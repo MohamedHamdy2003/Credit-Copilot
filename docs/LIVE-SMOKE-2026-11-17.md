@@ -1,5 +1,15 @@
 # Live vector smoke baseline
 
+## Verified correction
+
+The failed tenor case was traced using the real provider response: it returned
+the correct source quote under `text` rather than `quote`. The selection schema
+now explicitly normalizes this one alias while retaining source-span verification.
+A unit regression covers it. Both the next live run and a further run after
+versioned reindexing passed all five cases: hit@5 3/3 answerable cases, refusal
+correctness5/5, OOC refusal2/2. This supersedes the unresolved status below, which
+is retained as the original failure record. Threshold remained0.65.
+
 Real Gemini requests executed17 November2026; this is a five-case smoke baseline,
 not the full15-case FR-6 evaluation. Model gemini-3.5-flash-lite; embeddings
 gemini-embedding-001,768 dimensions; cosine threshold0.65; top5.

@@ -1,5 +1,22 @@
 # Credit Copilot design
 
+## Versioned policy index
+
+Clause chunking uses pinned cl100k_base tokenization (js-tiktoken1.0.21),800-token
+maximum and60-token overlap only within oversized clauses. Small clauses/tables
+stay intact. This tokenizer is a documented chunking budget, not Gemini usage.
+Index migrations preserve legacy chunks and revision snapshots; a successful
+transaction activates the new pipeline's chunks and deactivates previous ones.
+Failures leave the old active index intact. Historical chunk IDs remain stored
+for earlier citations. Changing bytes under the same reviewed document version
+is rejected rather than silently replacing source evidence.
+
+Numeric questions use a strict structured input contract through `pnpm calculate`.
+The code chooses source-backed policy/pricing and returns calculation citations;
+caller-supplied rates/DBR thresholds are rejected. Conversational number/date
+extraction is not part of this baseline. Q&A returns exact source spans; the
+explicit `text` alias accommodates observed provider JSON without trusting prose.
+
 Implementation is incremental. See `planning/PROJECT-PLAN.md` for the target architecture;
 this document records actual decisions and will expand as each feature lands.
 
