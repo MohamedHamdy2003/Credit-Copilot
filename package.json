@@ -22,7 +22,9 @@
     "format:check": "prettier --check apps packages scripts tests *.json *.yaml .github",
     "db:migrate": "tsx scripts/migrate.ts",
     "seed": "tsx scripts/seed.ts",
-    "evaluate": "tsx scripts/evaluate.ts"
+    "evaluate": "tsx scripts/evaluate.ts",
+    "ask": "tsx scripts/ask.ts",
+    "calculate": "tsx scripts/calculate.ts"
   },
   "dependencies": {
     "@mastra/core": "1.83.0",
