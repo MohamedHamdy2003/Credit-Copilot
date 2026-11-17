@@ -1,0 +1,72 @@
+[
+  {
+    "filename": "credit-policy-2024.pdf",
+    "id": "CP-2024",
+    "edition": "CP-2024",
+    "effectiveFrom": "2024-01-01",
+    "effectiveTo": "2025-03-01",
+    "kind": "policy",
+    "product": "PL-100",
+    "sha256": "bc835d292e81d99312fda3873045a65b954cda5ee3320d6dbc83bb4c39249016"
+  },
+  {
+    "filename": "credit-policy-2025.pdf",
+    "id": "CP-2025",
+    "edition": "CP-2025",
+    "effectiveFrom": "2025-03-01",
+    "effectiveTo": null,
+    "kind": "policy",
+    "product": "PL-100",
+    "sha256": "7355ce3a7f59a9c45d56b2ee75d042c7bd3d503318482cbcc938d635a8b2dd76"
+  },
+  {
+    "filename": "credit-procedures-manual (1).pdf",
+    "id": "PM-CC-2025",
+    "edition": "4.0",
+    "effectiveFrom": "2025-03-01",
+    "effectiveTo": null,
+    "kind": "procedure",
+    "product": "PL-100",
+    "sha256": "69b30f5f6f81d8886d43881664bddd3961ac87da765ac59fd0cf7c6a7bce2c83"
+  },
+  {
+    "filename": "circular-2024-07.md",
+    "id": "C-2024-07",
+    "edition": "2024/07",
+    "effectiveFrom": "2024-08-01",
+    "effectiveTo": "2025-03-01",
+    "kind": "circular",
+    "product": "PL-100",
+    "sha256": "befc0200ce3031379a07efbbdd78a7a8d78a6630fc91c5d37560e125f29fa9b3"
+  },
+  {
+    "filename": "circular-2025-02.md",
+    "id": "C-2025-02",
+    "edition": "2025/02",
+    "effectiveFrom": "2025-03-01",
+    "effectiveTo": null,
+    "kind": "circular",
+    "product": "PL-100",
+    "sha256": "8e6ea176039591c58cf716e8530b86f87c01e8688e3dfc7faff8ca0cef1e1524"
+  },
+  {
+    "filename": "product-sheet-personal-loan.md",
+    "id": "PS-PL-100",
+    "edition": "3.1",
+    "effectiveFrom": "2024-01-01",
+    "effectiveTo": null,
+    "kind": "product",
+    "product": "PL-100",
+    "sha256": "c48471272ecceff2fb2ec1d19a91410e742297259c41664e77be83e2999603ac"
+  },
+  {
+    "filename": "pricing-table.csv",
+    "id": "PT-2025-01",
+    "edition": "1.0",
+    "effectiveFrom": "2024-01-01",
+    "effectiveTo": null,
+    "kind": "pricing",
+    "product": "PL-100",
+    "sha256": "9edc05dc7dde2e1e2345dec29209294415164b71c55fb168a42aaecc1234c589"
+  }
+]
