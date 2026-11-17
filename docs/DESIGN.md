@@ -17,8 +17,7 @@ caller-supplied rates/DBR thresholds are rejected. Conversational number/date
 extraction is not part of this baseline. Q&A returns exact source spans; the
 explicit `text` alias accommodates observed provider JSON without trusting prose.
 
-Implementation is incremental. See `planning/PROJECT-PLAN.md` for the target architecture;
-this document records actual decisions and will expand as each feature lands.
+Implementation is incremental; README and status.md distinguish completed behavior from future work.
 
 ## Source-authoritative arithmetic
 
@@ -57,13 +56,55 @@ breakdown remain unfinished.
 The internal assessment use case now parses an allowlisted form, resolves mode and
 policy, verifies model extraction against evidence, selects supplied CSV pricing,
 runs pure rules and produces a deterministic numeric memo. A typed Mastra adapter
-currently wraps this use case as one workflow step. It does not persist results or
-approve/issue offers. Evidence verification facts are trusted internal inputs and
+currently wraps this use case as one workflow step. Persistence is an optional second step; it does not approve or issue offers. Evidence verification facts are trusted internal inputs and
 must be derived server-side before exposing an assessment endpoint; client-supplied
 verification flags must never be accepted. Separate typed workflow stages and
-immutable run/audit storage remain required before the core gate.
+server-side evidence derivation remain required before the core gate.
 
 Pure domain functions have no database, network, NestJS, Mastra or model imports.
 ESLint enforces the infrastructure boundary. Dates use UTC calendar-only values and
 month-end clamping; maturity is compared with the60th birthday. Strict configuration
 validation prevents the string "false" from being treated as a true boolean.
+
+## Architecture and source constraints
+
+```mermaid
+flowchart TD
+  P[React and Nest presentation] --> A[Application use cases and ports]
+  A --> D[Pure Domain rules and calculations]
+  I[Infrastructure adapters] --> A
+  I --> D
+```
+
+PostgreSQL knowledge/cases schemas and repositories separate trusted policy from
+untrusted customer evidence. PDF/CSV/MD only, maximum10MiB/file and100 PDF pages;
+no OCR. Clause/page/CSV-row provenance is retained; trusted source hashes live in
+data/config/corpus-manifest.json. Documents at data/corpus are authoritative.
+Provider prompts are files; Application generation/embed interfaces isolate Gemini.
+A new provider implements ports in packages/infrastructure/src/llm and is selected
+at the composition root (scripts/runtime.ts today; Nest composition later).
+
+Application date selects half-open policy intervals; missing/ambiguous coverage
+refers. CP2025 income10,000 overrides product's old8,000; PL-100 remains20,000–1m
+and12–60 months despite circular72. Bureau score below600 refers, defaults decline,
+verified hard eligibility failures decline; affordability follows eligibility.
+Age at final maturity uses calendar dates, maximum60th birthday; minimum age21,
+employment6 completed months, stamped salary evidence within60 days. Include all
+bureau obligations/card minima; variable annual commission is not monthly salary.
+Fees: admin1% deducted at disbursement, early settlement2% outstanding, late150EGP;
+do not add them to regular principal/DBR without an applicable source rule.
+
+Protected fields are removed locally before model/rules; model sees allowlisted
+salary/bureau lines, not form names/IDs/phones. Verify labeled quotes and values,
+not merely a number occurring somewhere. Tampering requires fraud referral. Human
+approval must enforce authority0/250k/500k/1m and different preparer/approver; referred
+approval requires Senior and written justification, exceptions Head approval, and
+pricing deviations Credit Committee authorization. Records retained7 years; written
+rejection reasons cite clause/edition and complaint requests have30-day window.
+Historical pre-March2025 operational procedures are not supplied; do not invent them.
+
+Remaining scope: complete typed eight-step workflow, server auth/approval/UI, full
+15-case evaluation, then all nine stretches (hybrid BM25+pgvector/RRF, rewriting,
+new synthetic documents, typed agents, SSE, local fallback, second product, offer
+PDF/schedule, per-user usage/cost). PostgreSQL ts_rank is not BM25. Before hybrid,
+retain vector baseline; compare actual results without assuming improvement.

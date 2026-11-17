@@ -1,35 +1,96 @@
 # Credit Copilot
 
 Synthetic personal-loan underwriting assistant. Implementation is in progress;
-the detailed scope and delivery sequence live in `docs/planning/`.
+the detailed scope and delivery sequence live in `docs/PR-PLAN.md`.
 
-Start with [DAY-1-REVIEW.md](DAY-1-REVIEW.md) for the tested checkpoint, commands,
-architecture diagram, expected results and limits. Command details are in
-[scripts/README.md](scripts/README.md). [status.md](status.md) records the handoff.
 
-## Development prerequisites
+## التشغيل والمراجعة
 
-Node24, pnpm11.25.0, Docker Desktop with Linux containers.
+آخر تحديث:17 نوفمبر2026. نطاق اليوم الأول P01–P05. يوجد عمل مبكر جزئي للـassessment، لكنه ليس تسليم اليوم الثاني.
 
-```sh
+## اللي هتراجعه
+
+- هيكل React + NestJS + TypeScript، dependencies ثابتة وCI.
+- PostgreSQL + pgvector، migrations، وفصل policy knowledge عن customer evidence.
+- PDF/CSV/MD parsers وnormalization وclause chunking: حد800token وoverlap60 باستخدام cl100k_base.
+- ingestion للسياسات السبع فقط، بدون تكرار، مع index revisions تحتفظ بالـchunks القديمة.
+- محرك حسابات Decimal واختيار السياسة والتسعير من المصادر.
+- vector search + citations متحققة + refusal، وأمر حساب structured بدون LLM arithmetic.
+
+## اختبر بنفسك
+
+من Terminal داخل G:\Credit Copilot:
+
+```powershell
 pnpm install --frozen-lockfile
 docker compose up -d db
+pnpm db:migrate
 pnpm test
 pnpm typecheck
+pnpm lint
+pnpm format:check
 pnpm build
+pnpm calculate
+pnpm evaluate:offline
 ```
 
-Run `pnpm dev:api` and `pnpm dev:web` in separate terminals. API health is
-`http://localhost:3000/api/v1/health`; OpenAPI is at `/api/docs`.
-The initial web shell reports backend connectivity and is not a completed assessment UI.
-If3000 is occupied, use an available port (`$env:PORT='4300'; pnpm dev:api`
-in PowerShell). To use the shell against that port, set API_PROXY_TARGET to
-http://127.0.0.1:4300 before starting pnpm dev:web.
+الإعدادات موجودة في .env؛ لا تنشره. Strict افتراضي. calculate يقرأ data/config/calculation-example.json؛ غيّر التاريخ من2025-04-03 إلى2024-12-01 لمقارنة الإصدارين.
 
-Copy `.env.example` to `.env` before provider/database use. Never commit credentials.
-Strict assessment mode is the default. Demo mode must be explicitly enabled and may
-assume only ID-copy presence, never verification. Policy editions drive the calculation
-engine: CP-2024 uses50% DBR; CP-2025 uses45%. See the planning discrepancy record.
+المتوقع: EMI8630.39، maximum330000 لسياسة2025 أو382000 لسياسة2024. الناتج affordability فقط، وليس موافقة أو عرض قرض.
 
-No real lending data or production banking decisions are supported. All provided
-documents are synthetic. LLM arithmetic and autonomous approval are prohibited.
+## جرّب البحث الحقيقي
+
+```powershell
+pnpm seed
+pnpm seed
+pnpm ask "What is the maximum debt burden ratio?" "2025-04-03"
+pnpm ask "What is the maximum debt burden ratio?" "2024-12-01"
+pnpm ask "Can PL-100 be offered for 72 months?" "2025-04-03"
+pnpm ask "What is the policy for crypto-backed loans?" "2025-04-03"
+pnpm evaluate
+```
+
+seed الثاني يرجع skipped. DBR45% في2025 و50% في2024، والمنتج يظل60 شهرًا، وcrypto refusal. evaluate الحالي خمس حالات live فقط، وليس تقييم FR-6 الكامل المطلوب في اليوم الثاني. الطلبات تستهلك quota من حساب Gemini.
+
+النتائج المنفذة:62 unit tests و5 PostgreSQL integration tests ناجحين. القياس الحقيقي بعد الإصلاح: hit@5 =3/3 للأسئلة القابلة للإجابة؛ refusal correctness =5/5؛ out-of-corpus refusal =2/2. الحالة الأولى لسؤال المدة فشلت وتم الاحتفاظ بها في docs/EVALUATION.md، ثم أصلحنا اختلاف اسم حقل JSON وأعدنا القياس بنجاح.
+
+## اختبارات قاعدة البيانات
+
+قاعدة الاختبار منفصلة وتنتهي بـ_test. إن لم تكن موجودة أنشئها مرة واحدة:
+
+```powershell
+docker compose exec -T db psql -U copilot -d postgres -c "CREATE DATABASE credit_copilot_test"
+pnpm test:integration
+```
+
+الاختبارات تفرغ قاعدة الاختبار فقط. تثبت idempotency وfailure rollback وhistorical citation retention وpolicy/evidence isolation.
+
+## افهم الـarchitecture
+
+```mermaid
+flowchart TD
+  P[Presentation: React / Nest Controllers] --> A[Application: use cases and ports]
+  A --> D[Domain: pure rules and calculations]
+  I[Infrastructure: TypeORM / pgvector / Gemini / Mastra / parsers] --> A
+  I --> D
+```
+
+الأسهم اعتماد كود: الـDomain لا يستورد DB أو LLM. Application يحدد واجهات الخدمات، Infrastructure ينفذها. scripts وNest composition root يربطوا المكونات.
+
+اقرأ بالترتيب:
+1. packages/domain/src/calculations.ts
+2. packages/domain/src/policy.ts
+3. packages/application/src/questions.ts
+4. packages/application/src/calculation-question.ts
+5. packages/infrastructure/src/parsers/registry.ts
+6. packages/infrastructure/src/knowledge/ingestion.ts
+7. packages/infrastructure/src/knowledge/retrieval.ts
+
+## حدود واضحة
+
+Q&A تعرض اقتباسات المصدر؛ لا توجد صياغة شرح حر مضمونة أو استخراج محادثي عام للأرقام. استخدم JSON مع calculate للحساب. threshold0.65 مبدئي؛ خمس حالات لا تثبت الجودة العامة. cl100k ليس tokenizer Gemini. نفس document/version ببايتات مختلفة يرفض؛ التحديث المسموح بإصدار pipeline يحفظ التاريخ. واجهة React حاليًا shell؛ auth/approval/full UI/full15-case evaluation/stretches لاحقًا. تمت إضافة fixtures لـPDF بلا نص وPDF محمي وكمان اختبار ملف تالف؛ كلها تُرفض بأخطاء واضحة.
+
+تابع PRs وActions على GitHub؛ status.md يسجل الحالة الفعلية وآخر خطوة، ولا تعتبر وجود CI YAML دليلًا أن كل run نجح.
+
+
+لو المنفذ3000 مشغول، شغّل الـAPI بـ`$env:PORT="4300"; pnpm dev:api`، وفي terminal آخر شغّل الويب بـ`$env:API_PROXY_TARGET="http://127.0.0.1:4300"; pnpm dev:web`. الـUI حاليًا connectivity shell فقط.
