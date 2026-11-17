@@ -4,6 +4,10 @@ Updated2026-11-17 Cairo. Implementation active; core incomplete; no stretches st
 
 ## Latest assessment increment
 
+New increment: local application-form allowlist parser (all5 PDFs covered), application assessment service connecting mode/evidence checks, policy selection, verified extraction, CSV pricing, pure rules and canonical memo. Infrastructure adapter executes this service using a real typed Mastra workflow; offline Mastra execution tested.46 unit tests pass (6 new cases), with typecheck/lint passing. Workflow currently wraps the service in ONE Mastra step, not eight separate persisted steps. No API/public endpoint added yet. Inputs `verifiedFacts` and evidence are trusted internal service inputs; never bind them directly to client bodies. A server evidence-verification service must derive/check them before public use. Current internal tests supply documented complete facts for APP-001 and a modified birth date to test over-age behavior.
+
+Next concrete task: build evidence-fact derivation and persistence ports/repository, split ordered workflow stages with typed outputs and save pending assessment/audit/fraud referrals. Handle policy-resolution failures as persisted referrals; load prompt via infrastructure. Empty required evidence lists and spoofed client verification flags must be rejected at the server boundary. Current service is an incremental internal implementation, not the complete P06 feature; keep feature/application-assessment open.
+
 packages/application/src/extraction.ts now provides local allowlisted evidence sanitization and schema/provenance-verified model extraction. Only income/obligations/employment-start/score lines go to provider; exact labeled source lines and decimal values must match. Protected fields, names and identifiers never enter these extraction requests. APP-004 tampering raises SuspectedTampering before a provider call; pipeline still needs to translate this into a persisted referral and Fraud Unit event. Prompt lives in prompts/extraction.txt. Five new offline tests cover valid/invalid JSON, invented value, injection, and fairness of model input. Latest checks:40 unit tests passed;3 integration tests passed against real PostgreSQL; typecheck/lint/format checks and production build passed. The final contradiction guard was followed by typecheck,40 unit tests and lint; storage integration remains unchanged. This is one application service, not the completed eight-step Mastra pipeline.
 
 ## Verified baseline before current assessment work
@@ -23,7 +27,7 @@ API smoke succeeded http://localhost:4300/api/v1/health (3000 already occupied; 
 
 ## Next work
 
-Next: parse application form locally with schema (amount,tenor,DOB,application date), then assemble Mastra eight-step workflow around extractVerified/evaluateEvidence/selectPolicy/assessRules. Load prompt via infrastructure; application port should not read files. Persist immutable runs/audit including failures; implement server login/tier/four-eyes/approval lifecycle. Add grounded Q&A prompt/citation checks and actual15-case evaluation. Then React core UI, seed/Compose full app and provider smoke. Core gate before hybrid/rewriting/agents/SSE/local fallback/auto product/PDF letter/usage. Full target details in planning files.
+Continue from latest increment above, then implement server login/tier/four-eyes/approval lifecycle. Add grounded Q&A prompt/citation checks and actual15-case evaluation. Then React core UI, seed/Compose full app and provider smoke. Core gate before hybrid/rewriting/agents/SSE/local fallback/auto product/PDF letter/usage. Full target details in planning files.
 
 ## Known limitations to resolve
 

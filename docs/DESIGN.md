@@ -29,6 +29,15 @@ require a new assessment, not relabeling an earlier result.
 
 ## Domain isolation
 
+The internal assessment use case now parses an allowlisted form, resolves mode and
+policy, verifies model extraction against evidence, selects supplied CSV pricing,
+runs pure rules and produces a deterministic numeric memo. A typed Mastra adapter
+currently wraps this use case as one workflow step. It does not persist results or
+approve/issue offers. Evidence verification facts are trusted internal inputs and
+must be derived server-side before exposing an assessment endpoint; client-supplied
+verification flags must never be accepted. Separate typed workflow stages and
+immutable run/audit storage remain required before the core gate.
+
 Pure domain functions have no database, network, NestJS, Mastra or model imports.
 ESLint enforces the infrastructure boundary. Dates use UTC calendar-only values and
 month-end clamping; maturity is compared with the60th birthday. Strict configuration
