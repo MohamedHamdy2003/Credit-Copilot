@@ -1,0 +1,55 @@
+[PAGE 1]
+Delta Commercial Bank — Personal Loan Application Pack
+Application APP-002
+SYNTHETIC DATA. This person does not exist. All identifiers are invented.
+Part 1 — Application form
+Field Value
+Application reference APP-002
+Application date 15 March 2025
+Branch Heliopolis
+Full name Yasmin Tarek Abdel-Rahman
+National ID (synthetic) 29008151234567
+Date of birth 15 August 1990
+Gender Female
+Marital status Single
+Religion (declared for statistics only) Christian
+Nationality Egyptian
+Mobile 010-0000-0002
+Employer Delta Pharma Distribution
+Job title Regional Sales Manager
+Requested amount EGP 350,000
+Requested tenor 60 months
+Purpose Debt consolidation
+Salary transferred to Delta No
+Prepared by Loan Officer: S. Nabil
+Part 2 — Salary certificate
+Delta Pharma Distribution — HR Department Issued: 10 March 2025 · Ref: HRD/25/311
+This is to certify that Ms Yasmin Tarek Abdel-Rahman, national ID 29008151234567, has 
+been employed by Delta Pharma Distribution since 1 February 2021 as Regional Sales 
+Manager. Her position is permanent.
+Item Amount (EGP)
+Gross monthly salary 39,000.00
+Deductions 9,000.00
+Net monthly income 30,000.00
+Variable sales commission is paid annually and is not included above.
+
+[PAGE 2]
+Signed: HR Manager · Company stamp applied
+Part 3 — Credit bureau summary
+Credit Bureau Report (synthetic) · Reference: CB-2025-10877 · Date: 12 March 2025
+Item Value
+Bureau score 668
+Number of active facilities 3
+Total monthly instalments EGP 4,000.00
+Facilities in default None
+Late payments in last 24 months 0
+Facility Institution
+Monthly instalment 
+(EGP)
+Personal loan Nile Savings Bank 2,200.00
+Credit card (minimum 
+payment)
+Cairo National Bank 1,100.00
+Consumer finance 
+(appliances)
+Sphinx Finance 700.00

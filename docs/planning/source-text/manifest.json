@@ -1,0 +1,119 @@
+[
+  {
+    "filename": "APP-001.pdf",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\APP-001.pdf",
+    "sha256": "63dec47c4daf2baeef4a7465d1610df8df1525b3ad5ce944e428e15a975e4918",
+    "bytes": 66277,
+    "pdf_pages": 2,
+    "extracted_characters": 1849,
+    "extraction": "APP-001.pdf.txt"
+  },
+  {
+    "filename": "APP-002.pdf",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\APP-002.pdf",
+    "sha256": "d6ab7255e68782babe996e07c8bb714b69eac577601c7f10f475c1b55906b8ac",
+    "bytes": 66599,
+    "pdf_pages": 2,
+    "extracted_characters": 1730,
+    "extraction": "APP-002.pdf.txt"
+  },
+  {
+    "filename": "APP-003.pdf",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\APP-003.pdf",
+    "sha256": "23cb1ec5ace5e42fccdc6721bb8040a5b249449ab5dbaf1e99a358595a3e88a1",
+    "bytes": 63822,
+    "pdf_pages": 2,
+    "extracted_characters": 1565,
+    "extraction": "APP-003.pdf.txt"
+  },
+  {
+    "filename": "APP-004.pdf",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\APP-004.pdf",
+    "sha256": "96dc4f3be95b5bf424363f3f2b6f0b7138335f5be04fe25caf783a749ec1c9d9",
+    "bytes": 65070,
+    "pdf_pages": 2,
+    "extracted_characters": 2036,
+    "extraction": "APP-004.pdf.txt"
+  },
+  {
+    "filename": "APP-005.pdf",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\APP-005.pdf",
+    "sha256": "d049a26352d763d93aa495cdaf8ed461bae2b9aede72caa64a91104812116933",
+    "bytes": 65412,
+    "pdf_pages": 2,
+    "extracted_characters": 1579,
+    "extraction": "APP-005.pdf.txt"
+  },
+  {
+    "filename": "circular-2024-07.md",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\circular-2024-07.md",
+    "sha256": "befc0200ce3031379a07efbbdd78a7a8d78a6630fc91c5d37560e125f29fa9b3",
+    "bytes": 776,
+    "pdf_pages": null,
+    "extracted_characters": 773,
+    "extraction": "circular-2024-07.md.txt"
+  },
+  {
+    "filename": "circular-2025-02.md",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\circular-2025-02.md",
+    "sha256": "8e6ea176039591c58cf716e8530b86f87c01e8688e3dfc7faff8ca0cef1e1524",
+    "bytes": 1011,
+    "pdf_pages": null,
+    "extracted_characters": 1006,
+    "extraction": "circular-2025-02.md.txt"
+  },
+  {
+    "filename": "credit-policy-2024.pdf",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\credit-policy-2024.pdf",
+    "sha256": "bc835d292e81d99312fda3873045a65b954cda5ee3320d6dbc83bb4c39249016",
+    "bytes": 69425,
+    "pdf_pages": 3,
+    "extracted_characters": 4331,
+    "extraction": "credit-policy-2024.pdf.txt"
+  },
+  {
+    "filename": "credit-policy-2025.pdf",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\credit-policy-2025.pdf",
+    "sha256": "7355ce3a7f59a9c45d56b2ee75d042c7bd3d503318482cbcc938d635a8b2dd76",
+    "bytes": 77270,
+    "pdf_pages": 3,
+    "extracted_characters": 4877,
+    "extraction": "credit-policy-2025.pdf.txt"
+  },
+  {
+    "filename": "credit-procedures-manual (1).pdf",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\credit-procedures-manual (1).pdf",
+    "sha256": "69b30f5f6f81d8886d43881664bddd3961ac87da765ac59fd0cf7c6a7bce2c83",
+    "bytes": 48836,
+    "pdf_pages": 2,
+    "extracted_characters": 2510,
+    "extraction": "credit-procedures-manual (1).pdf.txt"
+  },
+  {
+    "filename": "ITI-OS-Task_Finance_Credit-Copilot-.docx",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\ITI-OS-Task_Finance_Credit-Copilot-.docx",
+    "sha256": "226c1782d9fd0277854124bc7c835d5375e5a5c965ef4b5590a8043b1fd8dc8d",
+    "bytes": 31370,
+    "pdf_pages": null,
+    "extracted_characters": 24449,
+    "extraction": "ITI-OS-Task_Finance_Credit-Copilot-.docx.txt"
+  },
+  {
+    "filename": "pricing-table.csv",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\pricing-table.csv",
+    "sha256": "9edc05dc7dde2e1e2345dec29209294415164b71c55fb168a42aaecc1234c589",
+    "bytes": 403,
+    "pdf_pages": null,
+    "extracted_characters": 403,
+    "extraction": "pricing-table.csv.txt"
+  },
+  {
+    "filename": "product-sheet-personal-loan.md",
+    "source_path": "C:\\Users\\Mohamed Hamada\\OneDrive\\Desktop\\Credit Copilot Data\\product-sheet-personal-loan.md",
+    "sha256": "c48471272ecceff2fb2ec1d19a91410e742297259c41664e77be83e2999603ac",
+    "bytes": 1935,
+    "pdf_pages": null,
+    "extracted_characters": 1929,
+    "extraction": "product-sheet-personal-loan.md.txt"
+  }
+]

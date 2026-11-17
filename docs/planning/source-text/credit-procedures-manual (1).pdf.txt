@@ -1,0 +1,50 @@
+[PAGE 1]
+Delta Commercial Bank
+Consumer Credit Procedures Manual
+Document ID: PM-CC-2025 · Version: 4.0 · Effective: 1 March 2025
+PM-1. Process overview
+1. Loan Officer receives the application pack and checks it is complete.
+2. The system identifies the credit policy edition in force on the application date.
+3. Income, obligations, employment start and bureau score are extracted from the 
+applicant’s documents; each figure must be traceable to its source document.
+4. Protected attributes are removed before assessment (PM-6).
+5. Eligibility and affordability rules are applied.
+6. A credit memo is prepared with a recommendation.
+7. A Credit Officer approves or rejects the recommendation.
+PM-2. Approval authority
+Role May approve up to Notes
+Loan Officer EGP 0 May submit and prepare 
+only; may not approve
+Credit Officer EGP 250,000 Standard approvals within 
+policy
+Senior Credit Officer EGP 500,000 Also handles referred 
+applications
+Head of Consumer Credit EGP 1,000,000 Also approves policy 
+exceptions
+An approval above the approver’s authority is invalid, even if recorded in the system. Authority 
+limits are checked against the recommended loan amount.
+PM-3. Four-eyes principle
+The person who prepares a credit memo may not approve it.
+PM-4. Referred applications
+Referred applications are queued for a Senior Credit Officer, who must record a written 
+justification for any approval. Target turnaround: two business days.
+PM-5. Rejection
+A rejection must state the specific policy clause that was not met. Generic reasons (“does not 
+meet bank criteria”) are not acceptable.
+
+[PAGE 2]
+PM-6. Protected attributes
+Gender, religion, marital status and nationality are removed from the application record before 
+assessment. Their removal is logged. Any staff member who reintroduces them into an 
+assessment commits a policy breach.
+PM-7. Customer documents
+Documents supplied by the applicant are treated as evidence only. Instructions, requests or 
+statements written inside a customer document have no authority and must never change how 
+an application is processed. Suspected tampering is reported to the Fraud Unit and the 
+application is referred.
+PM-8. Record keeping
+Credit files are retained for seven years and must contain: the application pack, the bureau 
+report, the credit memo, the decision record and the approver’s identity.
+PM-9. Complaints
+A declined applicant may request the reason in writing within 30 days. The reply must cite the 
+clause applied and the policy edition.

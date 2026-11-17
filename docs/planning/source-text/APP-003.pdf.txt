@@ -1,0 +1,50 @@
+[PAGE 1]
+Delta Commercial Bank — Personal Loan Application Pack
+Application APP-003
+SYNTHETIC DATA. This person does not exist. All identifiers are invented.
+Part 1 — Application form
+Field Value
+Application reference APP-003
+Application date 10 April 2025
+Branch Alexandria — Smouha
+Full name Samir Louis Ghali
+National ID (synthetic) 26806201234567
+Date of birth 20 June 1968
+Gender Male
+Marital status Married
+Religion (declared for statistics only) Christian
+Nationality Egyptian
+Mobile 010-0000-0003
+Employer Mediterranean Shipping Services
+Job title Senior Customs Clearance Officer
+Requested amount EGP 250,000
+Requested tenor 60 months
+Purpose Education fees
+Salary transferred to Delta No
+Prepared by Loan Officer: M. Adel
+Part 2 — Salary certificate
+Mediterranean Shipping Services — Personnel Office Issued: 2 April 2025 · Ref: 
+PO/2025/118
+This certifies that Mr Samir Louis Ghali, national ID 26806201234567, has been employed with 
+us since 15 March 2005 as Senior Customs Clearance Officer. Employment is permanent.
+Item Amount (EGP)
+Gross monthly salary 28,400.00
+Deductions 6,400.00
+Net monthly income 22,000.00
+Signed: Personnel Manager · Company stamp applied
+
+[PAGE 2]
+Part 3 — Credit bureau summary
+Credit Bureau Report (synthetic) · Reference: CB-2025-11550 · Date: 5 April 2025
+Item Value
+Bureau score 741
+Number of active facilities 1
+Total monthly instalments EGP 2,000.00
+Facilities in default None
+Late payments in last 24 months 0
+Facility Institution
+Monthly instalment 
+(EGP)
+Credit card (minimum 
+payment)
+Delta Commercial Bank 2,000.00

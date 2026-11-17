@@ -1,0 +1,99 @@
+[PAGE 1]
+Delta Commercial Bank
+Consumer Credit Policy — 2025 Edition
+Document ID: CP-2025 · Edition: 2025 · Approved: 10 February 2025 Effective for 
+applications received from: 1 March 2025 Supersedes: CP-2024 for applications received 
+from 1 March 2025
+CP-1. Purpose and scope
+This policy governs the granting of unsecured personal loans to salaried individuals. The 
+edition of this policy that applies to an application is the edition in force on the date the 
+application is received. A later edition never applies retroactively to an application already 
+received.
+CP-2. Definitions
+• Net monthly income: salary after tax, social insurance and mandatory deductions, as 
+shown on the salary certificate.
+• Existing monthly obligations: the total monthly instalments of all credit facilities 
+reported in the applicant’s credit bureau report, including credit card minimum 
+payments.
+• Debt burden ratio (DBR): existing monthly obligations plus the instalment of the 
+requested loan, divided by net monthly income.
+• Age at maturity: the applicant’s age at the due date of the final instalment.
+CP-3. Eligibility
+An applicant must satisfy all of the following:
+ID Criterion Requirement
+CP-3.1 Employment Salaried and confirmed; 
+probation period completed
+CP-3.2 Employment duration At least 6 months with the 
+current employer
+CP-3.3 Minimum net monthly 
+income
+EGP 10,000
+CP-3.4 Minimum age at application 21 years
+CP-3.5 Maximum age at maturity 60 years
+CP-3.6 Credit bureau score Minimum 600
+
+[PAGE 2]
+CP-4. Affordability
+CP-4.1 Maximum debt burden ratio
+The DBR of an approved application must not exceed 45% of net monthly income, in line with 
+Circular 2025/02 paragraph C-2.
+CP-4.2 Calculation of the instalment
+The monthly instalment is calculated on a reducing balance: instalment = P x r / (1 - 
+(1 + r)^-n), where P is the loan amount, r is the applicable annual rate divided by 12, and n 
+is the tenor in months. The result is rounded to two decimal places, half up.
+CP-4.3 Maximum eligible amount
+Where the requested amount fails CP-4.1, the bank shall calculate the largest loan amount 
+whose instalment keeps the DBR at the maximum permitted, and may offer that amount 
+instead. The maximum eligible amount is rounded down to the nearest EGP 1,000.
+CP-4.4 Order of assessment
+Eligibility (CP-3) is assessed first. Affordability (CP-4) is assessed only for applicants who 
+satisfy CP-3.
+CP-5. Income verification
+Net monthly income is evidenced by a salary certificate issued within the last 60 days and 
+stamped by the employer. Where the certificate and the bureau report disagree on employment, 
+the application is referred to a credit officer.
+CP-6. Credit bureau
+A bureau report must be obtained for every application. - Score 600 and above: proceed to 
+affordability assessment. - Score below 600: refer to a credit officer. Such applications are not 
+automatically declined. - Any facility reported as in default: decline.
+CP-7. Amount, tenor and pricing
+Amounts and tenors are limited by the product sheet in force. The interest rate is taken from 
+the approved pricing table by tenor band. Deviations from published pricing require Credit 
+Committee approval.
+CP-8. Referral and decline
+An application is referred (not decided by the system) where: evidence is missing or 
+unreadable, documents contradict each other, the bureau score is below the minimum, or the 
+applicant is an employee of the bank.
+An application is declined where a mandatory criterion in CP-3 fails, the DBR exceeds CP-4.1 
+and the applicant rejects the maximum eligible amount, or a facility is in default.
+
+[PAGE 3]
+CP-9. Non-discrimination
+Credit decisions shall not take into account the applicant’s gender, religion, marital status or 
+nationality. These attributes may be collected for statistical reporting only and must not be 
+used in assessment.
+CP-10. Documentation of decisions
+Every decision must record: the policy edition applied, the figures used, the source document 
+for each figure, the rule results, and the identity of the approver.
+CP-11. Prohibited purposes
+Loans may not be granted for business or commercial purposes, the purchase of securities, or 
+any purpose prohibited by the circulars in force.
+CP-12. Exceptions
+Any exception to this policy requires written approval from the Head of Consumer Credit and 
+must be recorded in the credit file.
+CP-13. Changes from the 2024 edition
+Clause 2024 edition 2025 edition
+CP-4.1 Maximum DBR 50% Maximum DBR 45%
+CP-3.3 Minimum net monthly 
+income EGP 8,000
+EGP 10,000
+CP-9 Non-discrimination stated as 
+principle
+Bank must be able to 
+demonstrate that protected 
+attributes do not enter the 
+decision (Circular 2025/02, 
+C-4)
+CP-14. Tenor
+The maximum tenor permitted by Circular 2025/02 is 72 months. Until the product sheet for 
+PL-100 is updated, the maximum tenor offered on this product remains 60 months.
