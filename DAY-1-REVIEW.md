@@ -46,7 +46,7 @@ pnpm evaluate
 
 seed الثاني يرجع skipped. DBR45% في2025 و50% في2024، والمنتج يظل60 شهرًا، وcrypto refusal. evaluate الحالي خمس حالات live فقط، وليس تقييم FR-6 الكامل المطلوب في اليوم الثاني. الطلبات تستهلك quota من حساب Gemini.
 
-النتائج المنفذة:60 unit tests و5 PostgreSQL integration tests ناجحين. القياس الحقيقي بعد الإصلاح: hit@5 =3/3 للأسئلة القابلة للإجابة؛ refusal correctness =5/5؛ out-of-corpus refusal =2/2. الحالة الأولى لسؤال المدة فشلت وتم الاحتفاظ بها في docs/LIVE-SMOKE-2026-11-17.md، ثم أصلحنا اختلاف اسم حقل JSON وأعدنا القياس بنجاح.
+النتائج المنفذة:62 unit tests و5 PostgreSQL integration tests ناجحين. القياس الحقيقي بعد الإصلاح: hit@5 =3/3 للأسئلة القابلة للإجابة؛ refusal correctness =5/5؛ out-of-corpus refusal =2/2. الحالة الأولى لسؤال المدة فشلت وتم الاحتفاظ بها في docs/LIVE-SMOKE-2026-11-17.md، ثم أصلحنا اختلاف اسم حقل JSON وأعدنا القياس بنجاح.
 
 ## اختبارات قاعدة البيانات
 
@@ -82,6 +82,6 @@ flowchart TD
 
 ## حدود واضحة
 
-Q&A تعرض اقتباسات المصدر؛ لا توجد صياغة شرح حر مضمونة أو استخراج محادثي عام للأرقام. استخدم JSON مع calculate للحساب. threshold0.65 مبدئي؛ خمس حالات لا تثبت الجودة العامة. cl100k ليس tokenizer Gemini. نفس document/version ببايتات مختلفة يرفض؛ التحديث المسموح بإصدار pipeline يحفظ التاريخ. واجهة React حاليًا shell؛ auth/approval/full UI/full15-case evaluation/stretches لاحقًا. حالات PDF scanned/encrypted تحتاج fixtures مخصصة قبل اكتمال core gate.
+Q&A تعرض اقتباسات المصدر؛ لا توجد صياغة شرح حر مضمونة أو استخراج محادثي عام للأرقام. استخدم JSON مع calculate للحساب. threshold0.65 مبدئي؛ خمس حالات لا تثبت الجودة العامة. cl100k ليس tokenizer Gemini. نفس document/version ببايتات مختلفة يرفض؛ التحديث المسموح بإصدار pipeline يحفظ التاريخ. واجهة React حاليًا shell؛ auth/approval/full UI/full15-case evaluation/stretches لاحقًا. تمت إضافة fixtures لـPDF بلا نص وPDF محمي وكمان اختبار ملف تالف؛ كلها تُرفض بأخطاء واضحة.
 
 تابع PRs وActions على GitHub؛ status.md يسجل الحالة الفعلية وآخر خطوة، ولا تعتبر وجود CI YAML دليلًا أن كل run نجح.

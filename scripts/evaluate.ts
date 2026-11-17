@@ -95,7 +95,14 @@ try {
   };
   await mkdir('artifacts', { recursive: true });
   await writeFile('artifacts/live-vector-smoke.json', JSON.stringify(report, null, 2));
-  if (results.some((r) => 'error' in r || ('refusalCorrect' in r && !r.refusalCorrect)))
+  if (
+    results.some(
+      (r) =>
+        'error' in r ||
+        ('refusalCorrect' in r && !r.refusalCorrect) ||
+        ('hitAt5' in r && r.hitAt5 === false),
+    )
+  )
     process.exitCode = 1;
 } finally {
   await db.destroy();
