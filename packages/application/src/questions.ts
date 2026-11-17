@@ -58,10 +58,18 @@ export async function answerPolicyQuestion(
   const citations = [];
   for (const selected of parsed.data.citations) {
     const hit = hits.find((item) => item.chunk.id === selected.chunkId);
-    if (!hit || !hit.chunk.text.includes(selected.quote)) return refuse();
+    // Models may fold PDF line breaks into spaces. Match whitespace only, then
+    // emit the original source span; never relax word/number/punctuation checks.
+    const pattern = selected.quote
+      .trim()
+      .split(/\s+/)
+      .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('\\s+');
+    const sourceQuote = hit?.chunk.text.match(new RegExp(pattern))?.[0];
+    if (!hit || !sourceQuote) return refuse();
     citations.push({
       chunkId: hit.chunk.id,
-      quote: selected.quote,
+      quote: sourceQuote,
       sourceFile: hit.chunk.sourceFile,
       section: hit.chunk.section,
       edition: hit.chunk.edition,

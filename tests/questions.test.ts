@@ -17,6 +17,21 @@ const chunk: Chunk = {
   product: 'PL-100',
   contentHash: 'hash',
 };
+it('accepts whitespace folding while returning the original PDF span', async () => {
+  const original = { ...chunk, text: 'Maximum tenor\nremains 60 months.' };
+  const result = await answerPolicyQuestion(
+    { question: 'Tenor?', asOfDate: '2025-04-01' },
+    {
+      provider: new FakeGeneration({
+        citations: [{ chunkId: 'chunk', quote: 'Maximum tenor remains 60 months.' }],
+      }),
+      search: { search: async () => [{ chunk: original, similarity: 0.9 }] },
+      prompt: 'test',
+      minimumSimilarity: 0.65,
+    },
+  );
+  expect(result.answer).toBe(original.text);
+});
 it('returns exact source quotes and complete citation metadata', async () => {
   const provider = new FakeGeneration({ citations: [{ chunkId: 'chunk', quote: chunk.text }] });
   const search = { search: async () => [{ chunk, similarity: 0.9 }] };
