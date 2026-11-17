@@ -5,6 +5,19 @@ import { extractPricing } from '../packages/infrastructure/src/parsers/pricing.j
 import { selectPricing } from '../packages/domain/src/policy.js';
 const registry = new ParserRegistry();
 describe('document parser layer', () => {
+  it('rejects an image-only/blank PDF with a named missing-text error', async () => {
+    await expect(
+      registry.extract('no-text.pdf', await readFile('tests/fixtures/no-text.pdf')),
+    ).rejects.toMatchObject({ code: 'TextLayerMissing' });
+  });
+  it('rejects password-protected and corrupt PDFs without guessing content', async () => {
+    await expect(
+      registry.extract('encrypted.pdf', await readFile('tests/fixtures/encrypted.pdf')),
+    ).rejects.toMatchObject({ code: 'ExtractionFailed' });
+    await expect(
+      registry.extract('corrupt.pdf', Buffer.from('%PDF-1.7\ninvalid')),
+    ).rejects.toMatchObject({ code: 'ExtractionFailed' });
+  });
   it('extracts all twelve real source documents with provenance', async () => {
     for (const kind of ['policy', 'evidence']) {
       for (const filename of await readdir(`data/corpus/${kind}`)) {
