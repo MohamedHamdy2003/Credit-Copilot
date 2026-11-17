@@ -103,6 +103,39 @@ it('serializes concurrent duplicate imports', async () => {
   expect(await db.query('SELECT count(*)::int AS n FROM knowledge.pricing')).toEqual([{ n: 6 }]);
 });
 
+it('keeps historical citation chunks while atomically activating a new pipeline revision', async () => {
+  const embedding = new FakeEmbedding();
+  const service = new IngestionService(db, embedding, manifest);
+  const entry = manifest.find((e) => e.kind === 'pricing')!;
+  const bytes = await readFile(`data/corpus/policy/${entry.filename}`);
+  await service.ingest(entry.filename, bytes);
+  // Simulate a previous pipeline's retained chunks without changing source bytes.
+  // Create a retained historical chunk without mutating existing citation ids.
+  await db.query(
+    "INSERT INTO knowledge.chunks(id,document_id,ordinal,text,metadata,edition,product,effective_from,pipeline_version,active) SELECT 'historic',document_id,0,text,metadata,edition,product,effective_from,'previous',true FROM knowledge.chunks WHERE document_id=$1 LIMIT 1",
+    [entry.id],
+  );
+  await db.query("UPDATE knowledge.documents SET pipeline_version='previous' WHERE id=$1", [
+    entry.id,
+  ]);
+  await service.ingest(entry.filename, bytes);
+  expect(await db.query("SELECT active FROM knowledge.chunks WHERE id='historic'")).toEqual([
+    { active: false },
+  ]);
+  expect(
+    await db.query(
+      'SELECT count(*)::int AS n FROM knowledge.index_revisions WHERE document_id=$1',
+      [entry.id],
+    ),
+  ).toEqual([{ n: 1 }]);
+  expect(
+    await db.query(
+      'SELECT count(*)::int AS n FROM knowledge.chunks WHERE document_id=$1 AND active',
+      [entry.id],
+    ),
+  ).toEqual([{ n: 6 }]);
+});
+
 it('atomically preserves immutable assessment, demo assumptions and fraud referrals', async () => {
   const actorId = randomUUID(),
     applicationId = randomUUID(),

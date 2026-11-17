@@ -22,7 +22,7 @@ export class RetrievalService {
     const rows = (await this.db.query(
       `SELECT c.metadata AS chunk, 1-(e.embedding <=> $1::vector) AS similarity
       FROM knowledge.chunks c JOIN knowledge.embeddings e ON e.chunk_id=c.id
-      WHERE c.product=$2 AND c.effective_from <= $3::date AND (c.effective_to IS NULL OR $3::date < c.effective_to)
+      WHERE c.active AND c.product=$2 AND c.effective_from <= $3::date AND (c.effective_to IS NULL OR $3::date < c.effective_to)
       AND e.model=$4 AND e.dimensions=$5
       ORDER BY e.embedding <=> $1::vector, c.id LIMIT $6`,
       [

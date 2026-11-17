@@ -14,7 +14,17 @@ export interface PolicySearch {
 }
 const selectionSchema = z
   .object({
-    citations: z.array(z.object({ chunkId: z.string(), quote: z.string().min(1) }).strict()).max(5),
+    citations: z
+      .array(
+        z.union([
+          z.object({ chunkId: z.string(), quote: z.string().min(1) }).strict(),
+          z
+            .object({ chunkId: z.string(), text: z.string().min(1) })
+            .strict()
+            .transform(({ chunkId, text }) => ({ chunkId, quote: text })),
+        ]),
+      )
+      .max(5),
   })
   .strict();
 export const REFUSAL = 'The documents do not contain enough information to answer this question.';

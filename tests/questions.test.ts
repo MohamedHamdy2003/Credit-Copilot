@@ -1,6 +1,19 @@
 import { answerPolicyQuestion, REFUSAL } from '../packages/application/src/questions.js';
 import { FakeGeneration } from './helpers/fake-provider.js';
 import type { Chunk } from '../packages/contracts/src/documents.js';
+it('normalizes a text field alias but still verifies it against source', async () => {
+  const result = await answerPolicyQuestion(
+    { question: 'DBR?', asOfDate: '2025-04-01' },
+    {
+      provider: new FakeGeneration({ citations: [{ chunkId: 'chunk', text: chunk.text }] }),
+      search: { search: async () => [{ chunk, similarity: 0.9 }] },
+      prompt: 'test',
+      minimumSimilarity: 0.65,
+    },
+  );
+  expect(result.refused).toBe(false);
+  expect(result.answer).toBe(chunk.text);
+});
 const chunk: Chunk = {
   id: 'chunk',
   ordinal: 0,
