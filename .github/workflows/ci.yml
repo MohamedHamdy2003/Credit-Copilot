@@ -9,6 +9,20 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.2-pg17
+        env:
+          POSTGRES_USER: copilot
+          POSTGRES_PASSWORD: ci_test_password
+          POSTGRES_DB: credit_copilot_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U copilot -d credit_copilot_test"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://copilot:ci_test_password@localhost:5432/credit_copilot_test
+      TEST_DATABASE_URL: postgresql://copilot:ci_test_password@localhost:5432/credit_copilot_test
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
@@ -21,4 +35,7 @@ jobs:
       - run: pnpm format:check
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm db:migrate
+      - run: pnpm db:migrate
+      - run: pnpm test:integration
       - run: pnpm build
