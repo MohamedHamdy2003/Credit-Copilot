@@ -22,7 +22,7 @@ Commands: pnpm test; pnpm typecheck; pnpm lint; pnpm format:check; pnpm build; p
 
 ## References on demand
 
-docs/planning/PROJECT-PLAN.md architecture; PR-PLAN.md sequencing; SOURCE-REVIEW.md rules/conflicts; ACCEPTANCE-AND-EVALUATION.md frozen15 cases. Exact originals under data/corpus/policy and evidence; source-text is planning only. data/config contains source-backed policy/product config and trusted hash manifest.
+README.md for review/run commands; docs/DESIGN.md for architecture/source decisions; docs/EVALUATION.md for cases and real results; docs/PR-PLAN.md for sequencing. Exact originals under data/corpus/policy and evidence; data/config contains source-backed policy/product config and trusted hash manifest.
 
 ## Resume discipline
 
