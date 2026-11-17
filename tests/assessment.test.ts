@@ -110,3 +110,23 @@ it('executes through the real Mastra workflow engine offline', async () => {
   expect(result.status).toBe('success');
   if (result.status === 'success') expect(result.result.recommendation).toBe('APPROVE');
 });
+
+it('executes the persistence stage after assessment and returns only after saving', async () => {
+  const saved: string[] = [];
+  const workflow = createAssessmentWorkflow(deps, {
+    runId: 'run',
+    applicationId: 'application',
+    requestId: 'request',
+    actorId: input.actorId,
+    at: input.at,
+    repository: {
+      save: async (record) => {
+        saved.push(record.result.recommendation);
+      },
+    },
+  });
+  const run = await workflow.createRun();
+  const result = await run.start({ inputData: input });
+  expect(result.status).toBe('success');
+  expect(saved).toEqual(['APPROVE']);
+});

@@ -29,6 +29,14 @@ require a new assessment, not relabeling an earlier result.
 
 ## Domain isolation
 
+Assessment persistence follows dependency inversion: Application owns the repository
+contract and Infrastructure implements it using TypeORM transactions. Run insertion,
+audit, demo assumptions, successful extraction usage and fraud referral events commit
+together. Duplicate run identifiers cannot overwrite prior records. The repository
+checks the stored application preparer against the recording actor. Mastra can append
+a separate persistence step; public authenticated transport and the complete stage
+breakdown remain unfinished.
+
 The internal assessment use case now parses an allowlisted form, resolves mode and
 policy, verifies model extraction against evidence, selects supplied CSV pricing,
 runs pure rules and produces a deterministic numeric memo. A typed Mastra adapter

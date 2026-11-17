@@ -7,6 +7,11 @@ import {
 } from '../packages/infrastructure/src/knowledge/ingestion.js';
 import { RetrievalService } from '../packages/infrastructure/src/knowledge/retrieval.js';
 import { FakeEmbedding } from './helpers/fake-provider.js';
+import { FakeGeneration } from './helpers/fake-provider.js';
+import { randomUUID } from 'node:crypto';
+import { PostgresAssessmentRepository } from '../packages/infrastructure/src/db/assessment-repository.js';
+import { assessAndRecord } from '../packages/application/src/assessment-record.js';
+import { ParserRegistry } from '../packages/infrastructure/src/parsers/registry.js';
 
 const url =
   process.env.TEST_DATABASE_URL ??
@@ -96,4 +101,83 @@ it('serializes concurrent duplicate imports', async () => {
   ]);
   expect(await db.query('SELECT count(*)::int AS n FROM knowledge.documents')).toEqual([{ n: 1 }]);
   expect(await db.query('SELECT count(*)::int AS n FROM knowledge.pricing')).toEqual([{ n: 6 }]);
+});
+
+it('atomically preserves immutable assessment, demo assumptions and fraud referrals', async () => {
+  const actorId = randomUUID(),
+    applicationId = randomUUID(),
+    runId = randomUUID();
+  const doc = await new ParserRegistry().extract(
+    'APP-004.pdf',
+    await readFile('data/corpus/evidence/APP-004.pdf'),
+  );
+  await db.query(
+    'INSERT INTO cases.users(id,username,password_hash,role,tier) VALUES($1,$2,$3,$4,$5)',
+    [actorId, actorId, 'test-hash', 'loan_officer', 'none'],
+  );
+  await db.query(
+    'INSERT INTO cases.applications(id,reference,preparer_id,filename,hash,normalized,synthetic) VALUES($1,$2,$3,$4,$5,$6,true)',
+    [applicationId, 'APP-004', actorId, doc.filename, doc.hash, doc],
+  );
+  const input = {
+    document: doc,
+    actorId,
+    at: '2026-11-17T12:00:00Z',
+    synthetic: true,
+    requestedMode: 'demo' as const,
+    evidence: [{ requirement: 'national_id_copy', present: false, verified: false }],
+    verifiedFacts: {
+      certificateDate: '2025-04-15',
+      confirmed: true,
+      hasDefault: false,
+      bankEmployee: false,
+      purposeAllowed: true,
+      plannedDisbursement: '2025-04-22',
+    },
+  };
+  const dependencies = {
+    provider: new FakeGeneration({}),
+    prompt: 'test',
+    policies: JSON.parse(await readFile('data/config/policies.json', 'utf8')),
+    product: JSON.parse(await readFile('data/config/personal-loan.json', 'utf8')),
+    pricing: [],
+    settings: { allowDemo: true },
+  };
+  const repository = new PostgresAssessmentRepository(db);
+  const result = await assessAndRecord(input, dependencies, repository, {
+    runId,
+    applicationId,
+    requestId: 'integration-request',
+  });
+  expect(result.recommendation).toBe('REFER_TO_HUMAN');
+  const rows = (await db.query('SELECT event,details FROM cases.audit_events WHERE run_id=$1', [
+    runId,
+  ])) as { event: string; details: Record<string, unknown> }[];
+  expect(rows.some((r) => r.event === 'FRAUD_UNIT_REFERRAL')).toBe(true);
+  expect(rows.find((r) => r.event === 'DEMO_EVIDENCE_ASSUMPTION')?.details.verified).toBe(false);
+  const count = rows.length;
+  await expect(
+    assessAndRecord(input, dependencies, repository, {
+      runId,
+      applicationId,
+      requestId: 'duplicate',
+    }),
+  ).rejects.toThrow();
+  expect(
+    (await db.query('SELECT id FROM cases.audit_events WHERE run_id=$1', [runId])).length,
+  ).toBe(count);
+  const forbiddenRun = randomUUID();
+  await expect(
+    repository.save({
+      id: forbiddenRun,
+      applicationId,
+      actorId: randomUUID(),
+      requestId: 'forbidden',
+      at: input.at,
+      result,
+    }),
+  ).rejects.toThrow('preparer');
+  expect(
+    await db.query('SELECT id FROM cases.assessment_runs WHERE id=$1', [forbiddenRun]),
+  ).toEqual([]);
 });

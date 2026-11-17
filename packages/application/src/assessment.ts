@@ -54,8 +54,32 @@ export async function assessApplication(
   const sanitized = sanitizeEvidence(input.document);
   steps.push('remove_protected_attributes');
   const mode = resolveMode(input.requestedMode, dependencies.settings, input.synthetic);
-  const evidence = evaluateEvidence(input.evidence, mode, input.actorId, input.at);
-  const policy = selectPolicy(dependencies.policies, form.applicationDate);
+  // Missing entries never mean a requirement was waived.
+  const evidenceItems = input.evidence.some((item) => item.requirement === 'national_id_copy')
+    ? input.evidence
+    : [...input.evidence, { requirement: 'national_id_copy', present: false, verified: false }];
+  const evidence = evaluateEvidence(evidenceItems, mode, input.actorId, input.at);
+  let policy: Policy;
+  try {
+    policy = selectPolicy(dependencies.policies, form.applicationDate);
+  } catch (error) {
+    if (!(error instanceof DomainError)) throw error;
+    steps.push('select_policy');
+    return {
+      reference: form.reference,
+      mode,
+      evidence,
+      policyEdition: null,
+      maxDbr: null,
+      removedFields: sanitized.removedFields,
+      steps,
+      recommendation: 'REFER_TO_HUMAN' as const,
+      reason: error.code,
+      fraudReferral: sanitized.tampered,
+      calculation: null,
+      status: 'pending_review' as const,
+    };
+  }
   steps.push('select_policy');
   const base = {
     reference: form.reference,
