@@ -1,4 +1,19 @@
 import { createHash } from 'node:crypto';
+import { getEncoding } from 'js-tiktoken';
+const tokenizer = getEncoding('cl100k_base');
+export const CHUNKER_VERSION = 'clause-cl100k-v2';
+export const tokenCount = (text: string) => tokenizer.encode(text).length;
+
+export function splitWithOverlap(text: string, maximum = 800, overlap = 60): string[] {
+  const tokens = tokenizer.encode(text);
+  if (tokens.length <= maximum) return [text];
+  const parts: string[] = [];
+  for (let start = 0; start < tokens.length; start += maximum - overlap) {
+    parts.push(tokenizer.decode(tokens.slice(start, start + maximum)));
+    if (start + maximum >= tokens.length) break;
+  }
+  return parts;
+}
 import type {
   Chunk,
   DocumentMetadata,
@@ -32,7 +47,7 @@ export function chunkDocument(document: NormalizedDocument, metadata: DocumentMe
   const chunks: Chunk[] = [];
   for (const group of groups) {
     // Paragraph/line boundaries first; oversized text is split at word boundaries.
-    const parts = group.text.trim().match(/[\s\S]{1,2200}(?:\s|$)|\S{1,2200}/g) ?? [];
+    const parts = splitWithOverlap(group.text.trim());
     for (const part of parts) {
       const text = part.trim();
       const ordinal = chunks.length;
@@ -40,7 +55,7 @@ export function chunkDocument(document: NormalizedDocument, metadata: DocumentMe
       chunks.push({
         ...metadata,
         id: createHash('sha256')
-          .update(`${metadata.id}:${document.hash}:chunker1:${ordinal}:${contentHash}`)
+          .update(`${metadata.id}:${document.hash}:${CHUNKER_VERSION}:${ordinal}:${contentHash}`)
           .digest('hex'),
         ordinal,
         sourceFile: document.filename,

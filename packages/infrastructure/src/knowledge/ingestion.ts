@@ -4,7 +4,7 @@ import type { DocumentMetadata } from '../../../contracts/src/documents.js';
 import type { EmbeddingPort } from '../../../application/src/ports.js';
 import { DomainError, invariant } from '../../../domain/src/errors.js';
 import { ParserRegistry } from '../parsers/registry.js';
-import { chunkDocument } from '../parsers/chunker.js';
+import { chunkDocument, CHUNKER_VERSION } from '../parsers/chunker.js';
 import { extractPricing } from '../parsers/pricing.js';
 
 export interface ManifestEntry extends DocumentMetadata {
@@ -37,9 +37,10 @@ export class IngestionService {
       );
       const chunks = chunkDocument(document, metadata);
       const pricing = metadata.kind === 'pricing' ? extractPricing(document) : [];
-      const existing = (await this.db.query('SELECT hash FROM knowledge.documents WHERE id=$1', [
-        metadata.id,
-      ])) as { hash: string }[];
+      const existing = (await this.db.query(
+        'SELECT hash,pipeline_version FROM knowledge.documents WHERE id=$1',
+        [metadata.id],
+      )) as { hash: string; pipeline_version: string }[];
       invariant(
         !existing.length || existing[0]!.hash === document.hash,
         'DocumentVersionConflict',
@@ -47,10 +48,10 @@ export class IngestionService {
         409,
       );
       const missing = (await this.db.query(
-        'SELECT c.id FROM knowledge.chunks c LEFT JOIN knowledge.embeddings e ON e.chunk_id=c.id AND e.model=$2 WHERE c.document_id=$1 AND e.chunk_id IS NULL',
+        'SELECT c.id FROM knowledge.chunks c LEFT JOIN knowledge.embeddings e ON e.chunk_id=c.id AND e.model=$2 WHERE c.document_id=$1 AND c.active AND e.chunk_id IS NULL',
         [metadata.id, this.embeddings.model],
       )) as { id: string }[];
-      if (existing.length && missing.length === 0) {
+      if (existing[0]?.pipeline_version === CHUNKER_VERSION && missing.length === 0) {
         await this.db.query('UPDATE knowledge.ingestion_attempts SET status=$2 WHERE id=$1', [
           attempt,
           'skipped',
@@ -75,6 +76,13 @@ export class IngestionService {
           'INSERT INTO knowledge.documents(id,filename,hash,metadata,normalized) VALUES($1,$2,$3,$4,$5) ON CONFLICT(id) DO NOTHING',
           [metadata.id, filename, document.hash, metadata, document],
         );
+        await manager.query(
+          'INSERT INTO knowledge.index_revisions(document_id,pipeline_version,source_hash,normalized,metadata) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING',
+          [metadata.id, CHUNKER_VERSION, document.hash, document, metadata],
+        );
+        await manager.query('UPDATE knowledge.chunks SET active=false WHERE document_id=$1', [
+          metadata.id,
+        ]);
         for (const [index, chunk] of chunks.entries()) {
           const vector = vectors[index]!;
           invariant(
@@ -83,7 +91,7 @@ export class IngestionService {
             'Invalid vector',
           );
           await manager.query(
-            'INSERT INTO knowledge.chunks(id,document_id,ordinal,text,metadata,edition,product,effective_from,effective_to) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT(id) DO NOTHING',
+            'INSERT INTO knowledge.chunks(id,document_id,ordinal,text,metadata,edition,product,effective_from,effective_to,pipeline_version,active) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,true) ON CONFLICT(id) DO UPDATE SET active=true',
             [
               chunk.id,
               metadata.id,
@@ -94,6 +102,7 @@ export class IngestionService {
               chunk.product,
               chunk.effectiveFrom,
               chunk.effectiveTo,
+              CHUNKER_VERSION,
             ],
           );
           await manager.query(
@@ -101,6 +110,10 @@ export class IngestionService {
             [chunk.id, this.embeddings.model, this.embeddings.dimensions, JSON.stringify(vector)],
           );
         }
+        await manager.query('UPDATE knowledge.documents SET pipeline_version=$2 WHERE id=$1', [
+          metadata.id,
+          CHUNKER_VERSION,
+        ]);
         for (const row of pricing)
           await manager.query(
             'INSERT INTO knowledge.pricing(document_id,row_number,data) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',

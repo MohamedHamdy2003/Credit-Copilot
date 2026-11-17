@@ -1,8 +1,10 @@
 # Evaluation status
 
-No live LLM or RAG evaluation has run yet. The15 planned cases are in
-`planning/ACCEPTANCE-AND-EVALUATION.md`. Retrieval hit-rate and refusal correctness
-are **not measured**; fake/offline tests must not be described as live model quality.
+An initial five-case live Gemini smoke evaluation has now run; see
+`LIVE-SMOKE-2026-11-17.md` for actual results and the unresolved tenor false refusal.
+This is not the full FR-6 evaluation. The15 planned cases are in
+`planning/ACCEPTANCE-AND-EVALUATION.md`. Smoke hit@5 was3/3 answerable cases;
+refusal correctness4/5; OOC refusal2/2. Fake/offline tests are not live model quality.
 
 ## Policy discrepancy regression
 
