@@ -14,7 +14,9 @@ const input = z
     payroll: z.boolean().default(false),
   })
   .strict()
-  .parse(JSON.parse(await readFile(process.argv[2] ?? 'data/config/calculation-example.json', 'utf8')));
+  .parse(
+    JSON.parse(await readFile(process.argv[2] ?? 'data/config/calculation-example.json', 'utf8')),
+  );
 const policies = JSON.parse(await readFile('data/config/policies.json', 'utf8')) as Policy[];
 const product = JSON.parse(await readFile('data/config/personal-loan.json', 'utf8')) as {
   maximumAmount: string;
