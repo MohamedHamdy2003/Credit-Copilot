@@ -40,7 +40,9 @@ export class PostgresAssessmentRepository implements AssessmentRepository {
           [randomUUID(), record.id, record.requestId, record.actorId, event, details, record.at],
         );
       await audit('PROTECTED_ATTRIBUTES_REMOVED', { fields: result.removedFields });
-      for (const step of result.steps) await audit('ASSESSMENT_STEP', { step });
+      if (result.stageEvents)
+        for (const event of result.stageEvents) await audit('ASSESSMENT_STEP', event);
+      else for (const step of result.steps) await audit('ASSESSMENT_STEP', { step });
       for (const assumption of result.evidence.auditEvents)
         await audit(assumption.event, assumption);
       await audit('ASSESSMENT_RECORDED', {
@@ -50,12 +52,27 @@ export class PostgresAssessmentRepository implements AssessmentRepository {
         maxDbr: result.maxDbr,
         reason: 'reason' in result ? result.reason : null,
       });
+      await audit('POLICY_EVIDENCE_RETRIEVED', { chunkIds: result.retrievedChunkIds ?? [] });
+      for (const usage of result.usageRecords ?? [])
+        await manager.query(
+          'INSERT INTO cases.llm_usage(id,actor_id,run_id,model,operation,input_tokens,output_tokens,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
+          [
+            randomUUID(),
+            record.actorId,
+            record.id,
+            usage.model,
+            'assessment_extraction',
+            usage.inputTokens,
+            usage.outputTokens,
+            record.at,
+          ],
+        );
       if (result.fraudReferral)
         await audit('FRAUD_UNIT_REFERRAL', {
           reason: 'SuspectedTampering',
           status: 'pending_review',
         });
-      if ('extraction' in result && result.extraction) {
+      if (!result.usageRecords && 'extraction' in result && result.extraction) {
         await manager.query(
           'INSERT INTO cases.llm_usage(id,actor_id,run_id,model,operation,input_tokens,output_tokens,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
           [

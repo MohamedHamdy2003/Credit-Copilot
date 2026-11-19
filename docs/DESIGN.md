@@ -1,5 +1,26 @@
 # Credit Copilot design
 
+## Document assessment workflow
+
+The supported fixture entry point is scripts/assess.ts and the eight-stage Mastra
+adapter packages/infrastructure/src/workflows/document-assessment.ts. Application
+stages live in packages/application/src/document-assessment.ts: local form schema,
+protected-field stripping/local evidence facts, policy selection, verified model
+extraction, exact required-clause retrieval, pure rules, canonical memo, pending
+review persistence. The new input rejects client evidence/verifiedFacts properties.
+No Mastra snapshot storage is configured; originals stay in the private case store.
+
+The local CLI derives non-model facts from supported English evidence layouts;
+unknown purpose, missing certificate/default evidence or contradictory employers
+refer. Permanent employment alone does not prove probation completion. Required
+policy clauses are loaded by edition/product/date from the active reviewed index;
+missing clauses or DBR-source/config drift refer. Records include retrieved IDs,
+executed/skipped/failed stage events, and provider usage even when returned JSON
+later fails validation. Usage unavailable on transport failures remains unknown.
+Saving failure fails the run rather than reporting success. No approval/offer is
+issued. Internal legacy assessment helpers remain test harnesses; public transport
+must use the document workflow and derive identity/synthetic status server-side.
+
 ## Versioned policy index
 
 Clause chunking uses pinned cl100k_base tokenization (js-tiktoken1.0.21),800-token
