@@ -18,14 +18,14 @@ export class IngestionService {
     private readonly manifest: ManifestEntry[],
     private readonly parsers = new ParserRegistry(),
   ) {}
-  async ingest(filename: string, bytes: Uint8Array) {
+  async ingest(filename: string, bytes: Uint8Array, mime?: string) {
     const attempt = randomUUID();
     await this.db.query(
       'INSERT INTO knowledge.ingestion_attempts(id,filename,status) VALUES($1,$2,$3)',
       [attempt, filename, 'processing'],
     );
     try {
-      const document = await this.parsers.extract(filename, bytes);
+      const document = await this.parsers.extract(filename, bytes, mime);
       const metadata = this.manifest.find(
         (entry) => entry.filename === filename && entry.sha256 === document.hash,
       );

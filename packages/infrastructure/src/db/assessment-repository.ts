@@ -21,6 +21,16 @@ export class PostgresAssessmentRepository implements AssessmentRepository {
         403,
       );
       const result = record.result;
+      const jobs = (await manager.query(
+        'SELECT status FROM cases.assessment_jobs WHERE run_id=$1',
+        [record.id],
+      )) as { status: string }[];
+      invariant(
+        !jobs.length || jobs[0]!.status === 'running',
+        'StaleAssessmentJob',
+        'Assessment job is no longer active',
+        409,
+      );
       // INSERT only: existing run IDs cannot overwrite an earlier immutable assessment.
       await manager.query(
         'INSERT INTO cases.assessment_runs(id,application_id,mode,recommendation,status,result,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)',
@@ -41,6 +51,9 @@ export class PostgresAssessmentRepository implements AssessmentRepository {
         );
       await manager.query('UPDATE cases.applications SET latest_assessment_id=$2 WHERE id=$1', [
         record.applicationId,
+        record.id,
+      ]);
+      await manager.query("UPDATE cases.assessment_jobs SET status='succeeded' WHERE run_id=$1", [
         record.id,
       ]);
       await audit('PROTECTED_ATTRIBUTES_REMOVED', { fields: result.removedFields });
