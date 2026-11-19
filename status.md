@@ -1,8 +1,9 @@
 # Current checkpoint —19 November2026
 
-Read agent.md and FEATURES.md first. Current increment: feature/core-rest-api,
-following merged approval/access PRs9/10. Core authenticated REST is implemented;
-React remains a connectivity shell. Update this checkpoint after PR promotion.
+Read agent.md and FEATURES.md first. Core REST feature commit9af7691 merged into
+dev through PR11 after green CI44587996125 (all checks including secret scan).
+Promotion from dev to main is tracked in GitHub; use git branch/log for checkout
+state. Core authenticated REST is implemented; React remains a connectivity shell.
 
 ## Implemented and verified
 
