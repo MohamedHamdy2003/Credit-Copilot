@@ -1,25 +1,21 @@
-# Current checkpoint —17 November2026
+# Current checkpoint —19 November2026
 
-Read agent.md for rules; README.md for user reproduction; docs/PR-PLAN.md for remaining scope.
+Read agent.md for rules, README for commands, FEATURES.md for feature status and docs/PR-PLAN.md for sequence. Current branch feature/assessment-workflow.
 
-## Verified state
+## Completed increment
 
-Day-one engineering checkpoint promoted through PR1 feature/grounded-policy-qa ->dev and PR2 dev->main. Both merged, remote checks green before merge. Main commit12832a9. Main push CI44134091482 completed successfully (58s), including tests, migrations, build and secret scan. Current test/review-readiness branch also fixes stale script docs, tests blank/encrypted/corrupt PDFs and supports API_PROXY_TARGET for a non-default API port.
+Eight-stage document assessment now lives in packages/application/src/document-assessment.ts and infrastructure/workflows/document-assessment.ts. Local form/evidence-facts code derives fields; no caller verifiedFacts/evidence flags accepted. Exact applicable policy clauses loaded from PostgreSQL, checked for required IDs/date/edition and DBR agreement. Code-only calculations/memo; result remains pending human approval. Stage events distinguish executed/skipped/failed; persistence is atomic and errors propagate. Quote-validated extraction tokens recorded even if subsequent JSON validation fails. Fraud referral recorded before any model call for APP-004.
 
-62 unit tests,5 real PostgreSQL integration tests, types/lint/format/build passed. Gitleaks full history clean. CI includes offline Q&A/calculation regression, migration twice, real database integration and secret scan. Real Gemini vector smoke passed five cases after initial tenor false refusal: hit@5 3/3 answerable, refusal correctness5/5, OOC2/2. Initial failure preserved docs/EVALUATION.md. Root cause correct quote under text instead of quote; explicit alias normalization plus exact source-span verification fixed it. Don't claim full15-case FR-6 done.
+Use pnpm assess APP-001 (Strict). For explicit synthetic Demo, set ALLOW_DEMO_MODE=true in the current shell and run pnpm assess APP-001 --demo. CLI only selects shipped APP-001..005; it creates separate private application/original-byte records with a disabled fixture account, not a login. Do not expose this CLI/internal identity setup as an authenticated API. ID presence is never fabricated; all supplied original packs lack the ID copy. Demo waives ID presence only. APP-002/003/005 unresolved probation still refers. Unsupported layouts or purpose classification refer.
 
-Seven policy files indexed; repeated seed skips. Migration IndexRevisions applied to local databases. Legacy chunks retained, new pipeline active; retrieval filters active/version/date/product/model. Chunker uses pinned cl100k_base800/60, documented as chunking budget not Gemini billing. Strict structured numeric questions via pnpm calculate use source policy and CSV rates; request overrides rejected. Broad natural-language arithmetic unsupported, never let model calculate.
+Verification:72 unit tests,5 existing PostgreSQL integration tests, types/lint/format/build passed. Real Gemini/DB CLI: APP-001 Strict referral, Demo APPROVE pending_approval with EMI8630.39/cap330000, APP-004 fraud referral without model call; APP-002/003/005 Demo referrals. Original day1 vector baseline remains5/5 smoke, not full15-case FR-6. Secrets remain local.env, never output. Docker was stopped and has been restarted. Workflow stores no Mastra snapshots; raw originals stay in case storage.
 
-Gemini key exists locally and gh is authenticated as MohamedHamdy2003. Never output .env/key. Docker PostgreSQL healthy on54329. API only health/OpenAPI scaffold; React only shell, not complete UI. No stretches begun.
+Legacy assessment.ts and workflows/assessment.ts are retained for previous regression harnesses, deprecated for new entry points. New code uses the document workflow. Human approval/auth/full REST/React remain unimplemented. Public transport must derive actor/synthetic status server-side; never accept them as unrestricted client evidence assertions. Full evidence verification is not claimed (presence and source matching are distinct from human authenticity verification).
 
-## Next implementation —day2
+## Next feature
 
-Create feature/assessment-workflow from up-to-date dev. Earlier partial assessment internals were included in the day-one release and are documented as incomplete. Finish server-side evidence-fact derivation (never trust client verifiedFacts/evidence flags), separate eight typed Mastra stages, persist immutable results/audit/referrals, actual policy-clause retrieval and audit of retrieved IDs/usage failures. Current Mastra has assessment wrapper + optional persistence stage only. Then auth/authority/four-eyes/approval, minimal React workflows, full15-case evaluation and core gate before stretches.
+Login/permissions and approval lifecycle: two RBAC roles with server-owned Credit/Senior/Head tiers (250k/500k/1m), four-eyes, stale/concurrent decision checks, alternatives/customer response, approved then issued. Then REST/OpenAPI and minimal React UI; full15-case evaluation/core gate before all nine stretches.
 
-Domain: packages/domain. Application: packages/application. Infrastructure: packages/infrastructure. Presentation: apps/api and apps/web. Application defines ports; Infrastructure implements them. Domain imports no I/O/frameworks/models.
+## Fixed decisions
 
-## Decisions/limits
-
-Strict default missing ID =>REFER_TO_HUMAN CP-8/PS-7. Demo assumes ID presence only, verified=false and audit. APP-002/003/005 unclear probation must refer unless actual evidence supplied; no extra assumptions. APP-004 real18000 never injected200000; fraud referral. Policy2024/2025 maxDBR50%/45%, capacity382000/330000; correct Appendix E discrepancy. Numeric output only code. Same version/different bytes rejected; pipeline revisions preserve old citations. Blank/encrypted/corrupt PDF fixtures now pass; broader unsupported layouts still require explicit referral. No finished login, approval endpoint, complete UI, offer document or deployment. Evaluation threshold0.65 is provisional based on small smoke, not a calibrated general guarantee.
-
-Documentation consolidated: required README/DESIGN/EVALUATION/AI-USAGE-LOG plus user-requested PR-PLAN and agent/status. Planning exports and duplicate guides removed; no corpus/code removed.
+Strict default; missing ID=>REFER_TO_HUMAN CP-8/PS-7. Demo ID-only assumption logged verified=false. Policy2024/2025 DBR50%/45%, capacity382000/330000; source overrides inconsistent Appendix E. Strip protected fields before any model/rules, mask IDs/phones. Customer packs never policy KB. Pure domain no I/O/framework imports. Named feature branches ->dev ->main only after green tests/CI. No fake dated commits or invented measurements. No extra documentation: keep required docs and user-requested FEATURES/PR-PLAN/agent/status only.
