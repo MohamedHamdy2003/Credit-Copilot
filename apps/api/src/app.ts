@@ -11,6 +11,10 @@ import {
   Inject,
   Module,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  UploadedFiles,
+  Headers,
   type CanActivate,
   type ExecutionContext,
   type ExceptionFilter,
@@ -19,8 +23,16 @@ import {
   HttpException,
 } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { NestFactory } from '@nestjs/core';
-import { DocumentBuilder, SwaggerModule, ApiBody, ApiCookieAuth, ApiHeader } from '@nestjs/swagger';
+import {
+  DocumentBuilder,
+  SwaggerModule,
+  ApiBody,
+  ApiCookieAuth,
+  ApiHeader,
+  ApiConsumes,
+} from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -29,9 +41,16 @@ import type { AuthService } from '../../../packages/application/src/auth.js';
 import type { DecisionService } from '../../../packages/application/src/decisions.js';
 import type { Actor } from '../../../packages/domain/src/access.js';
 import { DomainError, invariant } from '../../../packages/domain/src/errors.js';
+import type { OperationsService } from '../../../packages/application/src/operations.js';
 
 const AUTH = Symbol('AUTH'),
   DECISIONS = Symbol('DECISIONS');
+const OPERATIONS = Symbol('OPERATIONS');
+interface MemoryUpload {
+  originalname: string;
+  buffer: Buffer;
+  mimetype: string;
+}
 interface AuthRequest extends Request {
   actor: Actor;
   csrf: string;
@@ -56,6 +75,17 @@ class SessionGuard implements CanActivate {
         403,
       );
     }
+    return true;
+  }
+}
+class IngestionGuard implements CanActivate {
+  canActivate(context: ExecutionContext) {
+    invariant(
+      context.switchToHttp().getRequest<AuthRequest>().actor.canIngest,
+      'Forbidden',
+      'Knowledge ingestion permission required',
+      403,
+    );
     return true;
   }
 }
@@ -115,6 +145,8 @@ export async function createApi(deps: {
   webOrigin: string;
   secureCookies: boolean;
   sessionHours: number;
+  operations?: OperationsService;
+  maxUploadBytes?: number;
 }) {
   const cookie = {
     httpOnly: true,
@@ -201,6 +233,158 @@ export async function createApi(deps: {
       return this.decisions.execute(req.actor, id, body, req.requestId);
     }
   }
+  @Controller()
+  @UseGuards(SessionGuard)
+  @ApiCookieAuth()
+  class OperationsController {
+    constructor(@Inject(OPERATIONS) private readonly operations: OperationsService | null) {}
+    private service() {
+      invariant(this.operations, 'ServiceUnavailable', 'Core operations not configured', 503);
+      return this.operations;
+    }
+    @Get('knowledge/documents') documents() {
+      return this.service().documents();
+    }
+    @Get('knowledge/ingestions') attempts(@Req() req: AuthRequest) {
+      return this.service().attempts(req.actor);
+    }
+    @Post('knowledge/ingestions')
+    @ApiConsumes('multipart/form-data')
+    @UseGuards(IngestionGuard)
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    @UseInterceptors(
+      FilesInterceptor('files', 20, {
+        limits: { fileSize: deps.maxUploadBytes ?? 10485760, files: 20, fields: 0 },
+      }),
+    )
+    @ApiBody({
+      schema: {
+        type: 'object',
+        required: ['files'],
+        properties: {
+          files: { type: 'array', maxItems: 20, items: { type: 'string', format: 'binary' } },
+        },
+      },
+    })
+    ingest(@UploadedFiles() files: MemoryUpload[] | undefined, @Req() req: AuthRequest) {
+      return this.service().ingest(
+        req.actor,
+        (files ?? []).map((f) => ({ filename: f.originalname, bytes: f.buffer, mime: f.mimetype })),
+      );
+    }
+    @Post('questions')
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    @ApiBody({
+      schema: {
+        type: 'object',
+        required: ['question'],
+        additionalProperties: false,
+        properties: {
+          question: { type: 'string', maxLength: 2000 },
+          asOfDate: { type: 'string', format: 'date' },
+          product: { type: 'string', enum: ['PL-100'] },
+          edition: { type: 'string', enum: ['CP-2024', 'CP-2025'] },
+        },
+      },
+    })
+    question(@Body() body: unknown) {
+      return this.service().question(body);
+    }
+    @Post('calculations')
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    @ApiBody({
+      schema: {
+        type: 'object',
+        required: ['principal', 'income', 'obligations', 'months', 'date'],
+        additionalProperties: false,
+        properties: {
+          principal: { type: 'string' },
+          income: { type: 'string' },
+          obligations: { type: 'string' },
+          months: { type: 'integer' },
+          date: { type: 'string', format: 'date' },
+          payroll: { type: 'boolean' },
+        },
+      },
+    })
+    calculate(@Body() body: unknown) {
+      return this.service().calculate(body);
+    }
+    @Get('applications/fixtures') fixtures() {
+      return this.service().fixtures();
+    }
+    @Get('applications') list(@Req() req: AuthRequest) {
+      return this.service().list(req.actor);
+    }
+    @Post('applications')
+    @ApiConsumes('multipart/form-data')
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    @UseInterceptors(
+      FileInterceptor('file', {
+        limits: { fileSize: deps.maxUploadBytes ?? 10485760, files: 1, fields: 0 },
+      }),
+    )
+    @ApiBody({
+      schema: {
+        type: 'object',
+        required: ['file'],
+        properties: { file: { type: 'string', format: 'binary' } },
+      },
+    })
+    upload(@UploadedFile() file: MemoryUpload | undefined, @Req() req: AuthRequest) {
+      invariant(file, 'InvalidUpload', 'Application file required');
+      return this.service().upload(req.actor, {
+        filename: file.originalname,
+        bytes: file.buffer,
+        mime: file.mimetype,
+      });
+    }
+    @Post('applications/fixtures/:reference')
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    select(@Param('reference') reference: string, @Body() body: unknown, @Req() req: AuthRequest) {
+      z.object({})
+        .strict()
+        .parse(body ?? {});
+      return this.service().selectFixture(req.actor, reference);
+    }
+    @Get('applications/:id') read(@Param('id') id: string, @Req() req: AuthRequest) {
+      return this.service().read(req.actor, id);
+    }
+    @Post('applications/:id/assessments')
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    @ApiHeader({ name: 'Idempotency-Key', required: false })
+    @ApiBody({
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { mode: { type: 'string', enum: ['strict', 'demo'] } },
+      },
+    })
+    assess(
+      @Param('id') id: string,
+      @Body() body: unknown,
+      @Headers('idempotency-key') key: string | undefined,
+      @Req() req: AuthRequest,
+    ) {
+      return this.service().assess(req.actor, id, body ?? {}, req.requestId, key);
+    }
+    @Get('applications/:id/evidence') async evidence(
+      @Param('id') id: string,
+      @Req() req: AuthRequest,
+      @Res() res: Response,
+    ) {
+      const original = await this.service().evidence(req.actor, id);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename*=UTF-8''${encodeURIComponent(original.filename)}`,
+      );
+      res.send(Buffer.from(original.bytes));
+    }
+    @Get('offers/:id') offer(@Param('id') id: string, @Req() req: AuthRequest) {
+      return this.service().offer(req.actor, id);
+    }
+  }
   @Controller('health')
   class HealthController {
     @Get() health() {
@@ -208,11 +392,13 @@ export async function createApi(deps: {
     }
   }
   @Module({
-    controllers: [AuthController, ReviewController, HealthController],
+    controllers: [AuthController, ReviewController, OperationsController, HealthController],
     providers: [
       SessionGuard,
+      IngestionGuard,
       { provide: AUTH, useValue: deps.auth },
       { provide: DECISIONS, useValue: deps.decisions },
+      { provide: OPERATIONS, useValue: deps.operations ?? null },
     ],
   })
   class AppModule {}
@@ -240,7 +426,8 @@ export async function createApi(deps: {
   app.enableCors({
     origin: deps.webOrigin,
     credentials: true,
-    allowedHeaders: ['Content-Type', 'x-csrf-token'],
+    allowedHeaders: ['Content-Type', 'x-csrf-token', 'Idempotency-Key'],
+    exposedHeaders: ['x-request-id', 'Content-Disposition'],
   });
   app.useGlobalFilters(new ApiErrors());
   app.setGlobalPrefix('api/v1');

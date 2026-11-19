@@ -1,19 +1,59 @@
 # Current checkpoint —19 November2026
 
-Read agent.md, FEATURES.md and README before implementation. Branch feature/approval-access; previous assessment workflow is already on main. Current increment adds server sessions and controlled human decisions; no complete React UI yet.
+Read agent.md and FEATURES.md first. Current increment: feature/core-rest-api,
+following merged approval/access PRs9/10. Core authenticated REST is implemented;
+React remains a connectivity shell. Update this checkpoint after PR promotion.
 
 ## Implemented and verified
 
-Application ports: auth.ts and decisions.ts. Pure access/authority rules in domain/access.ts. Infrastructure: scrypt credentials, PostgreSQL auth/session store and transactional decision-store. Presentation: apps/api/src/app.ts exported createApi for tests; main.ts composes real DB services without model calls. Added explicit ApprovalAccess and LatestAssessment migrations; applied locally. Server-authoritative tiers0/250k/500k/1m; HttpOnly/SameSite cookies, expiry/revocation, active checks, CSRF/origin checks, per-IP login throttle, strict schemas and request IDs.
+OperationsService application ports in packages/application/src/operations.ts;
+runtime composition in packages/infrastructure/src/operations.ts; storage in
+db/application-store.ts; Nest routes in apps/api/src/app.ts. Reuses existing
+parsers/ingestion/vector Q&A/calculation/eight-stage Mastra assessment; domain
+remains independent of framework/database/model.
 
-Decisions lock run/application and verify expectedVersion/latest_assessment_id. Recheck user privileges in the transaction. Prevent self-approval, authority bypass, duplicate/concurrent decisions, approval before customer alternative acceptance, stale assessment and issue-before-approval. Issuance rechecks maturity using source policy and retains demo assumptions. Rejection requires a specific failed/missing clause. Unresolved/tampered referrals cannot be waived; add evidence and reassess instead. No policy-exception or pricing-deviation override endpoint. Approval result/status is distinct from original immutable assessment.
+Authenticated policy upload/list/attempts, grounded questions, structured numeric
+calculations, application upload/fixture selection/list/read/original download,
+assessment and issued-offer read. Permissions reuse session/CSRF and server roles.
+Only seven reviewed policy hashes enter KB; five known synthetic PDF hashes enter
+customer assessment. Actor/synthetic flags are server-derived, extra fields rejected.
+Case originals stay in private cases storage, metadata omits personal attributes.
+Q&A masks ID/phone before embedding and generation; explicit question date/edition
+must agree with selectors. No selectors means current Cairo date.
 
-77 unit tests and15 real PostgreSQL/HTTP integration tests passed; types/lint/format/build passed. Real server smoke on4302: health ok, unauthenticated reviews401, OpenAPI generated. No provider calls needed for this feature. Local test server stopped. pnpm seed:users requires DEMO_PASSWORD12–256 chars locally; creates four synthetic accounts, revokes sessions on reset and never prints password. Fixture CLI disabled accounts cannot login. Full15-case FR-6 and UI are still unfinished. FEATURES.md updated to reflect exact scope; update it on every subsequent feature.
+AssessmentJobs migration applied locally: owner/hash upload deduplication; one
+active job per application; Idempotency-Key binds application/mode and replays
+completed result. Failed keys need a new attempt key. New attempts expire abandoned
+jobs after15 minutes; late writers cannot change latest assessment. Job success,
+result/latest pointer/audit commit atomically. Decisions block during reassessment;
+queue excludes superseded runs. Issued applications cannot be reassessed.
+
+77 unit and23 real PostgreSQL/HTTP integration tests passed, including new eight
+HTTP cases: login/upload/download/ownership, extension/MIME/size validation,
+trusted ingestion, Strict/default/idempotency, Demo->approve->issue->read retaining
+verified=false, concurrent job/decision blocking, fraud without provider calls,
+identifier masking, date conflicts and abandoned-job recovery. Typecheck, lint,
+format and API/web builds passed. HTTP tests use fake generation/test lexical
+embeddings; no new live Gemini quality metric claimed. Real server4303 health,
+OpenAPI multipart and unauthenticated access smoke checked. Previous real Gemini
+CLI/five-case baseline remains in docs/EVALUATION.md; full15-case FR-6 unfinished.
 
 ## Next
 
-Finish REST: authenticated policy ingestion/Q&A/application upload+assessment and offer read endpoints, reusing existing domain/workflow/ports. Resolve actor/synthetic/evidence status server-side, not client flags. Then React login/upload/questions/assessment/review UI; referral/complaints completion; full15-case evaluation/core gate before nine stretches. Preserve current PR conventions: professionally describe actual What/Why/How tested, link executed evidence, state material limits; feature->dev->main after green CI.
+React login/knowledge upload/questions/application assessment/review UI using these
+routes. Read applicable frontend skills before UI work; brief requests minimal
+styling. Then complete complaints and full15-case evaluation/core gate before nine
+stretches. FEATURES.md updated; keep professional PR What/Why/How tested, green
+feature->dev->main CI. Do not create extra docs. README has route/review instructions.
 
 ## Fixed decisions
 
-Strict default; missing ID=>REFER_TO_HUMAN CP-8/PS-7. Demo ID presence only, verified=false+audit. Never assume probation or fabricate evidence. CP2024/2025 DBR50%/45%, capacity382000/330000; unchanged Decimal formula, source overrides inconsistent Appendix E. Strip protected fields before model/rules, mask identifiers; customer packs never policy KB. No autonomous approval or LLM arithmetic. Source corpus at data/corpus; DB ports54329, API default3000 (use alternate if occupied). Secrets in local.env only. No extra docs beyond required files and explicitly requested FEATURES/PR-PLAN/agent/status.
+Strict default missing ID=>REFER_TO_HUMAN CP-8/PS-7. Explicit enabled Demo assumes
+only ID presence; result/audit/offer retain missing reality and verified=false.
+Never invent ID/probation evidence. CP2024/2025 DBR50%/45%, capacity382000/330000;
+source policies override inconsistent Appendix E via unchanged Decimal formula.
+Remove protected fields before models/rules; customer packs never policy KB.
+Human authority0/250k/500k/1m plus four-eyes before issuance. No unresolved referral
+override or pricing deviation endpoint. DB54329; API default3000, use another port
+if occupied. Secrets only local.env; never print them. Seed accounts only using
+local DEMO_PASSWORD; CLI accounts disabled for login.

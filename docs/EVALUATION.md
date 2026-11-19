@@ -1,5 +1,20 @@
 # Evaluation
 
+## Core REST verification on19 November2026
+
+77 unit and23 real PostgreSQL/HTTP integration tests pass. Eight new HTTP cases
+exercise the composed operations service: byte-exact upload/download and duplicate
+registration; ownership isolation; extension/MIME/size/extra-field rejection;
+trusted ingestion permission and customer-pack exclusion; Strict default and
+idempotent replay/mode conflict; Demo assessment through approval/issue/read with
+verified=false; concurrent-job and decision blocking; APP-004 pre-model fraud;
+identifier masking before embedding/generation; edition/date conflict rejection;
+structured calculation; and interrupted-job recovery with late-writer rejection.
+Preflight permits the browser's Idempotency-Key header. Types, lint, format and
+API/web builds pass. PostgreSQL and Nest are real; provider generation and lexical
+test embeddings are fake. These tests prove wiring/security behavior, not a new
+Gemini retrieval-quality measurement or completion of FR-6's fifteen-case suite.
+
 ## Approval/access verification on19 November2026
 
 77 unit and15 real PostgreSQL/HTTP integration tests pass. Coverage includes actual
