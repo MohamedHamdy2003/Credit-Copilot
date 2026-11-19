@@ -1,5 +1,26 @@
 # Credit Copilot design
 
+## Sessions and human decisions
+
+Application defines AuthStore/Credentials/DecisionStore ports. Infrastructure uses
+scrypt password hashes,32-byte random sessions (only SHA256 token hashes in DB),
+expiry/revocation/active-user checks and atomic per-IP login throttling. Transport
+uses HttpOnly SameSite Strict cookies, optional Secure for HTTPS, CSRF headers and
+an origin allowlist. Body schemas reject client role/tier/amount/approver overrides;
+server roles are reread inside decision transactions. No public user registration
+or role-upgrade endpoint exists. Local seed accounts are synthetic demo tooling.
+
+Approval requires a different preparer/reviewer, positive recommended amount within
+the server authority tier, complete resolved assessment and recorded acceptance
+for alternatives. Missing/tampered referrals cannot be waived; corrected evidence
+requires reassessment. Rejection cites a failed/missing clause, or CP-4.1 after
+the customer rejects an alternative. State transitions lock application/run rows
+and check expectedVersion plus latest assessment pointer. The original assessment
+snapshot stays immutable; status/version, decisions and audit are separate records.
+Issuance requires stored approval, tier check and source-policy maturity recheck;
+unique constraints prevent double decisions/offers. Demo flags propagate to offers.
+Full authenticated ingestion/assessment transport and React remain subsequent work.
+
 ## Document assessment workflow
 
 The supported fixture entry point is scripts/assess.ts and the eight-stage Mastra
@@ -66,21 +87,12 @@ require a new assessment, not relabeling an earlier result.
 
 ## Domain isolation
 
-Assessment persistence follows dependency inversion: Application owns the repository
-contract and Infrastructure implements it using TypeORM transactions. Run insertion,
-audit, demo assumptions, successful extraction usage and fraud referral events commit
-together. Duplicate run identifiers cannot overwrite prior records. The repository
-checks the stored application preparer against the recording actor. Mastra can append
-a separate persistence step; public authenticated transport and the complete stage
-breakdown remain unfinished.
-
-The internal assessment use case now parses an allowlisted form, resolves mode and
-policy, verifies model extraction against evidence, selects supplied CSV pricing,
-runs pure rules and produces a deterministic numeric memo. A typed Mastra adapter
-currently wraps this use case as one workflow step. Persistence is an optional second step; it does not approve or issue offers. Evidence verification facts are trusted internal inputs and
-must be derived server-side before exposing an assessment endpoint; client-supplied
-verification flags must never be accepted. Separate typed workflow stages and
-server-side evidence derivation remain required before the core gate.
+Application defines assessment, authentication and decision repository ports;
+Infrastructure implements PostgreSQL transactions. Assessment snapshots are insert-only,
+while explicit decisions update lifecycle status/version and append audit records.
+The latest-assessment pointer is updated under the same application lock as saving
+new runs, preventing an older run from being approved after reassessment. New entry
+points use the eight-stage document workflow; legacy wrappers are test harnesses.
 
 Pure domain functions have no database, network, NestJS, Mastra or model imports.
 ESLint enforces the infrastructure boundary. Dates use UTC calendar-only values and
@@ -124,7 +136,7 @@ pricing deviations Credit Committee authorization. Records retained7 years; writ
 rejection reasons cite clause/edition and complaint requests have30-day window.
 Historical pre-March2025 operational procedures are not supplied; do not invent them.
 
-Remaining scope: complete typed eight-step workflow, server auth/approval/UI, full
+Remaining scope: authenticated ingestion/assessment endpoints, React UI, full
 15-case evaluation, then all nine stretches (hybrid BM25+pgvector/RRF, rewriting,
 new synthetic documents, typed agents, SSE, local fallback, second product, offer
 PDF/schedule, per-user usage/cost). PostgreSQL ts_rank is not BM25. Before hybrid,

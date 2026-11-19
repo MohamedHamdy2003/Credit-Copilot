@@ -1,5 +1,16 @@
 # Evaluation
 
+## Approval/access verification on19 November2026
+
+77 unit and15 real PostgreSQL/HTTP integration tests pass. Coverage includes actual
+Nest login/cookies, hashed sessions, CSRF, role injection rejection, unauthorized
+ownership/queue access,250k boundary versus300k authority denial, self-approval,
+approved-before-issued lifecycle, duplicate/concurrent decisions, alternative
+acceptance, expired/revoked/disabled sessions, hostile origins/login throttling,
+clause-specific rejection, rejected issuance and stale/superseded assessments.
+An unresolved referral remains blocked even for Senior; no evidence was fabricated
+to demonstrate approval. Tests use a dedicated *_test database without provider keys.
+
 ## Assessment workflow verification on19 November2026
 
 72 offline unit tests and5 PostgreSQL integration tests pass. New workflow tests
