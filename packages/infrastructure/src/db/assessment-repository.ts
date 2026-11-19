@@ -39,6 +39,10 @@ export class PostgresAssessmentRepository implements AssessmentRepository {
           'INSERT INTO cases.audit_events(id,run_id,request_id,actor_id,event,details,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)',
           [randomUUID(), record.id, record.requestId, record.actorId, event, details, record.at],
         );
+      await manager.query('UPDATE cases.applications SET latest_assessment_id=$2 WHERE id=$1', [
+        record.applicationId,
+        record.id,
+      ]);
       await audit('PROTECTED_ATTRIBUTES_REMOVED', { fields: result.removedFields });
       if (result.stageEvents)
         for (const event of result.stageEvents) await audit('ASSESSMENT_STEP', event);
