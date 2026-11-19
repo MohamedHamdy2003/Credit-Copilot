@@ -1,5 +1,25 @@
 # Credit Copilot
 
+## تسجيل الدخول والاعتماد
+
+ضع `DEMO_PASSWORD` محليًا في `.env` بطول12–256 حرفًا، ثم:
+
+```powershell
+pnpm db:migrate
+pnpm seed:users
+pnpm dev:api
+```
+
+الحسابات: `loan-officer` للإعداد، `credit-officer` بحد250,000، `senior-credit-officer` بحد500,000، و`head-credit` بحد1,000,000. كلهم يستخدمون كلمة المرور المحلية المحددة للـdemo فقط. إعادة seed تحدث كلمة المرور وتلغي جلساتهم. الحسابات التي ينشئها CLI للتقييم معطّلة عن تسجيل الدخول.
+
+التوثيق: `http://localhost:3000/api/docs` (استخدم PORT بديلًا لو مشغول). Login يرجع cookie من نوع HttpOnly و`csrfToken`؛ أرسل الكوكي ومعه `x-csrf-token` في أي طلب تغيير حالة:
+
+- `POST /api/v1/auth/login` ببيانات username/password فقط؛ `GET /auth/me` و`POST /auth/logout` تحت نفس prefix.
+- `GET /api/v1/reviews` للمراجعين، و`GET /api/v1/assessments/:id` لصاحب الطلب أو Credit Officer.
+- `POST /api/v1/assessments/:id/decisions` ببيانات `action` و`expectedVersion` و`comment`. Actions: `approve`، `reject` (يحتاج clause)، `customer_response` (يحتاج accepted)، `issue` (يحتاج disbursementDate).
+
+الحد يُحسب على المبلغ المقترح، ولا يجوز اعتماد الطلب بواسطة معدّه. قبول البديل لازم يتسجل بواسطة معدّ الطلب قبل الاعتماد. الإصدار خطوة منفصلة بعد الموافقة وتعيد فحص سن الاستحقاق. Demo يصدر سجل عرض محاكاة بعلامة Demo وافتراضاته؛ ليس إثباتًا لاكتمال المستندات أو PDF جاهزًا. أي إحالة ناقصة/متلاعب بها تحتاج أدلة وإعادة تقييم؛ صلاحية Senior لا تتجاوز المتطلبات تلقائيًا. باقي الـAPI وReact لم يكتمل بعد.
+
 Synthetic personal-loan underwriting assistant. Implementation is in progress;
 the detailed scope and delivery sequence live in `docs/PR-PLAN.md`.
 
@@ -105,9 +125,9 @@ pnpm assess APP-004 --demo
 Remove-Item Env:ALLOW_DEMO_MODE
 ```
 
-APP-001 يرجع توصية pending_approval؛ APP-004 إحالة احتيال بدون LLM. Demo يفترض وجود البطاقة فقط ويحتفظ بـverified=false. APP-002/003/005 عندها نقص إثبات probation فبتتحول لمراجعة بشرية حتى في Demo؛ لا نفترض اكتماله لعرض نتيجة مرغوبة. كل تشغيل يحفظ طلب synthetic منفصلًا و8 أحداث مراحل والنتيجة والافتراضات وبنود السياسة وتوكنات الاستدعاء المتاحة. الـCLI مخصص للـfixtures المحلية بحساب disabled لا يصلح لتسجيل الدخول؛ ليس endpoint عام أو نظام اعتماد. تفعيل REST والواجهة والصلاحيات هو الـfeature التالي.
+APP-001 يرجع توصية pending_approval؛ APP-004 إحالة احتيال بدون LLM. Demo يفترض وجود البطاقة فقط ويحتفظ بـverified=false. APP-002/003/005 عندها نقص إثبات probation فبتتحول لمراجعة بشرية حتى في Demo؛ لا نفترض اكتماله لعرض نتيجة مرغوبة. كل تشغيل يحفظ طلب synthetic منفصلًا و8 أحداث مراحل والنتيجة والافتراضات وبنود السياسة وتوكنات الاستدعاء المتاحة. الـCLI مخصص للـfixtures المحلية بحساب disabled لا يصلح لتسجيل الدخول؛ ليس endpoint عام أو نظام اعتماد. ربط التقييم بواجهة REST عامة ومصادقة وReact هو العمل التالي؛ الدخول وقرارات المراجعة متاحة كما هو موضح أعلاه.
 
-Q&A تعرض اقتباسات المصدر؛ لا توجد صياغة شرح حر مضمونة أو استخراج محادثي عام للأرقام. استخدم JSON مع calculate للحساب. threshold0.65 مبدئي؛ خمس حالات لا تثبت الجودة العامة. cl100k ليس tokenizer Gemini. نفس document/version ببايتات مختلفة يرفض؛ التحديث المسموح بإصدار pipeline يحفظ التاريخ. واجهة React حاليًا shell؛ auth/approval/full UI/full15-case evaluation/stretches لاحقًا. تمت إضافة fixtures لـPDF بلا نص وPDF محمي وكمان اختبار ملف تالف؛ كلها تُرفض بأخطاء واضحة.
+Q&A تعرض اقتباسات المصدر؛ لا توجد صياغة شرح حر مضمونة أو استخراج محادثي عام للأرقام. استخدم JSON مع calculate للحساب. threshold0.65 مبدئي؛ خمس حالات لا تثبت الجودة العامة. cl100k ليس tokenizer Gemini. نفس document/version ببايتات مختلفة يرفض؛ التحديث المسموح بإصدار pipeline يحفظ التاريخ. واجهة React حاليًا shell؛ باقي endpoints وfull UI/full15-case evaluation/stretches لاحقًا. تمت إضافة fixtures لـPDF بلا نص وPDF محمي وكمان اختبار ملف تالف؛ كلها تُرفض بأخطاء واضحة.
 
 تابع PRs وActions على GitHub؛ status.md يسجل الحالة الفعلية وآخر خطوة، ولا تعتبر وجود CI YAML دليلًا أن كل run نجح.
 

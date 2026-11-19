@@ -1,0 +1,287 @@
+import { randomUUID } from 'node:crypto';
+import type { DataSource } from 'typeorm';
+import type { DecisionStore, DecisionCommand } from '../../../application/src/decisions.js';
+import type { AssessmentResult } from '../../../application/src/assessment-record.js';
+import { authorizeApproval, requireReviewer, type Actor } from '../../../domain/src/access.js';
+import { invariant } from '../../../domain/src/errors.js';
+import { addMonths, compareMoney } from '../../../domain/src/calculations.js';
+import { parseApplicationForm } from '../../../application/src/application-form.js';
+import type { NormalizedDocument } from '../../../contracts/src/documents.js';
+import { selectPolicy, type Policy } from '../../../domain/src/policy.js';
+interface RunRow {
+  latest_assessment_id?: string | null;
+  id: string;
+  application_id: string;
+  preparer_id: string;
+  status: string;
+  version: number;
+  result: AssessmentResult;
+  normalized: NormalizedDocument;
+}
+export class PostgresDecisionStore implements DecisionStore {
+  constructor(
+    private readonly db: DataSource,
+    private readonly policies: Policy[],
+  ) {}
+  async read(actor: Actor, runId: string) {
+    const rows = (await this.db.query(
+      'SELECT r.id,r.application_id,r.status,r.version,r.result,a.preparer_id FROM cases.assessment_runs r JOIN cases.applications a ON a.id=r.application_id WHERE r.id=$1',
+      [runId],
+    )) as RunRow[];
+    const row = rows[0];
+    invariant(row, 'NotFound', 'Assessment not found', 404);
+    invariant(
+      actor.role === 'credit_officer' || row.preparer_id === actor.id,
+      'Forbidden',
+      'Assessment access denied',
+      403,
+    );
+    return row;
+  }
+  async queue(actor: Actor) {
+    requireReviewer(actor);
+    return this.db.query(
+      "SELECT r.id,r.application_id,r.status,r.version,r.result->>'recommendation' AS recommendation,r.result->>'recommendedAmount' AS recommended_amount,r.created_at FROM cases.assessment_runs r WHERE r.status IN ('pending_review','pending_approval','pending_customer_acceptance') ORDER BY r.created_at,r.id",
+    );
+  }
+  async execute(actor: Actor, runId: string, command: DecisionCommand, requestId: string) {
+    return this.db.transaction(async (manager) => {
+      // Re-read current privileges inside the transaction; request body cannot set role/tier.
+      const users = (await manager.query(
+        'SELECT id,username,role,tier,can_ingest AS "canIngest" FROM cases.users WHERE id=$1 AND active FOR SHARE',
+        [actor.id],
+      )) as Actor[];
+      invariant(users[0], 'Unauthenticated', 'User disabled or removed', 401);
+      actor = users[0];
+      if (command.action !== 'customer_response') requireReviewer(actor);
+      const rows = (await manager.query(
+        'SELECT r.*,a.preparer_id,a.normalized,a.latest_assessment_id FROM cases.assessment_runs r JOIN cases.applications a ON a.id=r.application_id WHERE r.id=$1 FOR UPDATE OF r,a',
+        [runId],
+      )) as RunRow[];
+      const run = rows[0];
+      invariant(run, 'NotFound', 'Assessment not found', 404);
+      invariant(
+        !run.latest_assessment_id || run.latest_assessment_id === run.id,
+        'StaleAssessment',
+        'A newer assessment exists; review the latest run',
+        409,
+      );
+      invariant(
+        run.version === command.expectedVersion,
+        'StaleAssessment',
+        'Assessment version changed; reload before deciding',
+        409,
+      );
+      const newer = (await manager.query(
+        'SELECT id FROM cases.assessment_runs WHERE application_id=$1 AND (created_at,id)>(SELECT created_at,id FROM cases.assessment_runs WHERE id=$2) LIMIT 1',
+        [run.application_id, run.id],
+      )) as { id: string }[];
+      invariant(
+        !newer.length,
+        'StaleAssessment',
+        'A newer assessment exists; review the latest run',
+        409,
+      );
+      const result = run.result;
+      const audit = async (event: string, details: unknown) =>
+        manager.query(
+          'INSERT INTO cases.audit_events(id,run_id,request_id,actor_id,event,details) VALUES($1,$2,$3,$4,$5,$6)',
+          [randomUUID(), runId, requestId, actor.id, event, details],
+        );
+      let next: string;
+      if (command.action === 'customer_response') {
+        invariant(
+          actor.id === run.preparer_id,
+          'Forbidden',
+          'Only the preparer may record the customer response',
+          403,
+        );
+        invariant(
+          run.status === 'pending_customer_acceptance' &&
+            result.recommendation === 'OFFER_ALTERNATIVE',
+          'InvalidTransition',
+          'No alternative is awaiting acceptance',
+          409,
+        );
+        await manager.query(
+          'INSERT INTO cases.customer_responses(id,run_id,accepted,recorded_by,comment) VALUES($1,$2,$3,$4,$5)',
+          [randomUUID(), runId, command.accepted, actor.id, command.comment],
+        );
+        next = command.accepted ? 'pending_approval' : 'pending_review';
+        await audit('CUSTOMER_RESPONSE_RECORDED', {
+          accepted: command.accepted,
+          comment: command.comment,
+        });
+      } else if (command.action === 'approve') {
+        invariant(
+          run.status === 'pending_approval' || run.status === 'pending_review',
+          'InvalidTransition',
+          'Assessment is not awaiting approval',
+          409,
+        );
+        const amount = result.recommendedAmount;
+        invariant(
+          amount && compareMoney(amount, '0') > 0,
+          'UnresolvedReferral',
+          'A complete reassessment with a recommended amount is required',
+          409,
+        );
+        authorizeApproval(
+          actor,
+          run.preparer_id,
+          amount,
+          result.recommendation === 'REFER_TO_HUMAN',
+          command.comment,
+        );
+        invariant(
+          !result.fraudReferral && result.evidence.missing.length === 0,
+          'UnresolvedReferral',
+          'Missing or tampered evidence must be resolved by reassessment',
+          409,
+        );
+        invariant(
+          result.recommendation === 'APPROVE' || result.recommendation === 'OFFER_ALTERNATIVE',
+          'UnresolvedReferral',
+          'Failed eligibility cannot be silently overridden',
+          409,
+        );
+        if (result.recommendation === 'OFFER_ALTERNATIVE') {
+          const responses = (await manager.query(
+            'SELECT accepted FROM cases.customer_responses WHERE run_id=$1',
+            [runId],
+          )) as { accepted: boolean }[];
+          invariant(
+            responses[0]?.accepted,
+            'CustomerAcceptanceRequired',
+            'Customer must accept the alternative first',
+            409,
+          );
+        }
+        await manager.query(
+          'INSERT INTO cases.approvals(id,run_id,approver_id,decision,comment,amount,assessment_version) VALUES($1,$2,$3,$4,$5,$6,$7)',
+          [randomUUID(), runId, actor.id, 'approved', command.comment, amount, run.version],
+        );
+        next = 'approved';
+        await audit('ASSESSMENT_APPROVED', {
+          amount,
+          comment: command.comment,
+          version: run.version,
+        });
+      } else if (command.action === 'reject') {
+        requireReviewer(actor);
+        invariant(
+          actor.id !== run.preparer_id,
+          'FourEyesViolation',
+          'Preparer cannot decide their own assessment',
+          403,
+        );
+        invariant(
+          ['pending_review', 'pending_approval'].includes(run.status),
+          'InvalidTransition',
+          'Assessment is not awaiting a review decision',
+          409,
+        );
+        if (result.recommendation === 'REFER_TO_HUMAN')
+          invariant(
+            ['senior', 'head'].includes(actor.tier),
+            'Forbidden',
+            'Referral decisions require Senior Credit Officer',
+            403,
+          );
+        const failed = (result.results ?? [])
+          .filter((r) => r.result !== 'pass')
+          .map((r) => r.rule.split(' ')[0]);
+        const customerDeclined = (await manager.query(
+          'SELECT accepted FROM cases.customer_responses WHERE run_id=$1',
+          [runId],
+        )) as { accepted: boolean }[];
+        const allowed = [
+          ...failed,
+          ...(result.citations ?? result.evidence.referral?.citations ?? []),
+        ];
+        if (customerDeclined[0]?.accepted === false) allowed.push('CP-4.1');
+        invariant(
+          allowed.includes(command.clause),
+          'InvalidRejectionReason',
+          'Rejection must cite a failed/missing requirement or declined alternative',
+        );
+        await manager.query(
+          'INSERT INTO cases.approvals(id,run_id,approver_id,decision,comment,assessment_version) VALUES($1,$2,$3,$4,$5,$6)',
+          [
+            randomUUID(),
+            runId,
+            actor.id,
+            'rejected',
+            `${command.clause}: ${command.comment}`,
+            run.version,
+          ],
+        );
+        next = 'rejected';
+        await audit('ASSESSMENT_REJECTED', {
+          clause: command.clause,
+          edition: result.policyEdition,
+          comment: command.comment,
+        });
+      } else {
+        invariant(
+          run.status === 'approved',
+          'InvalidTransition',
+          'Only an approved assessment can be issued',
+          409,
+        );
+        const approval = (await manager.query(
+          "SELECT id,amount::text AS amount FROM cases.approvals WHERE run_id=$1 AND decision='approved'",
+          [runId],
+        )) as { id: string; amount: string }[];
+        invariant(approval[0], 'ApprovalRequired', 'Recorded approval required', 409);
+        authorizeApproval(actor, run.preparer_id, approval[0].amount, false, command.comment);
+        const form = parseApplicationForm(run.normalized);
+        invariant(
+          command.disbursementDate >= form.applicationDate,
+          'InvalidDisbursementDate',
+          'Disbursement must not predate the application',
+        );
+        const policy = selectPolicy(this.policies, form.applicationDate);
+        invariant(
+          policy.edition === result.policyEdition,
+          'ReassessmentRequired',
+          'Policy snapshot mismatch',
+        );
+        invariant(
+          addMonths(command.disbursementDate, form.months) <=
+            addMonths(form.birthDate, policy.maximumAgeAtMaturity * 12),
+          'ReassessmentRequired',
+          'Changed maturity date violates age limit',
+        );
+        const offerId = randomUUID();
+        await manager.query(
+          'INSERT INTO cases.offers(id,run_id,approval_id,data) VALUES($1,$2,$3,$4)',
+          [
+            offerId,
+            runId,
+            approval[0].id,
+            {
+              amount: approval[0].amount,
+              disbursementDate: command.disbursementDate,
+              mode: result.mode,
+              assumptions: result.evidence.assumptions,
+              fullyEvidenceVerified: result.evidence.fullyEvidenceVerified,
+              policyEdition: result.policyEdition,
+            },
+          ],
+        );
+        next = 'issued';
+        await audit('OFFER_ISSUED', {
+          offerId,
+          disbursementDate: command.disbursementDate,
+          comment: command.comment,
+        });
+      }
+      await manager.query(
+        'UPDATE cases.assessment_runs SET status=$2,version=version+1 WHERE id=$1',
+        [runId, next],
+      );
+      return { id: runId, status: next, version: run.version + 1 };
+    });
+  }
+}
