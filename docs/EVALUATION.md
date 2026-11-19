@@ -1,5 +1,17 @@
 # Evaluation
 
+## Assessment workflow verification on19 November2026
+
+72 offline unit tests and5 PostgreSQL integration tests pass. New workflow tests
+exercise all eight Mastra stages, all five original Strict referrals, Demo ID-only
+assumptions, missing probation referral, APP-004 pre-model fraud referral, invalid
+JSON/token retention, missing clauses, persistence failure, and fairness of the
+recommendation/calculation/canonical memo. Real local CLI/DB + Gemini smoke passed:
+APP-001 Strict missing-ID referral; Demo recommendation APPROVE pending human
+approval with EMI8,630.39 and capacity330,000; APP-004 fraud referral without a model
+call; other packs remain referrals for missing probation evidence. These are not
+issued offers or a substitute for the full fifteen-case evaluation.
+
 ## Observed results on17 November2026
 
 62 offline Jest tests and5 real PostgreSQL integration tests passed. Types, lint,

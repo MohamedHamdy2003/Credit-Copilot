@@ -88,6 +88,25 @@ flowchart TD
 
 ## حدود واضحة
 
+## تجربة تقييم الطلب
+
+بعد تشغيل PostgreSQL و`pnpm db:migrate` و`pnpm seed`:
+
+```powershell
+pnpm assess APP-001
+```
+
+Strict افتراضي: كل الـpacks الأصلية ناقصها نسخة البطاقة، فبتتحول لمراجعة بشرية. لتجربة Demo صراحة في نفس الـterminal فقط:
+
+```powershell
+$env:ALLOW_DEMO_MODE='true'
+pnpm assess APP-001 --demo
+pnpm assess APP-004 --demo
+Remove-Item Env:ALLOW_DEMO_MODE
+```
+
+APP-001 يرجع توصية pending_approval؛ APP-004 إحالة احتيال بدون LLM. Demo يفترض وجود البطاقة فقط ويحتفظ بـverified=false. APP-002/003/005 عندها نقص إثبات probation فبتتحول لمراجعة بشرية حتى في Demo؛ لا نفترض اكتماله لعرض نتيجة مرغوبة. كل تشغيل يحفظ طلب synthetic منفصلًا و8 أحداث مراحل والنتيجة والافتراضات وبنود السياسة وتوكنات الاستدعاء المتاحة. الـCLI مخصص للـfixtures المحلية بحساب disabled لا يصلح لتسجيل الدخول؛ ليس endpoint عام أو نظام اعتماد. تفعيل REST والواجهة والصلاحيات هو الـfeature التالي.
+
 Q&A تعرض اقتباسات المصدر؛ لا توجد صياغة شرح حر مضمونة أو استخراج محادثي عام للأرقام. استخدم JSON مع calculate للحساب. threshold0.65 مبدئي؛ خمس حالات لا تثبت الجودة العامة. cl100k ليس tokenizer Gemini. نفس document/version ببايتات مختلفة يرفض؛ التحديث المسموح بإصدار pipeline يحفظ التاريخ. واجهة React حاليًا shell؛ auth/approval/full UI/full15-case evaluation/stretches لاحقًا. تمت إضافة fixtures لـPDF بلا نص وPDF محمي وكمان اختبار ملف تالف؛ كلها تُرفض بأخطاء واضحة.
 
 تابع PRs وActions على GitHub؛ status.md يسجل الحالة الفعلية وآخر خطوة، ولا تعتبر وجود CI YAML دليلًا أن كل run نجح.

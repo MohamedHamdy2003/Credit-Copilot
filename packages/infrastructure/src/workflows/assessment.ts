@@ -34,7 +34,7 @@ const outputSchema = z.custom<Awaited<ReturnType<typeof assessApplication>>>(
     typeof value === 'object' && value !== null && 'recommendation' in value && 'status' in value,
 );
 
-/** Infrastructure wrapper; persistence/human approval are separate use cases. */
+/** Legacy test wrapper; new entry points use createDocumentAssessmentWorkflow. */
 export function createAssessmentWorkflow(
   dependencies: AssessmentDependencies,
   persistence?: {

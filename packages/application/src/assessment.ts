@@ -44,6 +44,7 @@ export interface AssessmentDependencies {
   pricing: PricingRow[];
   settings: { allowDemo: boolean; defaultMode?: AssessmentMode };
 }
+/** @deprecated Internal legacy test harness. Use the document-assessment stages for new entry points. */
 export async function assessApplication(
   input: AssessmentInput,
   dependencies: AssessmentDependencies,
