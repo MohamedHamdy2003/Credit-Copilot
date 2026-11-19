@@ -10,10 +10,23 @@ import { AuthService } from '../../../packages/application/src/auth.js';
 import { DecisionService } from '../../../packages/application/src/decisions.js';
 import { PostgresDecisionStore } from '../../../packages/infrastructure/src/db/decision-store.js';
 import type { Policy } from '../../../packages/domain/src/policy.js';
+import { GeminiAdapter } from '../../../packages/infrastructure/src/llm/gemini.js';
+import { createOperations } from '../../../packages/infrastructure/src/operations.js';
 const config = configSchema.parse(process.env);
 const db = await createDataSource(config.DATABASE_URL).initialize();
 const policies = JSON.parse(await readFile('data/config/policies.json', 'utf8')) as Policy[];
 const app = await createApi({
+  operations: await createOperations(
+    db,
+    new GeminiAdapter(
+      config.GEMINI_API_KEY,
+      config.GENERATION_MODEL,
+      config.EMBEDDING_MODEL,
+      config.EMBEDDING_DIMENSIONS,
+    ),
+    config,
+  ),
+  maxUploadBytes: config.UPLOAD_MAX_BYTES,
   auth: new AuthService(
     new PostgresAuthStore(db),
     new ScryptCredentials(),

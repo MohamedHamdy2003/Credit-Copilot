@@ -41,7 +41,7 @@ export class PostgresDecisionStore implements DecisionStore {
   async queue(actor: Actor) {
     requireReviewer(actor);
     return this.db.query(
-      "SELECT r.id,r.application_id,r.status,r.version,r.result->>'recommendation' AS recommendation,r.result->>'recommendedAmount' AS recommended_amount,r.created_at FROM cases.assessment_runs r WHERE r.status IN ('pending_review','pending_approval','pending_customer_acceptance') ORDER BY r.created_at,r.id",
+      "SELECT r.id,r.application_id,r.status,r.version,r.result->>'recommendation' AS recommendation,r.result->>'recommendedAmount' AS recommended_amount,r.created_at FROM cases.assessment_runs r JOIN cases.applications a ON a.id=r.application_id WHERE r.status IN ('pending_review','pending_approval','pending_customer_acceptance') AND (a.latest_assessment_id IS NULL OR a.latest_assessment_id=r.id) ORDER BY r.created_at,r.id",
     );
   }
   async execute(actor: Actor, runId: string, command: DecisionCommand, requestId: string) {
@@ -60,6 +60,16 @@ export class PostgresDecisionStore implements DecisionStore {
       )) as RunRow[];
       const run = rows[0];
       invariant(run, 'NotFound', 'Assessment not found', 404);
+      const activeJobs = (await manager.query(
+        "SELECT run_id FROM cases.assessment_jobs WHERE application_id=$1 AND status='running'",
+        [run.application_id],
+      )) as { run_id: string }[];
+      invariant(
+        !activeJobs.length,
+        'AssessmentInProgress',
+        'Wait for the current reassessment before recording a decision',
+        409,
+      );
       invariant(
         !run.latest_assessment_id || run.latest_assessment_id === run.id,
         'StaleAssessment',

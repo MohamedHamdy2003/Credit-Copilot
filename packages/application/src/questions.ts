@@ -43,8 +43,11 @@ export async function answerPolicyQuestion(
     'Question must contain 1–2000 characters',
   );
   validDate(input.asOfDate);
+  const question = input.question
+    .replace(/\b\d{14}\b/g, '[MASKED_ID]')
+    .replace(/\b01\d(?:[- ]?\d){8}\b/g, '[MASKED_PHONE]');
   const hits = (
-    await dependencies.search.search(input.question, input.asOfDate, input.product ?? 'PL-100', 5)
+    await dependencies.search.search(question, input.asOfDate, input.product ?? 'PL-100', 5)
   ).filter(
     (hit) => Number.isFinite(hit.similarity) && hit.similarity >= dependencies.minimumSimilarity,
   );
@@ -58,7 +61,7 @@ export async function answerPolicyQuestion(
   const response = await dependencies.provider.completeStructured(
     dependencies.prompt,
     JSON.stringify({
-      question: input.question,
+      question,
       asOfDate: input.asOfDate,
       evidence: hits.map((hit) => ({ chunkId: hit.chunk.id, text: hit.chunk.text })),
     }),

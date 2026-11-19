@@ -87,6 +87,26 @@ require a new assessment, not relabeling an earlier result.
 
 ## Domain isolation
 
+Authenticated REST uses OperationsService application ports, composed by Nest's
+main entry point with existing parsers, knowledge services, calculation functions
+and the eight-stage Mastra workflow. Controllers validate transport shape and
+session/CSRF; the server derives actor identity and reviewed synthetic status.
+Only byte hashes of the five supplied packs are accepted for customer uploads;
+only the seven reviewed manifest documents enter policy knowledge. Original pack
+bytes stay in cases.evidence_documents with owner/reviewer-only downloads. Safe
+application reads omit personal identifiers and protected fields. Q&A masks IDs
+and Egyptian phones before both embedding and generation. Explicit date/edition
+selectors must agree with dates/editions in the question; otherwise fail closed.
+
+Assessment jobs reserve one active run per application under an application lock.
+Idempotency keys bind the application and mode; success replays the immutable
+result, concurrent attempts return409, failures require a new key. Job completion,
+snapshot, latest pointer and audit events commit together. A new attempt can expire
+jobs older than15 minutes; expired jobs cannot persist late results. Decisions
+share the application lock and reject while a reassessment is running; the review
+queue omits superseded runs. Issued applications cannot start another assessment.
+The15-minute lease is fixed for now, not a background queue or resumable worker.
+
 Application defines assessment, authentication and decision repository ports;
 Infrastructure implements PostgreSQL transactions. Assessment snapshots are insert-only,
 while explicit decisions update lifecycle status/version and append audit records.
@@ -115,7 +135,7 @@ no OCR. Clause/page/CSV-row provenance is retained; trusted source hashes live i
 data/config/corpus-manifest.json. Documents at data/corpus are authoritative.
 Provider prompts are files; Application generation/embed interfaces isolate Gemini.
 A new provider implements ports in packages/infrastructure/src/llm and is selected
-at the composition root (scripts/runtime.ts today; Nest composition later).
+at the composition root (scripts/runtime.ts and apps/api/src/main.ts).
 
 Application date selects half-open policy intervals; missing/ambiguous coverage
 refers. CP2025 income10,000 overrides product's old8,000; PL-100 remains20,000–1m
@@ -136,7 +156,7 @@ pricing deviations Credit Committee authorization. Records retained7 years; writ
 rejection reasons cite clause/edition and complaint requests have30-day window.
 Historical pre-March2025 operational procedures are not supplied; do not invent them.
 
-Remaining scope: authenticated ingestion/assessment endpoints, React UI, full
+Remaining scope: React UI, complaints completion, full
 15-case evaluation, then all nine stretches (hybrid BM25+pgvector/RRF, rewriting,
 new synthetic documents, typed agents, SSE, local fallback, second product, offer
 PDF/schedule, per-user usage/cost). PostgreSQL ts_rank is not BM25. Before hybrid,

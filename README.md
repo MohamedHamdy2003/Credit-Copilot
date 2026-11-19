@@ -1,5 +1,30 @@
 # Credit Copilot
 
+## REST API — آخر تسليم
+
+الـREST الأساسي جاهز، وواجهة React الكاملة هي الخطوة التالية. شغّل migrations قبل الـAPI. كل المسارات التالية تحت `/api/v1` وتحتاج جلسة دخول، ومع POST أرسل cookie و`x-csrf-token`:
+
+| المسار | الاستخدام |
+|---|---|
+| `GET /knowledge/documents` | عرض السياسات المفهرسة |
+| `POST /knowledge/ingestions` | multipart بحقل `files`؛ من1 إلى20 ملفًا؛ صلاحية ingestion مطلوبة |
+| `GET /knowledge/ingestions` | نتائج المحاولات لمن يملك صلاحية ingestion |
+| `POST /questions` | JSON مثل `{"question":"Maximum DBR in CP-2024?"}`؛ يقبل `asOfDate` و`edition` و`product: "PL-100"` |
+| `POST /calculations` | نفس JSON الخاص بـcalculate: principal/income/obligations/months/date |
+| `GET /applications/fixtures` | قائمة APP-001 إلى APP-005 |
+| `POST /applications/fixtures/APP-001` | اختيار pack معروف بجسم `{}` |
+| `POST /applications` | رفع pack أصلي multipart بحقل `file` |
+| `GET /applications` أو `/applications/:id` | قائمة الطلبات أو بيانات الطلب المسموحة |
+| `GET /applications/:id/evidence` | تنزيل الملف الأصلي لصاحب الطلب أو المراجع |
+| `POST /applications/:id/assessments` | `{}` لـStrict أو `{"mode":"demo"}` عند تفعيل ALLOW_DEMO_MODE محليًا |
+| `GET /offers/:id` | قراءة سجل العرض الصادر مع علامة Demo والتحقق الفعلي |
+
+الرفع يقبل الأنواع PDF/CSV/MD وحد10MiB، لكن Knowledge Base تقبل السياسات السبع المطابقة للـmanifest فقط، وتقييم العملاء يقبل الـPDF packs الخمسة المعروفة بالـhash فقط. لا يوجد رفع عام لبيانات عملاء حقيقية. نتائج دفعة ingestion لكل ملف على حدة؛ راجع `results` لأن فشل ملف لا يلغي نجاح الباقي. المستخدم وكون الطلب synthetic يُحددان على السيرفر، وأي flags إضافية تُرفض.
+
+عند التقييم أرسل `Idempotency-Key` ثابتًا لنفس المحاولة: إعادة الطلب بعد النجاح ترجع نفس run؛ المفتاح نفسه مع mode مختلف يرفض409، والمحاولة الفاشلة تحتاج مفتاحًا جديدًا. يمنع تشغيل تقييمين لنفس الطلب، وأي قرار على نتيجة سابقة أثناء إعادة التقييم. المحاولات العالقة أكثر من15 دقيقة تُغلق عند بدء محاولة جديدة؛ نتيجتها المتأخرة لا تستبدل النتيجة الجديدة. الطلب الصادر عرضه لا يعاد تقييمه. السؤال يستنتج تاريخ ISO أو إصدار CP المذكور صراحة، ويستخدم تاريخ القاهرة الحالي إن لم تحدده؛ تعارض التاريخ والإصدار يرفض بدل اختيار سياسة بصمت.
+
+آخر تحقق لهذا التسليم:77 unit و23 PostgreSQL/HTTP integration، مع types/lint/format/build. اختبارات HTTP تستخدم provider وهميًا؛ لا تعتبر قياسًا جديدًا لجودة Gemini. نتائج Gemini الحقيقية السابقة محفوظة في `docs/EVALUATION.md`.
+
 ## تسجيل الدخول والاعتماد
 
 ضع `DEMO_PASSWORD` محليًا في `.env` بطول12–256 حرفًا، ثم:
@@ -18,7 +43,7 @@ pnpm dev:api
 - `GET /api/v1/reviews` للمراجعين، و`GET /api/v1/assessments/:id` لصاحب الطلب أو Credit Officer.
 - `POST /api/v1/assessments/:id/decisions` ببيانات `action` و`expectedVersion` و`comment`. Actions: `approve`، `reject` (يحتاج clause)، `customer_response` (يحتاج accepted)، `issue` (يحتاج disbursementDate).
 
-الحد يُحسب على المبلغ المقترح، ولا يجوز اعتماد الطلب بواسطة معدّه. قبول البديل لازم يتسجل بواسطة معدّ الطلب قبل الاعتماد. الإصدار خطوة منفصلة بعد الموافقة وتعيد فحص سن الاستحقاق. Demo يصدر سجل عرض محاكاة بعلامة Demo وافتراضاته؛ ليس إثباتًا لاكتمال المستندات أو PDF جاهزًا. أي إحالة ناقصة/متلاعب بها تحتاج أدلة وإعادة تقييم؛ صلاحية Senior لا تتجاوز المتطلبات تلقائيًا. باقي الـAPI وReact لم يكتمل بعد.
+الحد يُحسب على المبلغ المقترح، ولا يجوز اعتماد الطلب بواسطة معدّه. قبول البديل لازم يتسجل بواسطة معدّ الطلب قبل الاعتماد. الإصدار خطوة منفصلة بعد الموافقة وتعيد فحص سن الاستحقاق. Demo يصدر سجل عرض محاكاة بعلامة Demo وافتراضاته؛ ليس إثباتًا لاكتمال المستندات أو PDF جاهزًا. أي إحالة ناقصة/متلاعب بها تحتاج أدلة وإعادة تقييم؛ صلاحية Senior لا تتجاوز المتطلبات تلقائيًا. الـREST الأساسي جاهز، وواجهة React الكاملة لاحقًا.
 
 Synthetic personal-loan underwriting assistant. Implementation is in progress;
 the detailed scope and delivery sequence live in `docs/PR-PLAN.md`.
@@ -72,7 +97,7 @@ pnpm evaluate
 
 seed الثاني يرجع skipped. DBR45% في2025 و50% في2024، والمنتج يظل60 شهرًا، وcrypto refusal. evaluate الحالي خمس حالات live فقط، وليس تقييم FR-6 الكامل المطلوب في اليوم الثاني. الطلبات تستهلك quota من حساب Gemini.
 
-النتائج المنفذة:62 unit tests و5 PostgreSQL integration tests ناجحين. القياس الحقيقي بعد الإصلاح: hit@5 =3/3 للأسئلة القابلة للإجابة؛ refusal correctness =5/5؛ out-of-corpus refusal =2/2. الحالة الأولى لسؤال المدة فشلت وتم الاحتفاظ بها في docs/EVALUATION.md، ثم أصلحنا اختلاف اسم حقل JSON وأعدنا القياس بنجاح.
+نتائج اليوم الأول التاريخية:62 unit tests و5 PostgreSQL integration tests ناجحين؛ العدد الحالي أعلى كما هو موضح في آخر تسليم أعلاه. القياس الحقيقي بعد الإصلاح: hit@5 =3/3 للأسئلة القابلة للإجابة؛ refusal correctness =5/5؛ out-of-corpus refusal =2/2. الحالة الأولى لسؤال المدة فشلت وتم الاحتفاظ بها في docs/EVALUATION.md، ثم أصلحنا اختلاف اسم حقل JSON وأعدنا القياس بنجاح.
 
 ## اختبارات قاعدة البيانات
 
@@ -125,9 +150,9 @@ pnpm assess APP-004 --demo
 Remove-Item Env:ALLOW_DEMO_MODE
 ```
 
-APP-001 يرجع توصية pending_approval؛ APP-004 إحالة احتيال بدون LLM. Demo يفترض وجود البطاقة فقط ويحتفظ بـverified=false. APP-002/003/005 عندها نقص إثبات probation فبتتحول لمراجعة بشرية حتى في Demo؛ لا نفترض اكتماله لعرض نتيجة مرغوبة. كل تشغيل يحفظ طلب synthetic منفصلًا و8 أحداث مراحل والنتيجة والافتراضات وبنود السياسة وتوكنات الاستدعاء المتاحة. الـCLI مخصص للـfixtures المحلية بحساب disabled لا يصلح لتسجيل الدخول؛ ليس endpoint عام أو نظام اعتماد. ربط التقييم بواجهة REST عامة ومصادقة وReact هو العمل التالي؛ الدخول وقرارات المراجعة متاحة كما هو موضح أعلاه.
+APP-001 يرجع توصية pending_approval؛ APP-004 إحالة احتيال بدون LLM. Demo يفترض وجود البطاقة فقط ويحتفظ بـverified=false. APP-002/003/005 عندها نقص إثبات probation فبتتحول لمراجعة بشرية حتى في Demo؛ لا نفترض اكتماله لعرض نتيجة مرغوبة. كل تشغيل يحفظ طلب synthetic منفصلًا و8 أحداث مراحل والنتيجة والافتراضات وبنود السياسة وتوكنات الاستدعاء المتاحة. الـCLI مخصص للـfixtures المحلية بحساب disabled لا يصلح لتسجيل الدخول؛ ليس endpoint عام أو نظام اعتماد. التقييم متاح عبر REST محمية بالمصادقة كما هو موضح أعلاه؛ واجهة React الكاملة هي العمل التالي.
 
-Q&A تعرض اقتباسات المصدر؛ لا توجد صياغة شرح حر مضمونة أو استخراج محادثي عام للأرقام. استخدم JSON مع calculate للحساب. threshold0.65 مبدئي؛ خمس حالات لا تثبت الجودة العامة. cl100k ليس tokenizer Gemini. نفس document/version ببايتات مختلفة يرفض؛ التحديث المسموح بإصدار pipeline يحفظ التاريخ. واجهة React حاليًا shell؛ باقي endpoints وfull UI/full15-case evaluation/stretches لاحقًا. تمت إضافة fixtures لـPDF بلا نص وPDF محمي وكمان اختبار ملف تالف؛ كلها تُرفض بأخطاء واضحة.
+Q&A تعرض اقتباسات المصدر؛ لا توجد صياغة شرح حر مضمونة أو استخراج محادثي عام للأرقام. استخدم JSON مع calculate للحساب. threshold0.65 مبدئي؛ خمس حالات لا تثبت الجودة العامة. cl100k ليس tokenizer Gemini. نفس document/version ببايتات مختلفة يرفض؛ التحديث المسموح بإصدار pipeline يحفظ التاريخ. واجهة React حاليًا shell؛ full UI/full15-case evaluation/stretches لاحقًا. تمت إضافة fixtures لـPDF بلا نص وPDF محمي وكمان اختبار ملف تالف؛ كلها تُرفض بأخطاء واضحة.
 
 تابع PRs وActions على GitHub؛ status.md يسجل الحالة الفعلية وآخر خطوة، ولا تعتبر وجود CI YAML دليلًا أن كل run نجح.
 
