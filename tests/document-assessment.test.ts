@@ -162,11 +162,15 @@ it('refers missing clauses or inconsistent source/configuration', async () => {
   expect((await run('APP-001', { clauses: { loadRequired: async () => [] } })).result?.reason).toBe(
     'MissingPolicyClause',
   );
+  expect(
+    (await run('APP-001', { policies: deps.policies.map((p) => ({ ...p, maxDbr: '0.99' })) }))
+      .result?.reason,
+  ).toBe('PolicyConfigurationMismatch');
 });
-it('rejects client verification flags and does not trust caller-supplied evidence', () => {
+it('rejects client verification flags and does not trust caller-supplied evidence', async () => {
   expect(
     documentAssessmentInputSchema.safeParse({
-      document: {},
+      document: await load('APP-001'),
       actorId: 'actor',
       at: '2026-11-19T12:00:00Z',
       synthetic: true,
