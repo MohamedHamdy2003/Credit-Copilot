@@ -36,6 +36,11 @@ export function deriveEvidenceFacts(document: NormalizedDocument) {
     'MissingRequiredEvidence',
     'Exactly one default-status field required',
   );
+  invariant(
+    /^(?:None|Yes|[1-9]\d*(?: facilities?)?)$/i.test(defaultRows[0]!),
+    'UnverifiedDefaultStatus',
+    'Default status needs human verification',
+  );
   // Do not equate permanent employment alone with completed probation.
   const explicitComplete =
     /probation\s+(?:period\s+)?(?:is\s+)?complete(?:d)?|completed\s+(?:his\s+|her\s+|the\s+)?probation/i.test(

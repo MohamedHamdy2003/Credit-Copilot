@@ -181,6 +181,16 @@ it('rejects client verification flags and does not trust caller-supplied evidenc
 it('derives real local facts rather than using requested values', async () => {
   expect(deriveEvidenceFacts(await load('APP-001')).facts.confirmed).toBe(true);
   expect(deriveEvidenceFacts(await load('APP-002')).facts.confirmed).toBeNull();
+  const doc = await load('APP-001');
+  expect(() =>
+    deriveEvidenceFacts({
+      ...doc,
+      blocks: doc.blocks.map((b) => ({
+        ...b,
+        text: b.text.replace('Facilities in default None', 'Facilities in default Unknown'),
+      })),
+    }),
+  ).toThrow('human verification');
 });
 
 it('records skipped steps honestly and propagates persistence failure', async () => {
