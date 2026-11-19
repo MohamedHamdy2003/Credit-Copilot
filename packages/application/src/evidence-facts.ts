@@ -47,7 +47,9 @@ export function deriveEvidenceFacts(document: NormalizedDocument) {
       salary,
     );
   const probationActive =
-    /(?:on|under|in)\s+probation|probation\s+(?:not completed|incomplete)/i.test(salary);
+    /(?:on|under|in)\s+probation|probation\s+(?:is\s+)?(?:not completed|incomplete)|not\s+(?:yet\s+)?completed\s+(?:his\s+|her\s+|the\s+)?probation/i.test(
+      salary,
+    );
   if (explicitComplete && probationActive)
     throw new DomainError('EvidenceConflict', 'Contradictory probation evidence');
   const allowedPurposes = [

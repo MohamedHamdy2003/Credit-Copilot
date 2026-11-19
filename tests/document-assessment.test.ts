@@ -187,6 +187,15 @@ it('derives real local facts rather than using requested values', async () => {
       ...doc,
       blocks: doc.blocks.map((b) => ({
         ...b,
+        text: b.text.replace('completed his probation', 'not completed his probation'),
+      })),
+    }),
+  ).toThrow('probation');
+  expect(() =>
+    deriveEvidenceFacts({
+      ...doc,
+      blocks: doc.blocks.map((b) => ({
+        ...b,
         text: b.text.replace('Facilities in default None', 'Facilities in default Unknown'),
       })),
     }),
