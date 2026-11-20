@@ -73,6 +73,12 @@ function citation(chunk: Chunk, quote: string) {
     effectiveTo: chunk.effectiveTo,
   };
 }
+export function maskPolicyQuestion(question: string) {
+  return question
+    .replace(/\b\d{14}\b/g, '[MASKED_ID]')
+    .replace(/\b01\d(?:[- ]?\d){8}\b/g, '[MASKED_PHONE]');
+}
+
 export async function answerPolicyQuestion(
   input: { question: string; asOfDate: string; product?: string },
   dependencies: {
@@ -88,9 +94,7 @@ export async function answerPolicyQuestion(
     'Question must contain 1–2000 characters',
   );
   validDate(input.asOfDate);
-  const question = input.question
-    .replace(/\b\d{14}\b/g, '[MASKED_ID]')
-    .replace(/\b01\d(?:[- ]?\d){8}\b/g, '[MASKED_PHONE]');
+  const question = maskPolicyQuestion(input.question);
   const hits = (
     await dependencies.search.search(question, input.asOfDate, input.product ?? 'PL-100', 5)
   ).filter(

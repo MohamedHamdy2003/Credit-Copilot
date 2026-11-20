@@ -2,7 +2,7 @@ import type { DataSource } from 'typeorm';
 import type { Chunk } from '../../../contracts/src/documents.js';
 import type { EmbeddingPort } from '../../../application/src/ports.js';
 import { validDate } from '../../../domain/src/calculations.js';
-import { isApprovalBypass } from '../../../application/src/questions.js';
+import { isApprovalBypass, maskPolicyQuestion } from '../../../application/src/questions.js';
 import type { Config } from '../../../contracts/src/config.js';
 import { rewritePolicyQuery } from '../../../application/src/query-rewrite.js';
 import {
@@ -83,12 +83,13 @@ export class RetrievalService {
     return (await this.searchWithTrace(question, date, product, limit)).hits;
   }
   async searchWithTrace(
-    question: string,
+    rawQuestion: string,
     date: string,
     product = 'PL-100',
     limit = 5,
   ): Promise<{ hits: SearchHit[]; rewrite?: RewriteTrace }> {
     validDate(date);
+    const question = maskPolicyQuestion(rawQuestion);
     const vector = await this.embeddings.embed(question, 'query');
     const parameters = [
       JSON.stringify(vector),
