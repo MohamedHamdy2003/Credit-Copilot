@@ -1,6 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { DataSource } from 'typeorm';
-import type { EmbeddingPort, GenerationPort, Completion } from '../../application/src/ports.js';
+import type {
+  EmbeddingPort,
+  GenerationPort,
+  Completion,
+  GenerationSchema,
+} from '../../application/src/ports.js';
 export class EvaluationMeter implements GenerationPort, EmbeddingPort {
   readonly model: string;
   readonly dimensions: number;
@@ -19,7 +24,11 @@ export class EvaluationMeter implements GenerationPort, EmbeddingPort {
     this.model = provider.model;
     this.dimensions = provider.dimensions;
   }
-  async completeStructured(system: string, data: string): Promise<Completion> {
+  async completeStructured(
+    system: string,
+    data: string,
+    schema?: GenerationSchema,
+  ): Promise<Completion> {
     const event = {
       kind: 'generation' as const,
       inputHash: createHash('sha256')
@@ -31,7 +40,7 @@ export class EvaluationMeter implements GenerationPort, EmbeddingPort {
     };
     this.events.push(event);
     try {
-      const r = await this.provider.completeStructured(system, data);
+      const r = await this.provider.completeStructured(system, data, schema);
       Object.assign(event, r.usage);
       return r;
     } catch (e) {

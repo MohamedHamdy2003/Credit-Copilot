@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { Chunk } from '../../contracts/src/documents.js';
-import type { GenerationPort } from './ports.js';
+import type { GenerationPort, Usage } from './ports.js';
 import { validDate } from '../../domain/src/calculations.js';
 import { invariant } from '../../domain/src/errors.js';
 
@@ -18,12 +18,13 @@ export interface PolicySearch {
     hits: { chunk: Chunk; similarity: number }[],
   ): Promise<{ chunks: Chunk[]; reason: string }>;
 }
+const quotedCitation = z.object({ chunkId: z.string(), quote: z.string().min(1) }).strict();
 const selectionSchema = z
   .object({
     citations: z
       .array(
         z.union([
-          z.object({ chunkId: z.string(), quote: z.string().min(1) }).strict(),
+          quotedCitation,
           z
             .object({ chunkId: z.string(), text: z.string().min(1) })
             .strict()
@@ -33,6 +34,27 @@ const selectionSchema = z
       .max(5),
   })
   .strict();
+const sentences = new Intl.Segmenter('en', { granularity: 'sentence' });
+
+function generationSchema(candidates: Chunk[]) {
+  // The local decoder selects source text it can reproduce exactly, including
+  // the matching chunk ID. Cloud generation still uses the same input prompt.
+  const choices = candidates.map((chunk) => {
+    const spans = [
+      chunk.text,
+      ...chunk.text.split('\n'),
+      ...Array.from(sentences.segment(chunk.text), ({ segment }) => segment),
+    ]
+      .map((span) => span.trim())
+      .filter(Boolean);
+    return quotedCitation.extend({
+      chunkId: z.literal(chunk.id),
+      quote: z.enum([...new Set(spans)]),
+    });
+  });
+  return z.toJSONSchema(z.object({ citations: z.array(z.union(choices)).max(5) }).strict());
+}
+type FallbackAttribution = { generation?: { model: string; fallbackFrom: string; usage: Usage } };
 export const REFUSAL = 'The documents do not contain enough information to answer this question.';
 export const isApprovalBypass = (question: string) =>
   /\bapprove\b[\s\S]{0,160}\bwithout\b[\s\S]{0,80}\b(?:human|reviewer|approval)\b/i.test(question);
@@ -74,7 +96,8 @@ export async function answerPolicyQuestion(
   ).filter(
     (hit) => Number.isFinite(hit.similarity) && hit.similarity >= dependencies.minimumSimilarity,
   );
-  const refuse = () => ({
+  const refuse = (attribution: FallbackAttribution = {}) => ({
+    ...attribution,
     answer: REFUSAL,
     citations: [],
     refused: true,
@@ -144,9 +167,19 @@ export async function answerPolicyQuestion(
         effectiveTo: chunk.effectiveTo,
       })),
     }),
+    generationSchema(candidates),
   );
+  const attribution: FallbackAttribution = response.fallbackFrom
+    ? {
+        generation: {
+          model: response.model,
+          fallbackFrom: response.fallbackFrom,
+          usage: response.usage,
+        },
+      }
+    : {};
   const parsed = selectionSchema.safeParse(response.value);
-  if (!parsed.success || !parsed.data.citations.length) return refuse();
+  if (!parsed.success || !parsed.data.citations.length) return refuse(attribution);
   const citations = [];
   const requiredKeys = new Set(related?.chunks.map((c) => `${c.documentId}:${c.section}`) ?? []);
   const selectedCitations = [
@@ -165,7 +198,7 @@ export async function answerPolicyQuestion(
       !selected.quote.trim() ||
       !source.text.replace(/\s+/g, ' ').includes(selected.quote.trim().replace(/\s+/g, ' '))
     )
-      return refuse();
+      return refuse(attribution);
   }
   for (const selected of selectedCitations) {
     const chunk = candidates.find((item) => item.id === selected.chunkId);
@@ -177,11 +210,12 @@ export async function answerPolicyQuestion(
       .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       .join('\\s+');
     const sourceQuote = chunk?.text.match(new RegExp(pattern))?.[0];
-    if (!chunk || !sourceQuote) return refuse();
+    if (!chunk || !sourceQuote) return refuse(attribution);
     citations.push(citation(chunk, sourceQuote));
   }
   // Evidence-first baseline: only verified verbatim spans become answer text.
   return {
+    ...attribution,
     answer: citations.map((citation) => citation.quote).join('\n\n'),
     citations,
     refused: false,

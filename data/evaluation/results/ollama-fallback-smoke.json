@@ -1,0 +1,48 @@
+{
+  "at": "2026-11-20T18:16:39.330Z",
+  "model": "qwen3:4b-instruct-2507-q4_K_M",
+  "gitHead": "01beb5d7e6bf7fe5aad3abe9f11d4cdbb7f75c7c",
+  "workingTreeDirty": false,
+  "scope": "real local Ollama, injected primary outage, trusted fixture clauses and in-memory assessment persistence",
+  "results": [
+    {
+      "name": "verified_extraction_and_code_memo",
+      "passed": true,
+      "latencyMs": 55352,
+      "details": {
+        "reference": "APP-001",
+        "policyEdition": "CP-2025",
+        "status": "pending_approval",
+        "usageRecords": [
+          {
+            "model": "simulated-gemini",
+            "inputTokens": null,
+            "outputTokens": null
+          },
+          {
+            "model": "ollama:qwen3:4b-instruct-2507-q4_K_M",
+            "inputTokens": 237,
+            "outputTokens": 187,
+            "fallbackFrom": "simulated-gemini"
+          }
+        ]
+      }
+    },
+    {
+      "name": "grounded_policy_quote",
+      "passed": true,
+      "latencyMs": 29177,
+      "details": {
+        "section": "CP-4.1",
+        "generation": {
+          "model": "ollama:qwen3:4b-instruct-2507-q4_K_M",
+          "fallbackFrom": "simulated-gemini",
+          "usage": {
+            "inputTokens": 406,
+            "outputTokens": 93
+          }
+        }
+      }
+    }
+  ]
+}

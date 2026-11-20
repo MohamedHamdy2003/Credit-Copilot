@@ -1,0 +1,21 @@
+{
+  "at": "2026-11-20T18:11:37.213Z",
+  "model": "qwen3:4b-instruct-2507-q4_K_M",
+  "gitHead": "0ccbb4024f801f102fb7e171017acf7a4b0dc758",
+  "workingTreeDirty": false,
+  "scope": "real local Ollama, injected primary outage, trusted fixture clauses and in-memory assessment persistence",
+  "results": [
+    {
+      "name": "verified_extraction_and_code_memo",
+      "passed": false,
+      "latencyMs": 60066,
+      "details": "ProviderUnavailable"
+    },
+    {
+      "name": "grounded_policy_quote",
+      "passed": false,
+      "latencyMs": 37012,
+      "details": "SmokeCitationFailed"
+    }
+  ]
+}

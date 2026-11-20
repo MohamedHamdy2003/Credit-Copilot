@@ -13,6 +13,8 @@ import { DecisionService } from '../packages/application/src/decisions.js';
 import { createOperations } from '../packages/infrastructure/src/operations.js';
 import { configSchema } from '../packages/contracts/src/config.js';
 import { WorkflowTestProvider } from './helpers/workflow-provider.js';
+import { DomainError } from '../packages/domain/src/errors.js';
+import { GenerationFallback } from '../packages/infrastructure/src/llm/provider.js';
 import { PostgresAssessmentRepository } from '../packages/infrastructure/src/db/assessment-repository.js';
 import type { AssessmentResult } from '../packages/application/src/assessment-record.js';
 import type { Policy } from '../packages/domain/src/policy.js';
@@ -25,6 +27,8 @@ const url =
   'postgresql://copilot:copilot_local@localhost:54329/credit_copilot_test';
 if (!new URL(url).pathname.endsWith('_test')) throw new Error('Dedicated test DB required');
 let db: DataSource, app: INestApplication, hash: string;
+let primaryUnavailable = false;
+const localProvider = new WorkflowTestProvider();
 const provider = new WorkflowTestProvider(),
   password = `test-${randomUUID()}`;
 beforeAll(async () => {
@@ -47,7 +51,31 @@ beforeAll(async () => {
   app = await createApi({
     auth: new AuthService(new PostgresAuthStore(db), new ScryptCredentials(), 8),
     decisions: new DecisionService(new PostgresDecisionStore(db, policies)),
-    operations: await createOperations(db, provider, config),
+    operations: await createOperations(
+      db,
+      new GenerationFallback(
+        {
+          model: provider.model,
+          dimensions: provider.dimensions,
+          embed: provider.embed.bind(provider),
+          completeStructured: async (system, data) => {
+            if (primaryUnavailable)
+              throw new DomainError('ProviderUnavailable', 'Fixture primary outage', 503, {
+                model: 'gemini-test',
+                retryable: true,
+              });
+            return provider.completeStructured(system, data);
+          },
+        },
+        {
+          completeStructured: async (system, data) => ({
+            ...(await localProvider.completeStructured(system, data)),
+            model: 'ollama:test-local',
+          }),
+        },
+      ),
+      config,
+    ),
     maxUploadBytes: 100000,
     webOrigin: 'http://localhost:5173',
     secureCookies: false,
@@ -58,6 +86,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   await db.query('DELETE FROM cases.login_attempts');
   provider.texts = [];
+  localProvider.texts = [];
+  primaryUnavailable = false;
 });
 afterAll(async () => {
   await app?.close();
@@ -337,4 +367,54 @@ it('recovers an abandoned job and prevents its late result from superseding the 
   expect(
     await db.query('SELECT latest_assessment_id FROM cases.applications WHERE id=$1', [id]),
   ).toEqual([{ latest_assessment_id: response.body.runId }]);
+});
+
+it('persists fallback usage and audit data from a sanitized authenticated assessment', async () => {
+  const owner = await account();
+  const application = await select(owner);
+  primaryUnavailable = true;
+  const response = await post('applications/' + application + '/assessments', owner)
+    .set('Idempotency-Key', randomUUID())
+    .send({ mode: 'demo' })
+    .expect(201);
+  expect(response.body.result).toMatchObject({
+    status: 'pending_approval',
+    recommendation: 'APPROVE',
+    calculation: { monthlyInstallment: '8630.39' },
+    usageRecords: [
+      { model: 'gemini-test', inputTokens: null, outputTokens: null },
+      { model: 'ollama:test-local', fallbackFrom: 'gemini-test', inputTokens: 12, outputTokens: 8 },
+    ],
+  });
+  expect(localProvider.texts).toHaveLength(1);
+  expect(Object.keys(JSON.parse(localProvider.texts[0]!)).sort()).toEqual(['evidence', 'source']);
+  expect(localProvider.texts[0]).not.toMatch(/gender|religion|marital|nationality|28704121234567/i);
+  expect(
+    await db.query(
+      "SELECT details FROM cases.audit_events WHERE run_id=$1 AND event='LLM_GENERATION_FALLBACK'",
+      [response.body.runId],
+    ),
+  ).toEqual([{ details: { from: 'gemini-test', to: 'ollama:test-local' } }]);
+  expect(
+    await db.query(
+      'SELECT model,input_tokens,output_tokens FROM cases.llm_usage WHERE run_id=$1 ORDER BY model',
+      [response.body.runId],
+    ),
+  ).toEqual([
+    { model: 'gemini-test', input_tokens: null, output_tokens: null },
+    { model: 'ollama:test-local', input_tokens: 12, output_tokens: 8 },
+  ]);
+
+  const qa = await post('questions', owner)
+    .send({
+      question: 'maximum debt burden ratio for 28704121234567',
+      asOfDate: '2025-04-03',
+    })
+    .expect(201);
+  expect(qa.body).toMatchObject({
+    refused: false,
+    generation: { model: 'ollama:test-local', fallbackFrom: 'gemini-test' },
+  });
+  expect(localProvider.texts.at(-1)).toContain('[MASKED_ID]');
+  expect(localProvider.texts.at(-1)).not.toContain('28704121234567');
 });

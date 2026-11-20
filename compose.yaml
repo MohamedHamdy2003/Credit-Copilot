@@ -14,5 +14,15 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+  ollama:
+    profiles: ['local-llm']
+    image: ollama/ollama:0.40.16
+    environment:
+      OLLAMA_NO_CLOUD: '1'
+    ports:
+      - '127.0.0.1:11434:11434'
+    volumes:
+      - ollama_models:/root/.ollama
 volumes:
   postgres_data:
+  ollama_models:

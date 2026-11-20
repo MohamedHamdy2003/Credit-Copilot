@@ -28,9 +28,9 @@
 3. **Synthetic Corpus Extension:** مستندات وحالات اختبار جديدة.
 4. **Typed Tool-Calling Agents:** ثلاثة agents للاستخراج، وبحث السياسات، والمذكرة.
 5. **SSE Streaming:** عرض تقدم خطوات التقييم وبث الإجابات المتحققة.
-6. **Local Model Fallback:** ‏Ollama عند تعطل Gemini أو انتهاء الـquota.
+6. **Local Model Fallback:** ✅ ‏Ollama اختياري للتوليد بعد الأعطال المؤقتة في Gemini. الفحص المحلي نجح 2/2.
 7. **Second Product:** قرض سيارة بقواعد دفعة مقدمة وتسعير منفصل.
 8. **Offer PDF & Repayment Schedule:** خطاب العرض المعتمد وجدول الأقساط.
 9. **Per-user Token & Cost Tracking:** متابعة الاستخدام والتكلفة لكل مستخدم وتقييم.
 
-**الـfeature اللي عليها الدور حسب خطة الـPRs:** Local Model Fallback (P12). البوابة الوظيفية نجحت؛ الفيديو ومراجعة التسليم وشرط أربعة تواريخ commits ما زالوا متبقّيين.
+**الـfeature اللي عليها الدور حسب خطة الـPRs:** Typed Tool-Calling Agents (P13). البوابة الوظيفية نجحت؛ الفيديو ومراجعة التسليم وشرط أربعة تواريخ commits ما زالوا متبقّيين.
