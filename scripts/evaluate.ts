@@ -77,6 +77,8 @@ try {
 const db = await createDataSource(url.toString()).initialize();
 let source: ReturnType<typeof createDataSource> | undefined, runner: CoreEvaluation | undefined;
 const results: EvaluationResult[] = [];
+const providerRetryLimit = mode === 'live' ? 2 : 0;
+const providerFailuresBeforeRetry: EvaluationResult[] = [];
 const files = [
   'data/evaluation/cases.json',
   'data/config/policies.json',
@@ -147,6 +149,8 @@ const report: { [key: string]: unknown } = {
   hashConvention:
     'SHA256; code/config text normalized to LF; supplied source-document bytes unchanged',
   completed: false,
+  providerRetryLimit,
+  providerFailuresBeforeRetry,
   results,
 };
 await mkdir('artifacts/evaluation', { recursive: true });
@@ -183,7 +187,16 @@ try {
   );
   report.strictChecks = await runner.strictChecks();
   for (const c of dataset.cases) {
-    const result = await runner.run(c);
+    let result = await runner.run(c);
+    if (
+      result.error === 'ProviderUnavailable' &&
+      providerFailuresBeforeRetry.length < providerRetryLimit
+    ) {
+      providerFailuresBeforeRetry.push(result);
+      await persist();
+      console.log(`${c.id} RETRY ${result.error} ${result.latencyMs}ms`);
+      result = await runner.run(c);
+    }
     results.push(result);
     await persist();
     console.log(

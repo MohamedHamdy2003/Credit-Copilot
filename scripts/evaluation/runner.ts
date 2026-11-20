@@ -241,6 +241,24 @@ export class CoreEvaluation {
           'SELECT (SELECT count(*) FROM cases.approvals)::int AS approvals,(SELECT count(*) FROM cases.offers)::int AS offers',
         );
         const hits = await this.search.search(c.question!, c.date!);
+        const keys = hits.map((h) => `${h.chunk.documentId}:${h.chunk.section}`);
+        r.retrieval = {
+          hitAt5: c.expectedRefusal ? null : c.gold!.some((g) => keys.includes(g)),
+          gold: c.gold!,
+          critical: c.criticalGold!,
+          candidateKeys: keys,
+          citationKeys: [],
+        };
+        const observed = {
+          candidates: hits.map((h) => ({
+            key: `${h.chunk.documentId}:${h.chunk.section}`,
+            id: h.chunk.id,
+            similarity: h.similarity,
+            ...('ranking' in h ? { ranking: h.ranking } : {}),
+          })),
+          retrievalThreshold: this.config.RETRIEVAL_MIN_SIMILARITY,
+        };
+        r.observed = observed;
         const answer = await answerPolicyQuestion(
           { question: c.question!, asOfDate: c.date! },
           {
@@ -250,15 +268,8 @@ export class CoreEvaluation {
             search: { search: async () => hits, related: this.search.related?.bind(this.search) },
           },
         );
-        const keys = hits.map((h) => `${h.chunk.documentId}:${h.chunk.section}`),
-          citations = answer.citations.map((q) => `${q.documentId}:${q.section}`);
-        r.retrieval = {
-          hitAt5: c.expectedRefusal ? null : c.gold!.some((g) => keys.includes(g)),
-          gold: c.gold!,
-          critical: c.criticalGold!,
-          candidateKeys: keys,
-          citationKeys: citations,
-        };
+        const citations = answer.citations.map((q) => `${q.documentId}:${q.section}`);
+        r.retrieval.citationKeys = citations;
         r.refusal = { expected: c.expectedRefusal!, actual: answer.refused };
         r.assertions.push(assertion('refusal', 'behavior', c.expectedRefusal, answer.refused));
         for (const pattern of c.expectedPatterns!)
@@ -303,16 +314,7 @@ export class CoreEvaluation {
               ),
             ),
           );
-        r.observed = {
-          answer,
-          candidates: hits.map((h) => ({
-            key: `${h.chunk.documentId}:${h.chunk.section}`,
-            id: h.chunk.id,
-            similarity: h.similarity,
-            ...('ranking' in h ? { ranking: h.ranking } : {}),
-          })),
-          retrievalThreshold: this.config.RETRIEVAL_MIN_SIMILARITY,
-        };
+        r.observed = { ...observed, answer };
       } else if (c.kind === 'calculation') {
         const output = answerCalculationQuestion(
           {
