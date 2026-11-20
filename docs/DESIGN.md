@@ -13,7 +13,7 @@ or role-upgrade endpoint exists. Local seed accounts are synthetic demo tooling.
 Approval requires a different preparer/reviewer, positive recommended amount within
 the server authority tier, complete resolved assessment and recorded acceptance
 for alternatives. Missing/tampered referrals cannot be waived; corrected evidence
-requires reassessment. Rejection cites a failed/missing clause, or CP-4.1 after
+requires reassessment. Rejection cites a verified failed clause, or CP-4.1 after
 the customer rejects an alternative. State transitions lock application/run rows
 and check expectedVersion plus latest assessment pointer. The original assessment
 snapshot stays immutable; status/version, decisions and audit are separate records.
@@ -86,6 +86,25 @@ Demo assessments are never presented as fully evidence-verified; changes of mode
 require a new assessment, not relabeling an earlier result.
 
 ## Domain isolation
+
+Case-review ports separate PM-9 written-reason requests from credit decisions.
+Rejection snapshots retain the actual failed criterion, human justification, clause,
+original policy edition/source and decision time. A locked, owner-recorded request
+returns that snapshot in writing and appends request/provision audit events once;
+it never changes assessment status/version. Inclusive30-calendar-day counting
+starts at the recorded rejection date in Cairo (implementation interpretation;
+no separate notification date is supplied). Late first requests are rejected;
+existing replies remain readable. Legacy backfill uses recorded clause/edition
+only; incomplete history requires human review instead of invented reasons.
+
+Referrals route to Senior/Head; standard Credit queues omit them. Independent
+Senior notes cannot clear fraud, waive evidence, approve or reject a referral for
+missing evidence. Verified failures and customer-declined alternatives are the only
+rejection grounds. Fraud routing is an internal record, not external delivery.
+PM-4's two-business-day target is indicative: configurable weekend/holiday dates,
+Friday/Saturday default and no invented public holidays. Neither target nor notes
+change credit rules. All new mutations use session/CSRF, active-user rechecks,
+application/run locks, version/latest-run checks where appropriate and audit logs.
 
 React presentation is split into session shell, application selection/assessment,
 policy questions/calculations, knowledge ingestion and human reviews. A shared
@@ -167,7 +186,7 @@ pricing deviations Credit Committee authorization. Records retained7 years; writ
 rejection reasons cite clause/edition and complaint requests have30-day window.
 Historical pre-March2025 operational procedures are not supplied; do not invent them.
 
-Remaining scope: complaints completion, full
+Remaining scope: full
 15-case evaluation, then all nine stretches (hybrid BM25+pgvector/RRF, rewriting,
 new synthetic documents, typed agents, SSE, local fallback, second product, offer
 PDF/schedule, per-user usage/cost). PostgreSQL ts_rank is not BM25. Before hybrid,

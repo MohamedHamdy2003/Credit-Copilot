@@ -1,5 +1,16 @@
 # AI usage log
 
+## 2026-11-20 referrals and written reasons
+
+Codex re-read PM-4/5/7/9 from the supplied manual and CP-8. PM-9 requests a written
+reason within30 days; it does not specify an appeal adjudication workflow. New
+case-review code/UI therefore preserves the human decision and returns a recorded
+reason snapshot. Review also identified earlier rejection code accepting missing
+evidence/referral citations; this was corrected to verified failures or a declined
+alternative, without changing source requirements. Day30 inclusion/Cairo decision
+date and the configurable business calendar are documented implementation choices.
+No actual Fraud Unit delivery or live Gemini quality measurement is claimed.
+
 ## 2026-11-20 React workspace
 
 Codex authored the React session/forms/tables/assessment/review screens, client,

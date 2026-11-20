@@ -10,8 +10,10 @@ import { ScryptCredentials } from '../packages/infrastructure/src/auth/passwords
 import { createDataSource } from '../packages/infrastructure/src/db/data-source.js';
 import { PostgresDecisionStore } from '../packages/infrastructure/src/db/decision-store.js';
 import { createOperations } from '../packages/infrastructure/src/operations.js';
+import { createCaseReviews } from '../packages/infrastructure/src/db/case-review-store.js';
 import type { Policy } from '../packages/domain/src/policy.js';
 import { WorkflowTestProvider } from '../tests/helpers/workflow-provider.js';
+import { seedRejection } from '../tests/e2e/seed-rejection.js';
 import {
   IngestionService,
   type ManifestEntry,
@@ -28,7 +30,7 @@ await db.query('TRUNCATE cases.users CASCADE');
 await db.query('DELETE FROM cases.login_attempts');
 const credentials = new ScryptCredentials();
 const hash = await credentials.hash('e2e-only-password');
-for (const username of ['basic', 'strict', 'demo', 'question', 'upload', 'head']) {
+for (const username of ['basic', 'strict', 'demo', 'question', 'upload', 'head', 'reasons']) {
   await db.query(
     'INSERT INTO cases.users(id,username,password_hash,role,tier,can_ingest) VALUES($1,$2,$3,$4,$5,$6)',
     [
@@ -49,6 +51,7 @@ const ingestion = new IngestionService(db, provider, manifest);
 for (const entry of manifest)
   await ingestion.ingest(entry.filename, await readFile(`data/corpus/policy/${entry.filename}`));
 const policies = JSON.parse(await readFile('data/config/policies.json', 'utf8')) as Policy[];
+await seedRejection(db, policies);
 const config = configSchema.parse({
   DATABASE_URL: url,
   ALLOW_DEMO_MODE: 'true',
@@ -56,6 +59,7 @@ const config = configSchema.parse({
   RETRIEVAL_MIN_SIMILARITY: '0',
 });
 const app = await createApi({
+  caseReviews: await createCaseReviews(db),
   auth: new AuthService(new PostgresAuthStore(db), credentials, 8),
   decisions: new DecisionService(new PostgresDecisionStore(db, policies)),
   operations: await createOperations(db, provider, config),

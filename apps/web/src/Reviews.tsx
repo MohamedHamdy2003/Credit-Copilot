@@ -3,6 +3,7 @@ import { api } from './api';
 import type { Actor, ReviewRow, Run } from './types';
 import { Empty, Money, ResourceState, Status, useResource } from './components';
 import { Assessment } from './Assessment';
+import { ReferralQueue } from './CaseReview';
 function Review({ id, actor, changed }: { id: string; actor: Actor; changed: () => void }) {
   const run = useResource((signal) => api.request<Run>(`assessments/${id}`, { signal }), [id]);
   return (
@@ -45,6 +46,7 @@ export function Reviews({ actor }: { actor: Actor }) {
         Your tier: {actor.tier}. The server enforces authority, four-eyes and current assessment
         version.
       </p>
+      {['senior', 'head'].includes(actor.tier) && <ReferralQueue onSelect={setSelected} />}
       <ResourceState {...queue} retry={queue.refresh} />
       {queue.data && (
         <section className="table-wrap">

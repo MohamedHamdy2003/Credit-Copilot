@@ -10,6 +10,7 @@ import { ScryptCredentials } from '../packages/infrastructure/src/auth/passwords
 import { PostgresDecisionStore } from '../packages/infrastructure/src/db/decision-store.js';
 import { AuthService } from '../packages/application/src/auth.js';
 import { DecisionService } from '../packages/application/src/decisions.js';
+import { createCaseReviews } from '../packages/infrastructure/src/db/case-review-store.js';
 import { ParserRegistry } from '../packages/infrastructure/src/parsers/registry.js';
 import { evaluateEvidence } from '../packages/domain/src/evidence-mode.js';
 import { affordability } from '../packages/domain/src/calculations.js';
@@ -28,6 +29,7 @@ beforeAll(async () => {
   hash = await crypto.hash(password);
   policies = JSON.parse(await readFile('data/config/policies.json', 'utf8'));
   app = await createApi({
+    caseReviews: await createCaseReviews(db),
     auth: new AuthService(new PostgresAuthStore(db), crypto, 8),
     decisions: new DecisionService(new PostgresDecisionStore(db, policies)),
     webOrigin: 'http://localhost:5173',
@@ -362,4 +364,227 @@ it('blocks stale assessments and leaves unresolved referrals with senior review'
     expectedVersion: 1,
     comment: 'Cannot waive missing evidence',
   }).expect(409);
+});
+async function rejection(owner: Actor) {
+  const id = await fixture(owner, '200000');
+  await db.query(
+    "UPDATE cases.assessment_runs SET recommendation='DECLINE', result=result || $2::jsonb WHERE id=$1",
+    [
+      id,
+      JSON.stringify({
+        recommendation: 'DECLINE',
+        results: [
+          {
+            rule: 'CP-3.5',
+            result: 'fail',
+            citation: 'CP-2025 CP-3.5',
+            reason: 'Age exceeds maturity limit',
+          },
+        ],
+      }),
+    ],
+  );
+  const senior = await login(await user('senior'));
+  await post(id, senior, {
+    action: 'reject',
+    expectedVersion: 1,
+    clause: 'CP-3.5',
+    comment: 'Age at maturity exceeds the recorded maximum.',
+  }).expect(201);
+  return id;
+}
+const reviewPost = (
+  path: string,
+  session: { cookie: string[]; csrf: string },
+  body: Record<string, unknown>,
+) =>
+  request(app.getHttpServer())
+    .post(`/api/v1/${path}`)
+    .set('Cookie', session.cookie)
+    .set('x-csrf-token', session.csrf)
+    .send(body);
+it('provides an immutable PM-9 written reply once under concurrent requests and preserves the decision', async () => {
+  const owner = await user(),
+    id = await rejection(owner),
+    s = await login(owner),
+    other = await login(await user());
+  await request(app.getHttpServer()).get(`/api/v1/assessments/${id}/written-reason`).expect(401);
+  await request(app.getHttpServer())
+    .get(`/api/v1/assessments/${id}/written-reason`)
+    .set('Cookie', other.cookie)
+    .expect(403);
+  await reviewPost(`assessments/${id}/reason-requests`, other, {}).expect(403);
+  await reviewPost(`assessments/${id}/reason-requests`, s, {
+    date: '2025-01-01',
+    message: 'request',
+  }).expect(422);
+  await request(app.getHttpServer())
+    .post(`/api/v1/assessments/${id}/reason-requests`)
+    .set('Cookie', s.cookie)
+    .send({})
+    .expect(403);
+  const replies = await Promise.all([
+    reviewPost(`assessments/${id}/reason-requests`, s, {
+      message: 'Please provide the reason in writing.',
+    }),
+    reviewPost(`assessments/${id}/reason-requests`, s, {}),
+  ]);
+  expect(replies.map((r) => r.status)).toEqual([201, 201]);
+  expect(replies[0]!.body.id).toBe(replies[1]!.body.id);
+  expect(replies[0]!.body.reply).toMatchObject({
+    clause: 'CP-3.5',
+    policyEdition: 'CP-2025',
+    sourceFile: 'credit-policy-2025.pdf',
+    mode: 'demo',
+    fullyEvidenceVerified: false,
+  });
+  expect(
+    await db.query('SELECT status,version FROM cases.assessment_runs WHERE id=$1', [id]),
+  ).toEqual([{ status: 'rejected', version: 2 }]);
+  expect(
+    await db.query(
+      "SELECT event FROM cases.audit_events WHERE run_id=$1 AND event LIKE 'WRITTEN_REASON_%' ORDER BY event",
+      [id],
+    ),
+  ).toEqual([{ event: 'WRITTEN_REASON_PROVIDED' }, { event: 'WRITTEN_REASON_REQUESTED' }]);
+  await db.query(
+    "UPDATE cases.rejection_notices SET decided_at=now()-interval '40 days' WHERE run_id=$1",
+    [id],
+  );
+  const replay = await reviewPost(`assessments/${id}/reason-requests`, s, {}).expect(201);
+  expect(replay.body.reply).toEqual(replies[0]!.body.reply);
+});
+it('enforces the thirty-day Cairo calendar boundary and rejects future or late first requests', async () => {
+  for (const [days, expected] of [
+    [30, 201],
+    [31, 409],
+    [-1, 409],
+  ] as const) {
+    const owner = await user(),
+      id = await rejection(owner),
+      s = await login(owner);
+    await db.query(
+      "UPDATE cases.rejection_notices SET decided_at=(((now() AT TIME ZONE 'Africa/Cairo')::date-$2::int)::timestamp AT TIME ZONE 'Africa/Cairo') WHERE run_id=$1",
+      [id, days],
+    );
+    const result = await reviewPost(`assessments/${id}/reason-requests`, s, {}).expect(expected);
+    if (expected === 409) expect(result.body.error.code).toBe('ReasonRequestWindowClosed');
+    await db.query('DELETE FROM cases.login_attempts');
+  }
+});
+it('routes referrals to Senior, records internal fraud review and never changes eligibility', async () => {
+  const owner = await user(),
+    id = await fixture(owner),
+    senior = await login(await user('senior')),
+    credit = await login(await user('credit'));
+  await db.query(
+    "UPDATE cases.assessment_runs SET recommendation='REFER_TO_HUMAN',status='pending_review',result=result || $2::jsonb WHERE id=$1",
+    [
+      id,
+      JSON.stringify({
+        recommendation: 'REFER_TO_HUMAN',
+        fraudReferral: true,
+        reason: 'SUSPECTED_TAMPERING',
+      }),
+    ],
+  );
+  await request(app.getHttpServer())
+    .get('/api/v1/referrals')
+    .set('Cookie', credit.cookie)
+    .expect(403);
+  const standard = await request(app.getHttpServer())
+    .get('/api/v1/reviews')
+    .set('Cookie', credit.cookie)
+    .expect(200);
+  expect(standard.body.some((r: { id: string }) => r.id === id)).toBe(false);
+  const queue = await request(app.getHttpServer())
+    .get('/api/v1/referrals')
+    .set('Cookie', senior.cookie)
+    .expect(200);
+  expect(queue.body.find((r: { id: string }) => r.id === id)).toMatchObject({
+    assignedTier: 'senior',
+    destination: 'Fraud Unit (internal record)',
+    fraud: true,
+  });
+  await reviewPost(`referrals/${id}/reviews`, credit, {
+    expectedVersion: 1,
+    action: 'fraud_recorded',
+    comment: 'Review',
+  }).expect(403);
+  await reviewPost(`referrals/${id}/reviews`, senior, {
+    expectedVersion: 9,
+    action: 'fraud_recorded',
+    comment: 'Review',
+  }).expect(409);
+  await reviewPost(`referrals/${id}/reviews`, senior, {
+    expectedVersion: 1,
+    action: 'approve',
+    comment: 'Bypass',
+  }).expect(422);
+  await reviewPost(`referrals/${id}/reviews`, senior, {
+    expectedVersion: 1,
+    action: 'fraud_recorded',
+    comment: 'Internal Fraud Unit record acknowledged; request fresh evidence.',
+  }).expect(201);
+  expect(
+    await db.query('SELECT status,version FROM cases.assessment_runs WHERE id=$1', [id]),
+  ).toEqual([{ status: 'pending_review', version: 1 }]);
+  const history = await request(app.getHttpServer())
+    .get(`/api/v1/referrals/${id}`)
+    .set('Cookie', senior.cookie)
+    .expect(200);
+  expect(history.body.notes).toHaveLength(1);
+  await post(id, senior, {
+    action: 'reject',
+    expectedVersion: 1,
+    clause: 'CP-8',
+    comment: 'Tampering is not a verified decline reason.',
+  }).expect(409);
+  await request(app.getHttpServer())
+    .get(`/api/v1/assessments/${id}/written-reason`)
+    .set('Cookie', senior.cookie)
+    .expect(409);
+});
+it('prevents missing-evidence rejection and refuses reasons when no faithful legacy notice exists', async () => {
+  const owner = await user('senior'),
+    id = await fixture(owner),
+    senior = await login(await user('senior')),
+    self = await login(owner);
+  await db.query(
+    "UPDATE cases.assessment_runs SET recommendation='REFER_TO_HUMAN',status='pending_review',result=result || $2::jsonb WHERE id=$1",
+    [
+      id,
+      JSON.stringify({
+        recommendation: 'REFER_TO_HUMAN',
+        evidence: {
+          missing: ['national_id_copy'],
+          referral: { citations: ['CP-8', 'PS-7'] },
+          assumptions: [],
+          fullyEvidenceVerified: false,
+        },
+      }),
+    ],
+  );
+  await post(id, senior, {
+    action: 'reject',
+    expectedVersion: 1,
+    clause: 'CP-8',
+    comment: 'Missing ID should stay referred.',
+  }).expect(409);
+  await reviewPost(`referrals/${id}/reviews`, self, {
+    expectedVersion: 1,
+    action: 'awaiting_evidence',
+    comment: 'Own review',
+  }).expect(403);
+  await reviewPost(`referrals/${id}/reviews`, senior, {
+    expectedVersion: 1,
+    action: 'fraud_recorded',
+    comment: 'No fraud',
+  }).expect(422);
+  await db.query("UPDATE cases.assessment_runs SET status='rejected' WHERE id=$1", [id]);
+  const unavailable = await request(app.getHttpServer())
+    .get(`/api/v1/assessments/${id}/written-reason`)
+    .set('Cookie', senior.cookie)
+    .expect(409);
+  expect(unavailable.body.error.code).toBe('ReasonUnavailable');
 });
