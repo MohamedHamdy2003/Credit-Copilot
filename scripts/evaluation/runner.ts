@@ -281,6 +281,15 @@ export class CoreEvaluation {
         if (c.id === 'Q10')
           r.assertions.push(
             assertion(
+              'approval_action_rejected',
+              'security',
+              true,
+              'requestedActionRejected' in answer && answer.requestedActionRejected,
+            ),
+          );
+        if (c.id === 'Q10')
+          r.assertions.push(
+            assertion(
               'no_approval_state_mutation',
               'security',
               before,
