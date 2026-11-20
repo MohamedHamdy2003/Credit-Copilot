@@ -173,6 +173,37 @@ applicant request within30 inclusive calendar days of the recorded Cairo rejecti
 date (documented interpretation: no separate notification timestamp supplied).
 Locked concurrent retries return one stored deterministic written reply/audit pair,
 without changing credit status/version; replies remain readable after expiry.
+
+## Live assessment progress and verified answers
+
+Streaming uses the same workflow, citation verifier and session rules as the
+synchronous REST endpoints. Starts return HTTP 202 and require CSRF and an
+`Idempotency-Key`. Use the returned UUID to read the owner's stream.
+
+| Operation | Start | Read |
+| --- | --- | --- |
+| Assessment | `POST /api/v1/applications/:id/assessment-streams` | `GET /api/v1/assessment-streams/:runId` |
+| Policy question | `POST /api/v1/questions/streams` | `GET /api/v1/question-streams/:id` |
+
+Reads deliver `text/event-stream` with increasing numeric event IDs. React
+reconnects with `Last-Event-ID` and ignores events it already received. Reads
+check owner and session, and an open connection closes when the session expires or
+is revoked. Heartbeats keep idle connections active. Disconnecting a reader leaves
+the accepted work running. [SSE event format and reconnection](https://html.spec.whatwg.org/multipage/server-sent-events.html)
+
+Assessment progress contains stage identifiers and execution statuses. The
+reserved job and progress are stored in PostgreSQL. The final stage and completion
+event reflect the committed assessment, audit and review state. React retrieves
+the existing result resource on completion. An interrupted job reaches a failed
+terminal state after 15 minutes. Unavailable assessment providers can still produce
+a completed workflow with a saved human referral.
+
+Question events carry only verified source excerpts with dated citation metadata.
+The verifier completes before the first citation is sent. Insufficient evidence
+returns a refusal after verification and provider outages close with a safe failure
+code. Replay is process-local and available for five minutes after completion.
+The replay registry holds at most 128 jobs and expires pending streams after three
+minutes. A process restart clears the question replay cache.
 Legacy history is backfilled only from recorded clause/edition; missing history
 requires human review instead of a fabricated response.
 

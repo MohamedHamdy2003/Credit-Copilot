@@ -1,8 +1,24 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import {
+  ASSESSMENT_STAGES,
+  assessmentStreamEvent,
+  type AssessmentStreamEvent,
+} from '../../../packages/contracts/src/streams';
 import { api, ApiError } from './api';
 import type { Actor, ApplicationDetail, ApplicationRow, Run } from './types';
 import { Empty, ErrorNotice, Money, ResourceState, Status, useResource } from './components';
 import { Assessment } from './Assessment';
+
+const stageLabels = {
+  load_application: 'Loaded application',
+  remove_protected_attributes: 'Removed protected attributes',
+  select_policy: 'Selected applicable policy',
+  extract_data: 'Extracted assessment data',
+  retrieve_policy_clauses: 'Retrieved policy clauses',
+  calculate_and_check_rules: 'Calculated affordability and checked rules',
+  prepare_memo: 'Prepared credit memo',
+  record_pending_review: 'Recorded for human review',
+};
 function AddApplication({
   onAdded,
   onCancel,
@@ -97,27 +113,65 @@ function ApplicationView({
   );
   const [mode, setMode] = useState<'strict' | 'demo'>('strict'),
     [busy, setBusy] = useState(false),
+    [completed, setCompleted] = useState(false),
+    [reconnecting, setReconnecting] = useState(false),
+    [stage, setStage] = useState<Extract<AssessmentStreamEvent, { kind: 'stage' }>>(),
     [error, setError] = useState<unknown>();
   const key = useRef<string | null>(null);
+  const request = useRef<AbortController | null>(null);
+  useEffect(() => () => request.current?.abort(), []);
   async function assess() {
+    if (request.current) return;
+    const controller = new AbortController();
+    request.current = controller;
     setBusy(true);
+    setCompleted(false);
+    setStage(undefined);
     setError(undefined);
     key.current ??= crypto.randomUUID();
     try {
-      await api.request(`applications/${id}/assessments`, { body: { mode }, key: key.current });
+      const { runId } = await api.request<{ runId: string }>(
+        `applications/${id}/assessment-streams`,
+        {
+          body: { mode },
+          key: key.current,
+          signal: controller.signal,
+        },
+      );
+      const terminal = await api.follow(`assessment-streams/${runId}`, assessmentStreamEvent, {
+        signal: controller.signal,
+        onEvent: (event) => {
+          if (event.kind === 'stage') setStage(event);
+        },
+        onReconnect: setReconnecting,
+      });
       key.current = null;
+      if (terminal.kind === 'failed') {
+        throw new ApiError(
+          503,
+          terminal.code,
+          'Assessment could not be completed. Run a new assessment to retry.',
+        );
+      }
+      setCompleted(true);
       resource.refresh();
       onChanged();
     } catch (e) {
+      if (controller.signal.aborted) return;
       setError(e);
       if (
         e instanceof ApiError &&
-        e.status !== 0 &&
-        (e.status !== 409 || e.code === 'PreviousAttemptFailed')
+        e.status > 0 &&
+        e.status < 500 &&
+        e.code !== 'AssessmentInProgress'
       )
         key.current = null;
     } finally {
-      setBusy(false);
+      request.current = null;
+      if (!controller.signal.aborted) {
+        setBusy(false);
+        setReconnecting(false);
+      }
     }
   }
   const data = resource.data;
@@ -155,6 +209,8 @@ function ApplicationView({
                     setMode(e.target.value as 'strict' | 'demo');
                     key.current = null;
                     setError(undefined);
+                    setStage(undefined);
+                    setCompleted(false);
                   }}
                 >
                   <option value="strict">Strict</option>
@@ -168,15 +224,31 @@ function ApplicationView({
               </p>
               {data.application.canAssess && data.run?.status !== 'issued' && (
                 <button className="primary" disabled={busy} onClick={() => void assess()}>
-                  {busy ? 'Assessing…' : 'Run assessment'}
+                  {busy
+                    ? 'Assessing…'
+                    : error instanceof ApiError && error.code === 'StreamDisconnected'
+                      ? 'Retry connection'
+                      : 'Run assessment'}
                 </button>
               )}
               {busy && (
-                <p role="status">
-                  Assessment in progress. The result is saved on the server; reopening this case
-                  will reload it.
-                </p>
+                <>
+                  <progress
+                    className="assessment-progress"
+                    aria-label="Assessment progress"
+                    max={ASSESSMENT_STAGES.length}
+                    value={stage ? ASSESSMENT_STAGES.indexOf(stage.stage) + 1 : 0}
+                  />
+                  <p role="status">
+                    {reconnecting
+                      ? 'Reconnecting to assessment…'
+                      : stage
+                        ? `${stageLabels[stage.stage]}${stage.status === 'executed' ? '' : ` (${stage.status})`}`
+                        : 'Starting assessment…'}
+                  </p>
+                </>
               )}
+              {completed && <p role="status">Assessment saved for human review.</p>}
               <ErrorNotice error={error} />
             </div>
             <div>

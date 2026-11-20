@@ -22,7 +22,7 @@ export class PostgresAssessmentRepository implements AssessmentRepository {
       );
       const result = record.result;
       const jobs = (await manager.query(
-        'SELECT status FROM cases.assessment_jobs WHERE run_id=$1',
+        "SELECT CASE WHEN status='running' AND created_at < clock_timestamp()-interval '15 minutes' THEN 'failed' ELSE status END AS status FROM cases.assessment_jobs WHERE run_id=$1",
         [record.id],
       )) as { status: string }[];
       invariant(

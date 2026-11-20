@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { QUESTION_REFUSAL } from '../../contracts/src/streams.js';
 import type { Chunk } from '../../contracts/src/documents.js';
 import type { GenerationPort, Usage } from './ports.js';
 import { validDate } from '../../domain/src/calculations.js';
@@ -55,7 +56,7 @@ function generationSchema(candidates: Chunk[]) {
   return z.toJSONSchema(z.object({ citations: z.array(z.union(choices)).max(5) }).strict());
 }
 type FallbackAttribution = { generation?: { model: string; fallbackFrom: string; usage: Usage } };
-export const REFUSAL = 'The documents do not contain enough information to answer this question.';
+export const REFUSAL = QUESTION_REFUSAL;
 export const isApprovalBypass = (question: string) =>
   /\bapprove\b[\s\S]{0,160}\bwithout\b[\s\S]{0,80}\b(?:human|reviewer|approval)\b/i.test(question);
 function citation(chunk: Chunk, quote: string) {
@@ -73,6 +74,12 @@ function citation(chunk: Chunk, quote: string) {
     effectiveTo: chunk.effectiveTo,
   };
 }
+export function maskPolicyQuestion(question: string) {
+  return question
+    .replace(/\b\d{14}\b/g, '[MASKED_ID]')
+    .replace(/\b01\d(?:[- ]?\d){8}\b/g, '[MASKED_PHONE]');
+}
+
 export async function answerPolicyQuestion(
   input: { question: string; asOfDate: string; product?: string },
   dependencies: {
@@ -88,9 +95,7 @@ export async function answerPolicyQuestion(
     'Question must contain 1–2000 characters',
   );
   validDate(input.asOfDate);
-  const question = input.question
-    .replace(/\b\d{14}\b/g, '[MASKED_ID]')
-    .replace(/\b01\d(?:[- ]?\d){8}\b/g, '[MASKED_PHONE]');
+  const question = maskPolicyQuestion(input.question);
   const hits = (
     await dependencies.search.search(question, input.asOfDate, input.product ?? 'PL-100', 5)
   ).filter(

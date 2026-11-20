@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from 'react';
-import { api } from './api';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { questionStreamEvent, QUESTION_REFUSAL } from '../../../packages/contracts/src/streams';
+import { api, ApiError } from './api';
 import type { Answer } from './types';
 import { ErrorNotice, Money } from './components';
 interface Calculation {
@@ -14,29 +15,75 @@ export function Questions() {
   const [answer, setAnswer] = useState<Answer>(),
     [error, setError] = useState<unknown>(),
     [busy, setBusy] = useState(false),
+    [reconnecting, setReconnecting] = useState(false),
     [calculation, setCalculation] = useState<Calculation>(),
     [calcError, setCalcError] = useState<unknown>(),
     [calcBusy, setCalcBusy] = useState(false);
+  const request = useRef<AbortController | null>(null);
+  const retry = useRef<{ key: string; body: string } | null>(null);
+  useEffect(() => () => request.current?.abort(), []);
   async function ask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (request.current) return;
+    const controller = new AbortController();
+    request.current = controller;
     setBusy(true);
     setError(undefined);
     setAnswer(undefined);
     const data = new FormData(event.currentTarget);
+    const body = {
+      question: data.get('question'),
+      ...(data.get('date') ? { asOfDate: data.get('date') } : {}),
+      ...(data.get('edition') ? { edition: data.get('edition') } : {}),
+    };
+    const signature = JSON.stringify(body);
+    if (retry.current?.body !== signature)
+      retry.current = { body: signature, key: crypto.randomUUID() };
     try {
-      setAnswer(
-        await api.request('questions', {
-          body: {
-            question: data.get('question'),
-            ...(data.get('date') ? { asOfDate: data.get('date') } : {}),
-            ...(data.get('edition') ? { edition: data.get('edition') } : {}),
-          },
-        }),
-      );
+      const { streamId } = await api.request<{ streamId: string }>('questions/streams', {
+        body,
+        key: retry.current.key,
+        signal: controller.signal,
+      });
+      const terminal = await api.follow(`question-streams/${streamId}`, questionStreamEvent, {
+        signal: controller.signal,
+        onReconnect: setReconnecting,
+        onEvent: (update) => {
+          if (update.kind !== 'citation') return;
+          setAnswer((previous) => ({
+            answer: '',
+            refused: false,
+            asOfDate: update.asOfDate,
+            citations: [...(previous?.citations ?? []), update.citation],
+          }));
+        },
+      });
+      retry.current = null;
+      if (terminal.kind === 'failed') {
+        throw new ApiError(
+          503,
+          terminal.code,
+          'Policy question service is unavailable. Try again.',
+        );
+      }
+      if (terminal.kind === 'completed' && terminal.refused) {
+        setAnswer({
+          answer: QUESTION_REFUSAL,
+          refused: true,
+          asOfDate: terminal.asOfDate,
+          citations: [],
+        });
+      }
     } catch (e) {
+      if (controller.signal.aborted) return;
+      if (e instanceof ApiError && e.status > 0 && e.status < 500) retry.current = null;
       setError(e);
     } finally {
-      setBusy(false);
+      request.current = null;
+      if (!controller.signal.aborted) {
+        setBusy(false);
+        setReconnecting(false);
+      }
     }
   }
   async function calculate(event: FormEvent<HTMLFormElement>) {
@@ -104,9 +151,14 @@ export function Questions() {
             selectors are rejected.
           </p>
           <button className="primary" disabled={busy}>
-            {busy ? 'Finding evidence…' : 'Ask question'}
+            Ask question
           </button>
         </form>
+        {busy && (
+          <p role="status">
+            {reconnecting ? 'Reconnecting to policy answer…' : 'Finding policy evidence…'}
+          </p>
+        )}
         <ErrorNotice error={error} />
         {answer && (
           <section aria-live="polite" className="answer">

@@ -50,9 +50,10 @@ export async function createOperations(
   }
   const ingestion = new IngestionService(db, provider, manifest, parser),
     search = new RetrievalService(db, provider, config.RETRIEVAL_STRATEGY, config);
+  const store = new PostgresApplicationStore(db);
   return new OperationsService({
     policies,
-    store: new PostgresApplicationStore(db),
+    store,
     newId: randomUUID,
     fixtures,
     settings: { allowDemo: config.ALLOW_DEMO_MODE, defaultMode: config.ASSESSMENT_MODE },
@@ -77,17 +78,20 @@ export async function createOperations(
       }),
     calculate: (raw) => answerCalculationQuestion(raw, { policies, product, pricing }),
     assess: async (input, context) => {
-      const workflow = createDocumentAssessmentWorkflow({
-        provider,
-        agents: assessmentAgents(config.ASSESSMENT_ORCHESTRATION),
-        prompt: extractionPrompt,
-        policies,
-        product,
-        pricing,
-        settings: { allowDemo: config.ALLOW_DEMO_MODE, defaultMode: config.ASSESSMENT_MODE },
-        clauses: new PostgresAssessmentClauses(db),
-        persistence: { ...context, repository: new PostgresAssessmentRepository(db) },
-      });
+      const workflow = createDocumentAssessmentWorkflow(
+        {
+          provider,
+          agents: assessmentAgents(config.ASSESSMENT_ORCHESTRATION),
+          prompt: extractionPrompt,
+          policies,
+          product,
+          pricing,
+          settings: { allowDemo: config.ALLOW_DEMO_MODE, defaultMode: config.ASSESSMENT_MODE },
+          clauses: new PostgresAssessmentClauses(db),
+          persistence: { ...context, repository: new PostgresAssessmentRepository(db) },
+        },
+        (event) => store.recordAssessmentStage(context.runId, event),
+      );
       const outcome = await (await workflow.createRun()).start({ inputData: input });
       invariant(
         outcome.status === 'success',

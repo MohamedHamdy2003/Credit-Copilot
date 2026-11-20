@@ -47,11 +47,16 @@ export class IngestionService {
         'Document version already exists with different content',
         409,
       );
-      const missing = (await this.db.query(
-        'SELECT c.id FROM knowledge.chunks c LEFT JOIN knowledge.embeddings e ON e.chunk_id=c.id AND e.model=$2 WHERE c.document_id=$1 AND c.active AND e.chunk_id IS NULL',
-        [metadata.id, this.embeddings.model],
+      const indexed = (await this.db.query(
+        'SELECT c.id FROM knowledge.chunks c JOIN knowledge.embeddings e ON e.chunk_id=c.id WHERE c.document_id=$1 AND e.model=$2 AND e.dimensions=$3 AND c.active AND c.id=ANY($4)',
+        [
+          metadata.id,
+          this.embeddings.model,
+          this.embeddings.dimensions,
+          chunks.map((chunk) => chunk.id),
+        ],
       )) as { id: string }[];
-      if (existing[0]?.pipeline_version === CHUNKER_VERSION && missing.length === 0) {
+      if (existing[0]?.pipeline_version === CHUNKER_VERSION && indexed.length === chunks.length) {
         await this.db.query('UPDATE knowledge.ingestion_attempts SET status=$2 WHERE id=$1', [
           attempt,
           'skipped',
@@ -106,7 +111,7 @@ export class IngestionService {
             ],
           );
           await manager.query(
-            'INSERT INTO knowledge.embeddings(chunk_id,model,dimensions,embedding) VALUES($1,$2,$3,$4::vector) ON CONFLICT(chunk_id,model) DO NOTHING',
+            'INSERT INTO knowledge.embeddings(chunk_id,model,dimensions,embedding) VALUES($1,$2,$3,$4::vector) ON CONFLICT(chunk_id,model,dimensions) DO NOTHING',
             [chunk.id, this.embeddings.model, this.embeddings.dimensions, JSON.stringify(vector)],
           );
         }

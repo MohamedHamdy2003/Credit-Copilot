@@ -253,6 +253,19 @@ Production uses the existing provider timing.
 [Passing live report](../data/evaluation/results/agent-orchestration-core.json)
 [Initial failed report](../data/evaluation/results/agent-orchestration-initial-failure.json)
 
+## P14 streaming regression — 20 November 2026
+
+PostgreSQL and HTTP tests cover stage delivery before a gated assessment has
+finished, disconnect and cursor replay, one persisted run with human approval
+still pending, owner isolation, session revocation and interrupted jobs.
+Policy question tests cover verified excerpts, forged-citation refusal,
+provider outages and identifier masking. The prior-feature review also added
+a storage regression for reusing the same embedding model across dimensions.
+
+Chromium exercises desktop assessment progress through an induced connection
+drop and mobile policy questions through success, refusal and terminal failure.
+These transport checks use deterministic provider fixtures.
+
 ## Core gate and remaining submission work
 
 The measured functional gate passes: all15 cases, all critical safety/audit/numeric

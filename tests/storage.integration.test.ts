@@ -69,6 +69,43 @@ it('migrates idempotently and ingests/retrieves without duplicate or mixed evide
   expect(docs[0]?.n).toBe(7);
 });
 
+it('indexes each dimension of the same model and masks direct retrieval input', async () => {
+  const original = new FakeEmbedding();
+  const prompts: string[] = [];
+  const resized = {
+    model: original.model,
+    dimensions: 2,
+    embed: async (text: string) => {
+      prompts.push(text);
+      return [1, 0];
+    },
+  };
+  const entry = manifest.find((doc) => doc.kind === 'pricing')!;
+  const bytes = await readFile(`data/corpus/policy/${entry.filename}`);
+  await new IngestionService(db, original, manifest).ingest(entry.filename, bytes);
+  const ingestion = new IngestionService(db, resized, manifest);
+  await expect(ingestion.ingest(entry.filename, bytes)).resolves.toMatchObject({
+    status: 'succeeded',
+  });
+  await expect(ingestion.ingest(entry.filename, bytes)).resolves.toMatchObject({
+    status: 'skipped',
+  });
+  expect(
+    await db.query(
+      'SELECT dimensions, count(*)::int AS count FROM knowledge.embeddings GROUP BY dimensions ORDER BY dimensions',
+    ),
+  ).toEqual([
+    { dimensions: 2, count: 6 },
+    { dimensions: original.dimensions, count: 6 },
+  ]);
+
+  const retrieval = new RetrievalService(db, resized);
+  const hits = await retrieval.search('Pricing for 28704121234567 / 010-0000-0001', '2025-04-03');
+  expect(hits).toHaveLength(5);
+  expect(hits.every((hit) => hit.chunk.documentId === entry.id)).toBe(true);
+  expect(prompts.at(-1)).toBe('Pricing for [MASKED_ID] / [MASKED_PHONE]');
+});
+
 it('does not publish partial chunks when embedding fails', async () => {
   const good = new FakeEmbedding();
   let count = 0;
