@@ -191,6 +191,33 @@ lexical query. The rewrite run used 0 case-level provider retries.
 Candidate IDs, glossary expansions and final promotions are recorded in
 [query-rewrite-core-evaluation.json](../data/evaluation/results/query-rewrite-core-evaluation.json).
 
+## Local Ollama smoke — 20 November 2026
+
+Clean commit `01beb5d` passed both smoke cases against Ollama 0.40.16 using
+`qwen3:4b-instruct-2507-q4_K_M` on CPU. The harness injected a transient
+Gemini outage and used real local generation. This run made no Gemini calls.
+The Q&A smoke supplied a trusted CP-4.1 clause directly and verified the
+returned quote. The assessment ran the eight-stage workflow with the original
+synthetic APP-001, trusted dated sources and in-memory persistence. A separate
+PostgreSQL/HTTP test verified the persisted fallback audit and usage rows.
+
+| Check | Observed result | Elapsed | Ollama tokens (input / output) |
+|---|---|---|---|
+| APP-001 extraction and memo | Verified extraction, EGP 8,630.39 installment, pending human approval | 55.35 s | 237 / 187 |
+| Policy Q&A | Exact CP-4.1 quote with 45% DBR | 29.18 s | 406 / 93 |
+
+The Docker container used 5.531 GiB in a sample after the run. Elapsed times
+include the workflow and local request work. The first request includes model
+load time. This smoke covers generation and source checks. The Gemini suite
+continues to measure semantic retrieval separately.
+[Ollama fallback smoke report](../data/evaluation/results/ollama-fallback-smoke.json)
+
+The initial run timed out on extraction at the original 60-second limit and
+the verifier rejected the generated citation. After diagnosis, the local
+timeout default became 120 seconds and the citation schema constrained each
+allowed ID to exact source spans. The application verifier still checks the
+selected quote. [Initial failure report](../data/evaluation/results/ollama-fallback-initial-failure.json)
+
 ## Core gate and remaining submission work
 
 The measured functional gate passes: all15 cases, all critical safety/audit/numeric

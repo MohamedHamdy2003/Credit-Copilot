@@ -191,3 +191,51 @@ it.each([
   expect(result.refused).toBe(true);
   expect(result.citations).toEqual([]);
 });
+
+it('pairs allowed local citation IDs with their exact source text and refuses a mismatched quote', async () => {
+  const other = {
+    ...chunk,
+    id: 'other-chunk',
+    text: 'The salary certificate expires after 60 days.',
+  };
+  const result = await answerPolicyQuestion(
+    { question: 'Maximum DBR?', asOfDate: '2025-04-01' },
+    {
+      provider: {
+        completeStructured: async (_system, _data, schema) => {
+          expect(schema).toMatchObject({
+            properties: {
+              citations: {
+                items: {
+                  anyOf: [
+                    { properties: { chunkId: { const: chunk.id }, quote: { enum: [chunk.text] } } },
+                    { properties: { chunkId: { const: other.id }, quote: { enum: [other.text] } } },
+                  ],
+                },
+              },
+            },
+          });
+          return {
+            model: 'ollama:test-local',
+            fallbackFrom: 'gemini-test',
+            usage: { inputTokens: 15, outputTokens: 5 },
+            value: { citations: [{ chunkId: chunk.id, quote: other.text }] },
+          };
+        },
+      },
+      search: {
+        search: async () => [
+          { chunk, similarity: 0.9 },
+          { chunk: other, similarity: 0.8 },
+        ],
+      },
+      prompt: 'test',
+      minimumSimilarity: 0.65,
+    },
+  );
+  expect(result).toMatchObject({
+    refused: true,
+    citations: [],
+    generation: { model: 'ollama:test-local', fallbackFrom: 'gemini-test' },
+  });
+});

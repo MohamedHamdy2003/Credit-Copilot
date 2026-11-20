@@ -1,5 +1,6 @@
 import type { AssessmentInput, AssessmentDependencies } from './assessment.js';
 import { assessApplication } from './assessment.js';
+import type { Usage } from './ports.js';
 
 export interface AssessmentResult {
   reference: string;
@@ -22,7 +23,7 @@ export interface AssessmentResult {
   fraudReferral: boolean;
   retrievedChunkIds?: string[];
   stageEvents?: { stage: string; status: 'executed' | 'skipped' | 'failed' }[];
-  usageRecords?: { model: string; inputTokens: number | null; outputTokens: number | null }[];
+  usageRecords?: (Usage & { model: string; fallbackFrom?: string })[];
 }
 export interface AssessmentRecord {
   id: string;

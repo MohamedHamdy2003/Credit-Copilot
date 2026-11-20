@@ -11,6 +11,7 @@ import type { AssessmentDependencies } from './assessment.js';
 import type { AssessmentRepository, AssessmentResult } from './assessment-record.js';
 import type { Chunk } from '../../contracts/src/documents.js';
 import { creditMemo } from './credit-memo.js';
+import type { Usage } from './ports.js';
 
 export const documentAssessmentInputSchema = z
   .object({
@@ -78,6 +79,17 @@ export function initialAssessmentState(
     stageEvents: [],
   };
 }
+function recordGenerationUsage(
+  state: AssessmentState,
+  model: string,
+  usage: Usage,
+  fallbackFrom?: string,
+) {
+  if (fallbackFrom)
+    state.usageRecords.push({ model: fallbackFrom, inputTokens: null, outputTokens: null });
+  state.usageRecords.push({ model, ...usage, ...(fallbackFrom ? { fallbackFrom } : {}) });
+}
+
 export async function executeAssessmentStage(
   stage: AssessmentStage,
   state: AssessmentState,
@@ -126,20 +138,24 @@ export async function executeAssessmentStage(
         state.extraction = await extractVerified(
           state.input.document,
           {
-            completeStructured: async (system, data) => {
+            completeStructured: async (system, data, schema) => {
               try {
-                const response = await deps.provider.completeStructured(system, data);
-                state.usageRecords.push({ model: response.model, ...response.usage });
+                const response = await deps.provider.completeStructured(system, data, schema);
+                recordGenerationUsage(state, response.model, response.usage, response.fallbackFrom);
                 return response;
               } catch (error) {
                 const details = error instanceof DomainError ? error.details : {};
-                state.usageRecords.push({
-                  model:
-                    typeof details.model === 'string' ? details.model : 'provider-not-reported',
-                  inputTokens: typeof details.inputTokens === 'number' ? details.inputTokens : null,
-                  outputTokens:
-                    typeof details.outputTokens === 'number' ? details.outputTokens : null,
-                });
+                recordGenerationUsage(
+                  state,
+                  typeof details.model === 'string' ? details.model : 'provider-not-reported',
+                  {
+                    inputTokens:
+                      typeof details.inputTokens === 'number' ? details.inputTokens : null,
+                    outputTokens:
+                      typeof details.outputTokens === 'number' ? details.outputTokens : null,
+                  },
+                  typeof details.fallbackFrom === 'string' ? details.fallbackFrom : undefined,
+                );
                 throw error;
               }
             },

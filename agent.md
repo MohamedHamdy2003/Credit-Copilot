@@ -6,7 +6,7 @@ Read `status.md` first. Read specific source files only for the next task; do no
 
 User authorized implementation of the reviewed plan. Stack: React/Vite, NestJS, Mastra, PostgreSQL FTS + pgvector, true BM25 + RRF, REST/OpenAPI, TypeORM, Jest. All nine stretches follow a passing core gate. Four-day window November17–20,2026 Cairo. Explain progress simply in Arabic. Do not delegate to subagents unless explicitly requested by user or applicable instructions.
 
-Reported local hardware:16GB RAM and4GB graphics. Gemini is the approved live provider; local fallback remains a later stretch. Never replace the user's local key or print it.
+Reported local hardware:16GB RAM and4GB graphics. Gemini is the primary provider for generation and embeddings. Opt-in Ollama fallback covers generation after transient Gemini failures. Never replace the user's local key or print it.
 
 ## Nonnegotiable decisions
 

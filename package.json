@@ -31,6 +31,7 @@
     "seed:users": "tsx scripts/seed-users.ts",
     "evaluate:smoke": "tsx scripts/evaluate-smoke.ts",
     "evaluate:core:offline": "tsx scripts/evaluate.ts --offline",
+    "evaluate:fallback": "tsx scripts/evaluate-fallback.ts",
     "dev": "tsx scripts/dev.ts"
   },
   "dependencies": {

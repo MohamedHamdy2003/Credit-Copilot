@@ -48,7 +48,9 @@ export class GeminiAdapter implements GenerationPort, EmbeddingPort {
           },
         );
         if (!response.ok) {
-          if ((response.status === 429 || response.status >= 500) && attempt < 2) {
+          const retryable =
+            response.status === 408 || response.status === 429 || response.status >= 500;
+          if (retryable && attempt < 2) {
             await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
             continue;
           }
@@ -56,20 +58,29 @@ export class GeminiAdapter implements GenerationPort, EmbeddingPort {
             'ProviderUnavailable',
             `Provider request failed (HTTP ${response.status})`,
             503,
+            { model, retryable },
           );
         }
         return await response.json();
       } catch (error) {
         if (error instanceof DomainError) throw error;
+        if (error instanceof SyntaxError)
+          throw new DomainError('InvalidLLMOutput', 'Provider response is not valid JSON', 422, {
+            model,
+          });
         if (attempt === 2)
           throw new DomainError(
             'ProviderUnavailable',
             'Provider timed out or could not be reached',
             503,
+            { model, retryable: true },
           );
       }
     }
-    throw new DomainError('ProviderUnavailable', 'Provider retries exhausted', 503);
+    throw new DomainError('ProviderUnavailable', 'Provider retries exhausted', 503, {
+      model,
+      retryable: true,
+    });
   }
   async completeStructured(system: string, data: string): Promise<Completion> {
     const raw = await this.request(this.generationModel, 'generateContent', {

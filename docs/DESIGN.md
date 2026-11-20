@@ -164,13 +164,22 @@ requires human review instead of a fabricated response.
 
 ## Provider, evaluation and intentional limits
 
-GenerationPort/EmbeddingPort live in packages/application/src/ports.ts. The working
-adapter is packages/infrastructure/src/llm/gemini.ts; API main and scripts/runtime.ts
-compose it using local config. To add another provider, add an adapter file under
-that llm directory implementing the same ports, validate its configuration and
-select it at those composition roots; no Domain or assessment-stage edits are
-needed. Only Gemini is currently shipped for runtime use; fake providers are
-explicit test injection. Ollama fallback remains a later stretch.
+The API and CLI use a shared provider factory. Gemini owns document and query
+embeddings. When local fallback is enabled, exhausted Gemini retries for HTTP
+408, 429, 5xx and transport failures can trigger one Ollama generation request.
+The primary error is returned for configuration, credentials or validation
+problems. An embedding outage returns a service failure before vector search.
+
+Ollama receives the same sanitized input and a JSON schema derived from the
+application validator through loopback HTTP with redirects disabled. Compose
+disables Ollama Cloud. Model replies still pass the source quote and extracted
+value checks. For citations, its schema pairs each allowed chunk ID with exact
+source spans and permits an empty selection. The assessment workflow records the
+failed Gemini logical call
+with unknown usage, the Ollama model and its reported counts, and a fallback
+event. Q&A includes local generation attribution in the answer or refusal when
+it receives a model completion. The memo remains code-generated.
+[Ollama structured output API](https://docs.ollama.com/capabilities/structured-outputs)
 
 The frozen fifteen-case live baseline and failed first run are committed as JSON;
 EVALUATION.md defines denominators, source-context distinction and limitations.
