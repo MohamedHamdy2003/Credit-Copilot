@@ -16,6 +16,7 @@
     "start": "node dist/apps/api/src/main.js",
     "typecheck": "tsc --noEmit && tsc -p apps/web/tsconfig.json --noEmit",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand",
+    "test:e2e": "playwright test",
     "test:integration": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --config jest.integration.config.cjs",
     "lint": "eslint \"{apps,packages,scripts,tests}/**/*.{ts,tsx}\"",
     "format": "prettier --write apps packages scripts tests *.json *.yaml .github",
@@ -54,6 +55,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.65.1",
     "@types/cookie-parser": "1.4.10",
     "@types/express": "5.0.6",
     "@types/jest": "30.0.0",

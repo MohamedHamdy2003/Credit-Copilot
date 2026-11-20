@@ -1,5 +1,19 @@
 # AI usage log
 
+## 2026-11-20 React workspace
+
+Codex authored the React session/forms/tables/assessment/review screens, client,
+CSS and Playwright suite, reusing the real REST and workflow. The frontend-builder
+skill used built-in Image Gen for a minimal workspace concept; the production UI
+contains code-native controls and real server data, not that image or sample rows.
+Visual QA compared concept, desktop and mobile renders. Browser plugin was absent;
+Playwright used Chromium. Tests initially selected a form label too narrowly and
+clicked the previous case before the new upload completed; selectors now use the
+accessible combobox role and await the upload response/new case heading. A client
+test caught cross-realm AbortError handling; cancellation detection was corrected.
+No policy thresholds/evidence were changed to make UI tests pass. Provider output
+in browser tests is fake; user review of AI-authored code remains required.
+
 ## 2026-11-17 planning and implementation
 
 Codex read the supplied synthetic corpus and brief, proposed architecture and PR sequencing, and authored implementation with user review. The user chose the stack, strict/demo behavior, source-authoritative calculations and CI scope. Code written by Codex must be reviewed and understood by the submitting candidate; no claim of independent manual authorship is made.
