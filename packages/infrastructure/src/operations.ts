@@ -1,15 +1,15 @@
 import { readFile } from 'node:fs/promises';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { DataSource } from 'typeorm';
 import type { Config } from '../../contracts/src/config.js';
 import { OperationsService } from '../../application/src/operations.js';
+import { parseApplicationForm } from '../../application/src/application-form.js';
 import type { GenerationPort, EmbeddingPort } from '../../application/src/ports.js';
 import { answerPolicyQuestion } from '../../application/src/questions.js';
 import { answerCalculationQuestion } from '../../application/src/calculation-question.js';
 import { invariant } from '../../domain/src/errors.js';
-import type { Policy, Product } from '../../domain/src/policy.js';
 import { ParserRegistry } from './parsers/registry.js';
-import { extractPricing } from './parsers/pricing.js';
+import { loadAssessmentFixtures, loadProductCatalog } from './product-catalog.js';
 import { IngestionService, type ManifestEntry } from './knowledge/ingestion.js';
 import { RetrievalService } from './knowledge/retrieval.js';
 import { PostgresAssessmentClauses } from './knowledge/assessment-clauses.js';
@@ -21,41 +21,23 @@ export async function createOperations(
   db: DataSource,
   provider: GenerationPort & EmbeddingPort,
   config: Config,
+  catalog?: Awaited<ReturnType<typeof loadProductCatalog>>,
 ) {
   const parser = new ParserRegistry(config.UPLOAD_MAX_BYTES);
-  const policies = JSON.parse(await readFile('data/config/policies.json', 'utf8')) as Policy[];
-  const product = JSON.parse(await readFile('data/config/personal-loan.json', 'utf8')) as Product;
+  const products = catalog ?? (await loadProductCatalog(parser));
   const manifest = JSON.parse(
     await readFile('data/config/corpus-manifest.json', 'utf8'),
   ) as ManifestEntry[];
-  const pricing = extractPricing(
-    await parser.extract(
-      'pricing-table.csv',
-      await readFile('data/corpus/policy/pricing-table.csv'),
-    ),
-  );
   const extractionPrompt = await readFile('prompts/extraction.txt', 'utf8'),
     questionPrompt = await readFile('prompts/questions.txt', 'utf8');
-  const fixtures = [];
-  for (let n = 1; n <= 5; n++) {
-    const reference = `APP-00${n}`,
-      filename = `${reference}.pdf`,
-      bytes = await readFile(`data/corpus/evidence/${filename}`);
-    fixtures.push({
-      reference,
-      filename,
-      bytes,
-      hash: createHash('sha256').update(bytes).digest('hex'),
-    });
-  }
   const ingestion = new IngestionService(db, provider, manifest, parser),
     search = new RetrievalService(db, provider, config.RETRIEVAL_STRATEGY, config);
   const store = new PostgresApplicationStore(db);
   return new OperationsService({
-    policies,
+    policies: { 'PL-100': products['PL-100'].policies, 'AL-200': products['AL-200'].policies },
     store,
     newId: randomUUID,
-    fixtures,
+    fixtures: await loadAssessmentFixtures(),
     settings: { allowDemo: config.ALLOW_DEMO_MODE, defaultMode: config.ASSESSMENT_MODE },
     parse: (upload) => parser.extract(upload.filename, upload.bytes, upload.mime),
     knowledge: {
@@ -76,16 +58,15 @@ export async function createOperations(
         prompt: questionPrompt,
         minimumSimilarity: config.RETRIEVAL_MIN_SIMILARITY,
       }),
-    calculate: (raw) => answerCalculationQuestion(raw, { policies, product, pricing }),
+    calculate: (raw) => answerCalculationQuestion(raw, products['PL-100']),
     assess: async (input, context) => {
+      const { productId } = parseApplicationForm(input.document);
       const workflow = createDocumentAssessmentWorkflow(
         {
           provider,
           agents: assessmentAgents(config.ASSESSMENT_ORCHESTRATION),
           prompt: extractionPrompt,
-          policies,
-          product,
-          pricing,
+          ...products[productId],
           settings: { allowDemo: config.ALLOW_DEMO_MODE, defaultMode: config.ASSESSMENT_MODE },
           clauses: new PostgresAssessmentClauses(db),
           persistence: { ...context, repository: new PostgresAssessmentRepository(db) },

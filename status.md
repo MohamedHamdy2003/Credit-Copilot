@@ -1,6 +1,6 @@
 # Current checkpoint —20 November2026
 
-Read agent.md and FEATURES.md first. Current feature: feature/sse-progress.
+Read agent.md and FEATURES.md first. Current feature: feature/auto-loan-product.
 Core evaluation went through PR17/18, hybrid search through PR19/20, query
 rewriting through PR21/22 and local fallback through PR23/24 after CI.
 Local fallback is on main at da37033.
@@ -147,13 +147,35 @@ journeys, type checks, lint, formatting and builds. The offline workflow and
 agent evaluations each passed 15/15 using deterministic fixtures. Live model
 quality was measured in the prior baseline and agent runs.
 
+## Original-source review and P15
+
+The uploaded DOCX brief, corpus inventory and 12 provided sources were reviewed.
+All 12 SHA-256 digests match the checked-in originals. The procedures PDF has
+a filename suffix only. Fixed comparable employer mismatches, mandatory
+decline on verified default, eligibility before rate selection, retrieval of
+applicable circular and product clauses, upload filename provenance and stale
+assessment job blocking. Policy conflict answers explain operative rules using
+verified evidence in REST and SSE. Mastra planning prompts are stored in files.
+
+AL-200 adds four trusted policy sources and three separate private case PDFs.
+The reviewed form selects product-specific dates, clauses and pricing. The
+required quotation and 25% down payment precede exact vehicle finance and
+affordability calculations. Supplemental cases record passing finance, failed
+down payment, missing quote, and dated product isolation. The fifteen-case
+personal-loan evaluation uses corrected core-15-v2 criteria. Historical v1
+cases and live reports remain available. V2 was measured offline.
+Local checks passed 131 unit tests, 38 PostgreSQL/HTTP tests and 10 Chromium
+journeys. Both offline modes passed 15/15, with 8/8 required citations and
+17/17 numeric assertions. Type checking, lint, formatting and builds passed.
+
 ## Next and honest readiness
 
-P15 extends the synthetic corpus and adds the auto-loan product. Four stretches
-remain after P14.
+P16 adds the approved offer PDF and repayment schedule. The brief overview
+says 12 calendar days, while its submission section specifies day 10 at
+23:59 Cairo. The invitation date is unverified.
 The core memo and audit use plain wording as allowed by the brief. Final video and interactive clean-clone
-walkthrough are pending. Before this feature history had25 non-merge commits over
-only3 real Cairo dates(17,19,20 November); four-date brief requirement is unmet.
+walkthrough are pending. The current history spans three Cairo commit dates
+(17, 19 and 20 November). The four-date brief requirement is unmet.
 Never fabricate dates, history, billing costs or final submission status. No email
 or video upload authorized/performed.
 

@@ -1,6 +1,6 @@
 # Credit Copilot
 
-Synthetic personal-loan underwriting workspace: React/Vite → NestJS REST/OpenAPI → Application → pure Domain, with PostgreSQL/pgvector, TypeORM and Mastra adapters. كل البيانات تدريبية؛ التوصية الآلية تحتاج قرارًا بشريًا قبل الإصدار.
+بيئة تدريب لتقييم القرض الشخصي PL-100 وقرض السيارة AL-200 باستخدام React وNestJS وPostgreSQL/pgvector وMastra. كل البيانات تدريبية، والإصدار يحتاج قرارًا بشريًا.
 
 ## Quick start
 
@@ -26,7 +26,7 @@ pnpm seed
 pnpm seed:users
 ```
 
-seed يفهرس السياسات السبع فقط؛ تكراره يرجع skipped. حسابات Demo تستخدم كلمة المرور المحلية المحددة بطول12–256 حرفًا: `loan-officer`، `credit-officer` بحد250,000، `senior-credit-officer` بحد500,000 و`head-credit` بحد1,000,000. إعادة seed:users تحدث كلمات المرور وتلغي الجلسات. حسابات fixture CLI لا تصلح للدخول.
+seed يفهرس مستندات السياسات والتسعير والإجراءات من الـmanifest. تكرار الأمر يرجع skipped. حسابات Demo تستخدم كلمة المرور المحلية المحددة بطول 12–256 حرفًا. الحسابات هي `loan-officer`، و`credit-officer` بحد 250,000، و`senior-credit-officer` بحد 500,000، و`head-credit` بحد 1,000,000. إعادة seed:users تحدّث كلمات المرور وتلغي الجلسات. حسابات fixture CLI لا تصلح للدخول.
 
 ## 5-Minute Demo Path
 
@@ -74,6 +74,15 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 بـ`pnpm evaluate --offline-agents` أو بـ`pnpm evaluate --agents` مع Gemini.
 لو احتجت فاصل بين طلبات التوليد في القياس اضبط
 `EVALUATION_GENERATION_INTERVAL_MS` بالمللي ثانية. الإعداد خاص بالتقييم.
+
+## تجربة قرض السيارة التجريبي
+
+من Applications اختار `AUTO-001`، أو شغّل `pnpm assess AUTO-001 --demo` بعد
+تمكين Demo. تقييم العينة يحسب تمويل 250,000 جنيه من سعر السيارة 350,000
+ودفعة موثقة 100,000. بند PS-9 يشترط دفعة لا تقل عن 25%. العينة `AUTO-002`
+تحت الحد وتنتظر قرار رفض بشري، و`AUTO-003` تتحوّل لمراجعة بشرية لأن سعر
+السيارة غير موثق. كل العينات تحفظ نتيجة Strict وDemo حسب الأدلة.
+في Policy questions اختار Auto loan لعرض مصادر المنتج وتواريخه فقط.
 
 ## تشغيل Ollama كبديل محلي
 
@@ -130,8 +139,8 @@ APP-001، المذكرة المحسوبة واقتباس سياسة محدد. ت
 
 المسارات تحت `/api/v1` وموثقة في OpenAPI. Login يرجع HttpOnly/SameSite cookie وcsrfToken؛ أرسل cookie و`x-csrf-token` مع POST. عند التقييم أرسل Idempotency-Key ثابتًا للمحاولة نفسها؛ الرد الناجح يتكرر بنفس run، وتغيير mode يحتاج مفتاحًا مختلفًا. job واحد لكل طلب، منع القرار أثناء reassessment، وإغلاق المحاولة العالقة بعد15 دقيقة عند محاولة جديدة. النتائج المتأخرة لا تستبدل الأحدث، والطلب الصادر عرضه لا يعاد تقييمه.
 
-- Knowledge: عرض السياسات، multipart `files` لدفعات1–20 ونتيجة كل ملف. الـmanifest يقبل السياسات السبع المعروفة فقط.
-- Applications: multipart `file` أو اختيار fixture، list/read/download، assessments. يقبل الـPDF packs الخمسة المعروفة بالـhash فقط؛ بيانات العميل لا تدخل Knowledge Base.
+- Knowledge يعرض السياسات ويدعم multipart `files` لدفعات 1–20 مع نتيجة كل ملف. الـmanifest يحدد المصادر المعتمدة حسب المنتج.
+- Applications يدعم multipart `file` أو اختيار fixture. قبول الـPDF مرتبط ببصمة الحزمة المعتمدة. بيانات العملاء محفوظة في مخزن الحالات.
 - Reviews/decisions/offers: الصلاحيات والمبلغ والنسخة وfour-eyes على السيرفر. لا endpoint لتجاوز نقص الأدلة أو استثناء التسعير/السياسة.
 - Referrals/written-reason/reason-requests: Senior notes داخلية فقط؛ طلب السبب يعيد snapshot بالبند والإصدار والمصدر وتبرير المراجع، ولا يغير حالة التقييم. رد محفوظ يظل مقروءًا بعد انتهاء المهلة؛ تاريخ/مستخدم الطلب لا يأتيان من العميل.
 

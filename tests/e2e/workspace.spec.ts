@@ -171,6 +171,35 @@ test('explicit Demo, four-eyes human review and issued offer keep verification f
     page.getByText('Demo offer — not fully evidence-verified.', { exact: true }),
   ).toBeVisible();
 });
+
+test('auto application shows documented funding and cites its own product rules', async ({
+  page,
+}) => {
+  await login(page, 'auto');
+  await expect(page).toHaveTitle(/Credit Copilot/);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await add(page, 'AUTO-001');
+  await expect(page.getByText('Auto loan (AL-200)', { exact: true })).toBeVisible();
+  await expect(page.getByText('EGP 350,000.00', { exact: true })).toBeVisible();
+  await page.getByLabel('Assessment mode').selectOption('demo');
+  await page.getByRole('button', { name: 'Run assessment', exact: true }).click();
+  await expect(page.getByText('EGP 6,623.47', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Rules & sources' }).click();
+  await expect(page.getByText('synthetic-auto-product.md PS-9', { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Policy questions', exact: true }).click();
+  await page.getByRole('combobox', { name: 'Product', exact: true }).selectOption('AL-200');
+  await page.getByRole('combobox', { name: 'Policy edition' }).selectOption('AUTO-2025');
+  await page
+    .getByLabel('Question', { exact: true })
+    .fill('What is the minimum down payment for the vehicle loan?');
+  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
+  await expect(page.getByText('synthetic-auto-product.md', { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: shot('auto-policy-mobile'), fullPage: true });
+  expect(errors).toEqual([]);
+});
 test('grounded questions, refusal, conflicts and edition-specific code calculations', async ({
   page,
 }) => {

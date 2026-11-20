@@ -1,6 +1,7 @@
 import { answerPolicyQuestion, REFUSAL } from '../packages/application/src/questions.js';
 import { FakeGeneration } from './helpers/fake-provider.js';
 import type { Chunk } from '../packages/contracts/src/documents.js';
+import { QuestionStreams } from '../packages/application/src/question-streams.js';
 it('normalizes a text field alias but still verifies it against source', async () => {
   const result = await answerPolicyQuestion(
     { question: 'DBR?', asOfDate: '2025-04-01' },
@@ -30,6 +31,91 @@ const chunk: Chunk = {
   product: 'PL-100',
   contentHash: 'hash',
 };
+const clause = (documentId: string, section: string, text: string): Chunk => ({
+  ...chunk,
+  id: `${documentId}:${section}`,
+  documentId,
+  section,
+  text,
+});
+
+it('explains the operative income threshold with CP-1 and refuses incomplete precedence evidence', async () => {
+  const income = clause('CP-2025', 'CP-3.3', 'CP-3.3 Minimum net monthly EGP 10,000\nincome');
+  const product = clause('PS-PL-100', 'PS-2', '| Minimum net monthly income | EGP 8,000 |');
+  const scope = clause(
+    'CP-2025',
+    'CP-1',
+    'This policy governs the granting of unsecured personal loans to salaried individuals. The edition of this policy that applies to an application is the edition in force on the date the application is received.',
+  );
+  const ask = (linked: Chunk[]) =>
+    answerPolicyQuestion(
+      { question: 'Which minimum income is applicable?', asOfDate: '2025-04-01' },
+      {
+        provider: new FakeGeneration({ citations: [{ chunkId: income.id, quote: income.text }] }),
+        search: {
+          search: async () => [{ chunk: income, similarity: 0.9 }],
+          related: async () => ({ chunks: linked, reason: 'Income', conflict: 'minimum-income' }),
+        },
+        prompt: 'test',
+        minimumSimilarity: 0.65,
+      },
+    );
+  expect(await ask([income, product, scope])).toMatchObject({
+    refused: false,
+    resolution: expect.stringMatching(/applicable minimum.*10,000.*CP-1.*8,000.*stricter/),
+    citations: [{ chunkId: income.id }, { chunkId: product.id }, { chunkId: scope.id }],
+  });
+  expect(await ask([income, product])).toMatchObject({ refused: true, citations: [] });
+});
+
+it('streams the verified lower tenor limit and governing clauses', async () => {
+  const policy = clause('CP-2025', 'CP-14', 'The maximum tenor offered remains 60 months.');
+  const product = clause(
+    'PS-PL-100',
+    'PS-3',
+    '| Maximum tenor | 60 months, or the maximum permitted by the circular in force, whichever is lower |',
+  );
+  const circular = clause(
+    'C-2025-02',
+    'C-1',
+    'The maximum tenor is raised to\n**72 months**. Banks may offer tenors above 60 months only after updating their\nproduct sheets and system controls accordingly.',
+  );
+  const jobs = new QuestionStreams();
+  const { streamId } = jobs.start(
+    'owner',
+    'request',
+    'fingerprint',
+    () => 'answer',
+    () =>
+      answerPolicyQuestion(
+        { question: 'Can the PL-100 tenor reach 72 months?', asOfDate: '2025-04-01' },
+        {
+          provider: new FakeGeneration({ citations: [{ chunkId: policy.id, quote: policy.text }] }),
+          search: {
+            search: async () => [{ chunk: policy, similarity: 0.9 }],
+            related: async () => ({
+              chunks: [policy, product, circular],
+              reason: 'Tenor',
+              conflict: 'maximum-tenor',
+            }),
+          },
+          prompt: 'test',
+          minimumSimilarity: 0.65,
+        },
+      ),
+  );
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  const events = jobs.read('owner', streamId);
+  expect(events.map(({ data }) => data.kind)).toEqual([
+    'citation',
+    'citation',
+    'citation',
+    'completed',
+  ]);
+  expect(events.at(-1)?.data).toMatchObject({
+    resolution: expect.stringMatching(/PL-100 is capped at 60 months.*permits up to 72 months/),
+  });
+});
 it('answers a requested approval bypass from active procedure evidence without model discretion or an approval action', async () => {
   const procedure = (section: string, text: string): Chunk => ({
     ...chunk,

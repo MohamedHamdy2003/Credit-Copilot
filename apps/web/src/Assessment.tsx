@@ -220,6 +220,14 @@ export function Assessment({
                     <Money value={result.recommendedAmount} />
                   </dd>
                 </div>
+                {result.autoFinance && (
+                  <div>
+                    <dt>Vehicle price less documented down payment</dt>
+                    <dd>
+                      <Money value={result.autoFinance.financedAmount} />
+                    </dd>
+                  </div>
+                )}
               </dl>
               {result.reason && <p>{result.reason.replaceAll('_', ' ')}</p>}
               {result.evidence.missing.length > 0 && (

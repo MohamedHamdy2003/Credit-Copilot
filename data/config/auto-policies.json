@@ -1,0 +1,15 @@
+[
+  {
+    "edition": "AUTO-2025",
+    "productId": "AL-200",
+    "effectiveFrom": "2025-03-01",
+    "effectiveTo": null,
+    "maxDbr": "0.40",
+    "minimumIncome": "12000.00",
+    "minimumEmploymentMonths": 6,
+    "minimumAge": 21,
+    "maximumAgeAtMaturity": 60,
+    "minimumScore": 620,
+    "sourceFile": "synthetic-auto-policy-2025.md"
+  }
+]

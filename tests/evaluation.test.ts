@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import {
   assertion,
   evaluationSetSchema,
@@ -40,6 +41,16 @@ type LiveReport = {
 };
 const readLiveReport = (name: string) =>
   JSON.parse(readFileSync(`data/evaluation/results/${name}.json`, 'utf8')) as LiveReport;
+
+it('preserves the original case file used by historical live reports', () => {
+  const original = readFileSync('data/evaluation/cases-core-15-v1.json');
+  const historical = readLiveReport('vector-core-baseline');
+  expect(evaluationSetSchema.parse(JSON.parse(original.toString())).version).toBe('core-15-v1');
+  expect(createHash('sha256').update(original).digest('hex')).toBe(
+    historical.hashes['data/evaluation/cases.json'],
+  );
+  expect(set.version).toBe('core-15-v2');
+});
 
 it('verifies the clean live hybrid comparison and keeps both provider failures in the evidence', () => {
   const vector = readLiveReport('vector-core-baseline');

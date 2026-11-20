@@ -15,6 +15,7 @@ import { DomainError } from '../packages/domain/src/errors.js';
 import type { AssessmentRecord } from '../packages/application/src/assessment-record.js';
 import { FakeGeneration } from './helpers/fake-provider.js';
 import type { Completion, GenerationPort } from '../packages/application/src/ports.js';
+import type { ManifestEntry } from '../packages/infrastructure/src/knowledge/ingestion.js';
 
 const parser = new ParserRegistry();
 let deps: DocumentAssessmentDependencies;
@@ -56,18 +57,24 @@ const provider: GenerationPort = {
   },
 };
 beforeAll(async () => {
-  const doc = await parser.extract(
-    'credit-policy-2025.pdf',
-    await readFile('data/corpus/policy/credit-policy-2025.pdf'),
-  );
-  const clauses = chunkDocument(doc, {
-    id: 'CP-2025',
-    edition: 'CP-2025',
-    effectiveFrom: '2025-03-01',
-    effectiveTo: null,
-    product: 'PL-100',
-    kind: 'policy',
-  });
+  const manifest = JSON.parse(
+    await readFile('data/config/corpus-manifest.json', 'utf8'),
+  ) as ManifestEntry[];
+  const clauses = (
+    await Promise.all(
+      manifest
+        .filter((entry) => ['CP-2025', 'C-2025-02', 'PS-PL-100'].includes(entry.id))
+        .map(async (entry) =>
+          chunkDocument(
+            await parser.extract(
+              entry.filename,
+              await readFile(`data/corpus/policy/${entry.filename}`),
+            ),
+            entry,
+          ),
+        ),
+    )
+  ).flat();
   deps = {
     provider,
     prompt: await readFile('prompts/extraction.txt', 'utf8'),
@@ -124,6 +131,12 @@ it('runs eight actual stages, persists sources/usage and leaves an approvable ca
   expect(state.result?.recommendation).toBe('APPROVE');
   expect(state.result?.calculation?.monthlyInstallment).toBe('8630.39');
   expect(state.result?.retrievedChunkIds?.length).toBeGreaterThan(0);
+  expect(state.clauses).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ documentId: 'C-2025-02', section: 'C-2' }),
+      expect.objectContaining({ documentId: 'PS-PL-100', section: 'PS-3' }),
+    ]),
+  );
   expect(records).toHaveLength(1);
   expect(state.result?.usageRecords?.[0]?.inputTokens).toBe(12);
 });
@@ -224,6 +237,28 @@ it('derives real local facts rather than using requested values', async () => {
       })),
     }),
   ).toThrow('human verification');
+});
+
+it('refers an explicit employer discrepancy between salary and bureau evidence', async () => {
+  const doc = await load('APP-001');
+  const addBureauEmployer = (employer: string) => ({
+    ...doc,
+    blocks: doc.blocks.map((block) => ({
+      ...block,
+      text: block.text.replace(
+        'Facilities in default None',
+        `Facilities in default None\nEmployer: ${employer}`,
+      ),
+    })),
+  });
+  const employer = doc.blocks
+    .map((block) => block.text)
+    .join('\n')
+    .match(/^Employer (.+)$/m)![1]!;
+  expect(deriveEvidenceFacts(addBureauEmployer(employer.toUpperCase())).facts.confirmed).toBe(true);
+  expect(() => deriveEvidenceFacts(addBureauEmployer(`${employer} Subsidiary`))).toThrow(
+    'Reported employer disagrees',
+  );
 });
 
 it('records skipped steps honestly and propagates persistence failure', async () => {

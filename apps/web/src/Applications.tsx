@@ -186,6 +186,14 @@ function ApplicationView({
               <a href={`/api/v1/applications/${id}/evidence`}>Download original</a>
               <dl>
                 <div>
+                  <dt>Product</dt>
+                  <dd>
+                    {data.application.form.productId === 'AL-200'
+                      ? 'Auto loan (AL-200)'
+                      : 'Personal loan (PL-100)'}
+                  </dd>
+                </div>
+                <div>
                   <dt>Requested</dt>
                   <dd>
                     <Money value={data.application.form.amount} />
@@ -199,6 +207,22 @@ function ApplicationView({
                   <dt>Application date</dt>
                   <dd>{data.application.form.applicationDate}</dd>
                 </div>
+                {data.application.form.productId === 'AL-200' && (
+                  <>
+                    <div>
+                      <dt>Vehicle price</dt>
+                      <dd>
+                        <Money value={data.application.form.vehiclePrice} />
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Documented down payment</dt>
+                      <dd>
+                        <Money value={data.application.form.downPayment} />
+                      </dd>
+                    </div>
+                  </>
+                )}
               </dl>
               <label>
                 Assessment mode

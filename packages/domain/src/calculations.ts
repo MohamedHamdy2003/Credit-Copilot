@@ -80,6 +80,31 @@ export function compareMoney(a: Money, b: Money): number {
   return new D(a).comparedTo(new D(b));
 }
 
+export function calculateVehicleFunding(
+  vehiclePrice: Money,
+  downPayment: Money,
+  minimumDownPaymentPercent: Money,
+  productMaximum: Money,
+) {
+  const price = nonnegative(vehiclePrice, 'vehiclePrice');
+  const down = nonnegative(downPayment, 'downPayment');
+  const rate = nonnegative(minimumDownPaymentPercent, 'minimumDownPaymentPercent');
+  const limit = nonnegative(productMaximum, 'productMaximum');
+  invariant(rate.lt(100), 'InvalidCalculation', 'Minimum down payment must be below 100%');
+  const financed = price.minus(down);
+  if (!financed.gt(0)) return null;
+  const required = price.mul(rate).div(100);
+  return {
+    vehiclePrice: price.toFixed(2),
+    downPayment: down.toFixed(2),
+    financedAmount: financed.toFixed(2),
+    meetsMinimum: down.gte(required),
+    maximumPrincipal: D.min(limit, price.minus(required))
+      .toDecimalPlaces(2, D.ROUND_FLOOR)
+      .toFixed(2),
+  };
+}
+
 export function validDate(value: string): string {
   invariant(/^\d{4}-\d{2}-\d{2}$/.test(value), 'InvalidDate', 'Expected ISO calendar date');
   const parsed = new Date(`${value}T00:00:00Z`);

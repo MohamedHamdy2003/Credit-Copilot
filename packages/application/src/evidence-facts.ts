@@ -4,11 +4,17 @@ import type { EvidenceItem } from '../../domain/src/evidence-mode.js';
 import { parseEnglishDate } from './extraction.js';
 import { parseApplicationForm } from './application-form.js';
 
+const employerLabel = /^(?:Employer(?: name)?)(?::[ \t]*|[ \t]+)([^\n]+)$/gim;
+const employerHeader =
+  /^([^\n]+?)[ \t]+[—–-][ \t]+(?:Human Resources|HR(?: Department)?|Personnel Office)\b/gim;
+const normalizeEmployer = (name: string) => name.trim().replace(/\s+/g, ' ').toLowerCase();
+const employers = (section: string, labels: RegExp) =>
+  [...section.matchAll(labels)].map((match) => normalizeEmployer(match[1]!));
+
 /** Local extraction for supported layouts; unknown/contradictory evidence refers. */
 export function deriveEvidenceFacts(document: NormalizedDocument) {
   const text = document.blocks.map((block) => block.text).join('\n');
-  const salary = text.split(/^Part 2\b/m)[1]?.split(/^Part 3\b/m)[0] ?? '';
-  const bureau = text.split(/^Part 3\b/m)[1] ?? '';
+  const [application, salary = '', bureau = ''] = text.split(/^Part [23]\b/m);
   const form = parseApplicationForm(document);
   const dates = [...salary.matchAll(/Issued:\s*(\d{1,2} [A-Za-z]+ \d{4})/g)].map((m) => m[1]!);
   invariant(
@@ -16,17 +22,24 @@ export function deriveEvidenceFacts(document: NormalizedDocument) {
     'MissingRequiredEvidence',
     'Exactly one salary certificate issue date required',
   );
-  const employer = text.match(/^Employer (.+)$/m)?.[1]?.trim();
-  const purpose = text.match(/^Purpose (.+)$/m)?.[1]?.trim();
+  const [employer, ...additionalEmployers] = employers(application!, employerLabel);
+  const purpose = application!.match(/^Purpose (.+)$/m)?.[1]?.trim();
   invariant(
     employer && purpose,
     'MissingRequiredEvidence',
     'Employer and purpose evidence required',
   );
+  const salaryEmployers = [
+    ...employers(salary, employerLabel),
+    ...employers(salary, employerHeader),
+  ];
+  invariant(salaryEmployers.length, 'MissingRequiredEvidence', 'Salary employer evidence required');
   invariant(
-    salary.includes(employer),
+    [...additionalEmployers, ...salaryEmployers, ...employers(bureau, employerLabel)].every(
+      (reported) => reported === employer,
+    ),
     'EvidenceConflict',
-    'Salary employer disagrees with application',
+    'Reported employer disagrees across application, salary certificate or bureau evidence',
   );
   const defaultRows = [...bureau.matchAll(/^Facilities in default (.+)$/gm)].map((m) =>
     m[1]!.trim(),
@@ -60,8 +73,12 @@ export function deriveEvidenceFacts(document: NormalizedDocument) {
     'Medical expenses',
   ];
   const prohibited = /business|commercial|securities/i.test(purpose);
+  const purposeAllowed =
+    (form.productId ?? 'PL-100') === 'PL-100'
+      ? allowedPurposes.includes(purpose)
+      : purpose === 'Vehicle purchase';
   invariant(
-    allowedPurposes.includes(purpose) || prohibited,
+    purposeAllowed || prohibited,
     'UnverifiedPurpose',
     'Purpose requires human classification',
   );
@@ -75,14 +92,24 @@ export function deriveEvidenceFacts(document: NormalizedDocument) {
     },
     { requirement: 'bureau_report', present: Boolean(bureau), verified: false },
   ];
+  if (form.productId === 'AL-200') {
+    evidence.push({
+      requirement: 'vehicle_quotation',
+      present:
+        /^Part 1 Application and vehicle quotation\b/im.test(application!) &&
+        form.vehiclePrice !== undefined &&
+        form.downPayment !== undefined,
+      verified: false,
+    });
+  }
   return {
     evidence,
     facts: {
       certificateDate: parseEnglishDate(dates[0]!),
       confirmed: explicitComplete ? true : probationActive ? false : null,
       hasDefault: !/^None$/i.test(defaultRows[0]!),
-      bankEmployee: employer === 'Delta Commercial Bank',
-      purposeAllowed: !prohibited,
+      bankEmployee: employer === 'delta commercial bank',
+      purposeAllowed,
       plannedDisbursement: form.applicationDate,
     },
     provenance: {

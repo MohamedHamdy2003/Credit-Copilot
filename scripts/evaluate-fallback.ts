@@ -66,17 +66,24 @@ const parser = new ParserRegistry();
 const manifest = JSON.parse(
   await readFile('data/config/corpus-manifest.json', 'utf8'),
 ) as ManifestEntry[];
-const policy = manifest.find((entry) => entry.id === 'CP-2025')!;
-const policyDocument = await parser.extract(
-  policy.filename,
-  await readFile(`data/corpus/policy/${policy.filename}`),
-);
-invariant(
-  policy.sha256 === policyDocument.hash,
-  'UntrustedPolicyDocument',
-  'Policy hash does not match the manifest',
-);
-const clauses = chunkDocument(policyDocument, policy);
+const clauses = (
+  await Promise.all(
+    manifest
+      .filter((entry) => ['CP-2025', 'C-2025-02', 'PS-PL-100'].includes(entry.id))
+      .map(async (entry) => {
+        const document = await parser.extract(
+          entry.filename,
+          await readFile(`data/corpus/policy/${entry.filename}`),
+        );
+        invariant(
+          entry.sha256 === document.hash,
+          'UntrustedPolicyDocument',
+          'Policy evidence hash does not match the manifest',
+        );
+        return chunkDocument(document, entry);
+      }),
+  )
+).flat();
 const ollamaModel = `ollama:${settings.OLLAMA_MODEL}`;
 
 await measure('verified_extraction_and_code_memo', async () => {

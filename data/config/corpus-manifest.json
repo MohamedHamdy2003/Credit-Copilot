@@ -68,5 +68,45 @@
     "kind": "pricing",
     "product": "PL-100",
     "sha256": "9edc05dc7dde2e1e2345dec29209294415164b71c55fb168a42aaecc1234c589"
+  },
+  {
+    "filename": "synthetic-auto-policy-2025.md",
+    "id": "AUTO-2025",
+    "edition": "AUTO-2025",
+    "effectiveFrom": "2025-03-01",
+    "effectiveTo": null,
+    "kind": "policy",
+    "product": "AL-200",
+    "sha256": "3c1255163f65aa83faf9ed73a6373056638a994a5f5561b6ef622d01c6e6e8da"
+  },
+  {
+    "filename": "synthetic-auto-product.md",
+    "id": "PS-AL-200",
+    "edition": "1.0",
+    "effectiveFrom": "2025-03-01",
+    "effectiveTo": null,
+    "kind": "product",
+    "product": "AL-200",
+    "sha256": "1e419d2b0e64b154f07683b49b16df3d1cf29efeeaf79a8f7d987a01e7c898c2"
+  },
+  {
+    "filename": "synthetic-auto-procedure.md",
+    "id": "PM-AL-200",
+    "edition": "1.0",
+    "effectiveFrom": "2025-03-01",
+    "effectiveTo": null,
+    "kind": "procedure",
+    "product": "AL-200",
+    "sha256": "42fdefa27e26df75c587662eac74be38971813a27a708f2bf6f2d6ecb5e3ed75"
+  },
+  {
+    "filename": "synthetic-auto-pricing.csv",
+    "id": "PT-AL-200",
+    "edition": "1.0",
+    "effectiveFrom": "2025-03-01",
+    "effectiveTo": null,
+    "kind": "pricing",
+    "product": "AL-200",
+    "sha256": "606fe7ad3bf14bfd862da9f276d8838b29c4432c34b0442296fe5d0f61369cba"
   }
 ]

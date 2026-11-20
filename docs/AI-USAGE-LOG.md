@@ -1,5 +1,26 @@
 # AI usage log
 
+## 2026-11-20 original-source review and synthetic auto loans
+
+The user asked Codex to compare the project against the uploaded brief and
+source pack before adding AL-200. Codex checked the twelve source hashes,
+compared rule and citation behavior with the source clauses, and implemented
+the corrections. Codex authored the additional fictional policy, price and
+case documents and connected them to the existing human decision workflow.
+The auto evaluation uses provider fixtures. The new source files and tests
+record the policy choices for candidate review.
+
+The first Chromium check used an exact label selector that did not resolve the
+product control. The Playwright accessibility snapshot showed a combobox named
+Product. The test switched to that role and verified the selected edition and
+source citation on a mobile viewport.
+
+## 2026-11-20 streaming
+
+Codex added authenticated assessment progress and verified citation streams,
+plus replay and terminal states in the web interface. HTTP and Chromium checks
+exercise disconnection, session revocation and one saved assessment across retries.
+
 ## 2026-11-20 typed assessment agents
 
 Codex wired three Mastra agents to the existing source-verified operations.

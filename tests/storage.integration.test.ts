@@ -63,10 +63,13 @@ it('migrates idempotently and ingests/retrieves without duplicate or mixed evide
   await expect(
     ingestion.ingest('APP-001.pdf', await readFile('data/corpus/evidence/APP-001.pdf')),
   ).rejects.toThrow('manifest');
-  const docs = (await db.query('SELECT count(*)::int AS n FROM knowledge.documents')) as {
-    n: number;
-  }[];
-  expect(docs[0]?.n).toBe(7);
+  const docs = await db.query(
+    "SELECT metadata->>'product' AS product, count(*)::int AS n FROM knowledge.documents GROUP BY 1 ORDER BY 1",
+  );
+  expect(docs).toEqual([
+    { product: 'AL-200', n: 4 },
+    { product: 'PL-100', n: 7 },
+  ]);
 });
 
 it('indexes each dimension of the same model and masks direct retrieval input', async () => {
@@ -262,7 +265,8 @@ it('loads operative conflict context by date/product without changing the vector
   const income = context.chunks.find((c) => c.section === 'CP-3.3');
   expect(income?.edition).toBe('CP-2025');
   expect(income?.pageStart).toBe(1);
-  expect(context.chunks.map((c) => c.section)).toEqual(['CP-3.3', 'PS-2', 'CP-14']);
+  expect(context.chunks.map((c) => c.section)).toEqual(['CP-3.3', 'PS-2', 'CP-1']);
+  expect(context.conflict).toBe('minimum-income');
   const historical = await retrieval.related('Minimum income?', '2024-12-01', 'PL-100', primary);
   expect(historical.chunks.find((c) => c.section === 'CP-3.3')?.edition).toBe('CP-2024');
   const unrelated = await retrieval.related('Minimum income?', '2025-04-03', 'UNKNOWN', primary);

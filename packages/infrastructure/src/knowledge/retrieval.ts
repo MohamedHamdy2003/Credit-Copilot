@@ -2,7 +2,11 @@ import type { DataSource } from 'typeorm';
 import type { Chunk } from '../../../contracts/src/documents.js';
 import type { EmbeddingPort } from '../../../application/src/ports.js';
 import { validDate } from '../../../domain/src/calculations.js';
-import { isApprovalBypass, maskPolicyQuestion } from '../../../application/src/questions.js';
+import {
+  isApprovalBypass,
+  maskPolicyQuestion,
+  type PersonalLoanConflict,
+} from '../../../application/src/questions.js';
 import type { Config } from '../../../contracts/src/config.js';
 import { rewritePolicyQuery } from '../../../application/src/query-rewrite.js';
 import {
@@ -45,16 +49,23 @@ export class RetrievalService {
         (h) => h.chunk.documentId.startsWith('PM-') && ['PM-1', 'PM-2'].includes(h.chunk.section),
       );
     const income =
-      /\bincome\b|minimum salary/i.test(question) &&
+      product === 'PL-100' &&
+      /\bincome\b|\bsalary\b/i.test(question) &&
+      /\b(?:minimum|threshold|criteria|criterion|sufficient|meet|qualify|requires?|eligible|wins)\b|\bPS-2\b/i.test(
+        question,
+      ) &&
       hits.some((h) => ['CP-3.3', 'PS-2'].includes(h.chunk.section));
     const tenor =
-      /\btenor\b|\bmonths\b/i.test(question) &&
+      product === 'PL-100' &&
+      /\btenor\b|\b(?:loan|term|repayment|circular)\b[^?]*\bmonths\b|\b72 months\b/i.test(
+        question,
+      ) &&
       hits.some((h) => ['CP-14', 'PS-3', 'C-1'].includes(h.chunk.section));
     if (!income && !tenor && !approval) return { chunks: [], reason: 'No linked source context' };
     const sections = approval
       ? ['PM-1', 'PM-2', 'PM-3']
       : income
-        ? ['CP-3.3', 'PS-2', 'CP-14']
+        ? ['CP-3.3', 'PS-2', 'CP-1']
         : ['CP-14', 'PS-3', 'C-1'];
     const rows = (await this.db.query(
       "SELECT c.metadata AS chunk FROM knowledge.chunks c JOIN knowledge.documents d ON d.id=c.document_id WHERE c.active AND c.product=$1 AND c.effective_from<=$2::date AND (c.effective_to IS NULL OR $2::date<c.effective_to) AND c.metadata->>'section'=ANY($3) AND d.metadata->>'kind'=ANY($4) ORDER BY c.ordinal,c.id",
@@ -65,8 +76,16 @@ export class RetrievalService {
       const chunk = rows.find((r) => r.chunk.section === section)?.chunk;
       if (chunk) chunks.push(chunk);
     }
+    const conflict: PersonalLoanConflict | undefined = approval
+      ? undefined
+      : income
+        ? 'minimum-income'
+        : chunks.some((c) => c.documentId === 'CP-2025' || c.documentId === 'C-2025-02')
+          ? 'maximum-tenor'
+          : undefined;
     return {
       chunks,
+      conflict,
       reason: approval
         ? 'Read-only human approval boundary'
         : income

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import type { Actor } from '../../domain/src/access.js';
 import type { NormalizedDocument } from '../../contracts/src/documents.js';
+import { productIds, type ProductId } from '../../contracts/src/products.js';
 import type {
   AssessmentStreamEvent,
   QuestionStreamEvent,
@@ -56,7 +57,7 @@ export interface KnowledgePort {
   attempts(): Promise<unknown>;
 }
 export interface OperationDependencies {
-  policies: Policy[];
+  policies: Record<ProductId, Policy[]>;
   store: ApplicationStore;
   knowledge: KnowledgePort;
   parse(upload: Upload): Promise<NormalizedDocument>;
@@ -121,14 +122,19 @@ export class OperationsService {
   }
   async upload(actor: Actor, upload: Upload) {
     const document = await this.deps.parse(upload);
+    const fixture = this.deps.fixtures.find((entry) => entry.hash === document.hash);
     invariant(
-      this.deps.fixtures.some((f) => f.hash === document.hash),
+      fixture,
       'UnrecognizedSyntheticPack',
       'Only reviewed synthetic application packs are accepted',
       403,
     );
     parseApplicationForm(document);
-    return this.deps.store.register(actor, document, upload.bytes);
+    return this.deps.store.register(
+      actor,
+      { ...document, filename: fixture.filename },
+      upload.bytes,
+    );
   }
   async selectFixture(actor: Actor, reference: string) {
     const fixture = this.deps.fixtures.find((f) => f.reference === reference);
@@ -240,13 +246,16 @@ export class OperationsService {
       .object({
         question: z.string().trim().min(1).max(2000),
         asOfDate: z.iso.date().optional(),
-        product: z.literal('PL-100').default('PL-100'),
-        edition: z.enum(['CP-2024', 'CP-2025']).optional(),
+        product: z.enum(productIds).optional(),
+        edition: z.enum(['CP-2024', 'CP-2025', 'AUTO-2025']).optional(),
       })
       .strict()
       .parse(raw);
     const editions = [
-      ...new Set(input.question.match(/\bCP-20(?:24|25)\b/gi)?.map((e) => e.toUpperCase()) ?? []),
+      ...new Set(
+        input.question.match(/\b(?:CP-20(?:24|25)|AUTO-2025)\b/gi)?.map((e) => e.toUpperCase()) ??
+          [],
+      ),
     ];
     const dates = [...new Set(input.question.match(/\b\d{4}-\d{2}-\d{2}\b/g) ?? [])];
     invariant(
@@ -265,18 +274,26 @@ export class OperationsService {
       'Question and date selector disagree',
     );
     const edition = input.edition ?? editions[0];
+    const editionProduct = edition === 'AUTO-2025' ? 'AL-200' : edition ? 'PL-100' : undefined;
+    invariant(
+      !editionProduct || !input.product || editionProduct === input.product,
+      'ConflictingProduct',
+      'Policy edition belongs to a different product',
+    );
+    const product = input.product ?? editionProduct ?? 'PL-100';
+    const policies = this.deps.policies[product];
     const asOfDate =
       input.asOfDate ??
       dates[0] ??
-      this.deps.policies.find((p) => p.edition === edition)?.effectiveFrom ??
+      policies.find((p) => p.edition === edition)?.effectiveFrom ??
       new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
     if (edition)
       invariant(
-        selectPolicy(this.deps.policies, asOfDate).edition === edition,
+        selectPolicy(policies, asOfDate).edition === edition,
         'ConflictingEdition',
         'Selected date does not belong to the requested edition',
       );
-    return { question: input.question, product: input.product, asOfDate };
+    return { question: input.question, product, asOfDate };
   }
   async question(raw: unknown) {
     return this.deps.ask(this.resolveQuestion(raw));

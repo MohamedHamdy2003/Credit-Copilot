@@ -18,7 +18,8 @@ import { DomainError } from '../packages/domain/src/errors.js';
 import { GenerationFallback } from '../packages/infrastructure/src/llm/provider.js';
 import { PostgresAssessmentRepository } from '../packages/infrastructure/src/db/assessment-repository.js';
 import type { AssessmentResult } from '../packages/application/src/assessment-record.js';
-import type { Policy } from '../packages/domain/src/policy.js';
+import { loadProductCatalog } from '../packages/infrastructure/src/product-catalog.js';
+import { RetrievalService } from '../packages/infrastructure/src/knowledge/retrieval.js';
 import {
   IngestionService,
   type ManifestEntry,
@@ -38,7 +39,8 @@ beforeAll(async () => {
   db = await createDataSource(url).initialize();
   await db.runMigrations();
   hash = await new ScryptCredentials().hash(password);
-  const policies = JSON.parse(await readFile('data/config/policies.json', 'utf8')) as Policy[];
+  const catalog = await loadProductCatalog();
+  const policies = Object.values(catalog).flatMap((item) => item.policies);
   const manifest = JSON.parse(
     await readFile('data/config/corpus-manifest.json', 'utf8'),
   ) as ManifestEntry[];
@@ -88,6 +90,7 @@ beforeAll(async () => {
         },
       ),
       config,
+      catalog,
     ),
     maxUploadBytes: 100000,
     webOrigin: 'http://localhost:5173',
@@ -316,7 +319,8 @@ it('uploads original synthetic bytes idempotently and enforces evidence ownershi
   const owner = await account(),
     other = await account();
   const bytes = await readFile('data/corpus/evidence/APP-001.pdf');
-  const first = await post('applications', owner).attach('file', bytes, 'APP-001.pdf').expect(201);
+  const alias = 'customer-28704121234567-01000000001.pdf';
+  const first = await post('applications', owner).attach('file', bytes, alias).expect(201);
   const repeat = await post('applications', owner).attach('file', bytes, 'APP-001.pdf').expect(201);
   expect(repeat.body.id).toBe(first.body.id);
   expect(repeat.body.duplicate).toBe(true);
@@ -330,6 +334,16 @@ it('uploads original synthetic bytes idempotently and enforces evidence ownershi
     .set('Cookie', owner.cookie)
     .expect(200);
   expect(Buffer.from(download.body)).toEqual(bytes);
+  expect(download.headers['content-disposition']).toContain('APP-001.pdf');
+  expect(download.headers['content-disposition']).not.toContain(alias);
+  // Simulate an application registered before canonical names were enforced.
+  await db.query(
+    "UPDATE cases.applications SET normalized=jsonb_set(normalized, '{filename}', to_jsonb($1::text)) WHERE id=$2",
+    [alias, first.body.id],
+  );
+  await post(`applications/${first.body.id}/assessments`, owner).send({ mode: 'demo' }).expect(201);
+  expect(provider.texts.some((input) => input.includes('"source":"application-pack"'))).toBe(true);
+  expect(provider.texts.join(' ')).not.toContain(alias);
   await request(app.getHttpServer())
     .get(`/api/v1/applications/${first.body.id}/evidence`)
     .set('Cookie', other.cookie)
@@ -408,6 +422,10 @@ it('runs upload→assessment→human approval→issue→authorized offer read wi
   const runId = assessment.body.runId;
   expect(assessment.body.result.recommendation).toBe('APPROVE');
   expect(assessment.body.result.calculation.monthlyInstallment).toBe('8630.39');
+  await db.query(
+    "INSERT INTO cases.assessment_jobs(run_id,application_id,request_key,mode,status,created_at) VALUES($1,$2,'review-after-timeout','demo','running',now()-interval '16 minutes')",
+    [randomUUID(), id],
+  );
   await post(`assessments/${runId}/decisions`, senior)
     .send({
       action: 'approve',
@@ -437,6 +455,133 @@ it('runs upload→assessment→human approval→issue→authorized offer read wi
     .set('Cookie', other.cookie)
     .expect(403);
   await post(`applications/${id}/assessments`, owner).send({ mode: 'demo' }).expect(409);
+});
+
+it('evaluates all three auto packs and records product-scoped human decisions', async () => {
+  const suite = JSON.parse(await readFile('data/evaluation/auto-loan-cases.json', 'utf8')) as {
+    assessments: {
+      fixture: string;
+      mode: string;
+      expected: { recommendation: string; [field: string]: unknown };
+      downPaymentRule?: { rule: string; result: string; citation: string };
+    }[];
+  };
+  const owner = await account();
+  const reviewer = await account('senior');
+  const strictId = await select(owner, 'AUTO-001');
+  const strict = await post(`applications/${strictId}/assessments`, owner).send({}).expect(201);
+  expect(strict.body.result).toMatchObject({
+    mode: 'strict',
+    productId: 'AL-200',
+    policyEdition: 'AUTO-2025',
+    recommendation: 'REFER_TO_HUMAN',
+    evidence: { missing: ['national_id_copy'] },
+  });
+  for (const scenario of suite.assessments) {
+    provider.texts = [];
+    const applicationId = await select(owner, scenario.fixture);
+    const response = await post(`applications/${applicationId}/assessments`, owner)
+      .send({ mode: scenario.mode })
+      .expect(201);
+    const { runId, result } = response.body;
+    expect(result).toMatchObject(scenario.expected);
+    if (scenario.downPaymentRule) {
+      expect(result.results).toEqual(
+        expect.arrayContaining([expect.objectContaining(scenario.downPaymentRule)]),
+      );
+    } else {
+      expect(provider.texts).toHaveLength(0);
+    }
+    const stored = await readStream(`assessments/${runId}`, owner).expect(200);
+    expect(stored.body.result).toMatchObject(scenario.expected);
+    if (result.recommendation === 'APPROVE') {
+      await post(`assessments/${runId}/decisions`, reviewer)
+        .send({
+          action: 'approve',
+          expectedVersion: 1,
+          comment: 'Reviewed verified auto affordability and quotation.',
+        })
+        .expect(201);
+      await post(`assessments/${runId}/decisions`, reviewer)
+        .send({
+          action: 'issue',
+          expectedVersion: 2,
+          comment: 'Issue after human approval.',
+          disbursementDate: '2025-04-03',
+        })
+        .expect(201);
+      expect(await db.query('SELECT data FROM cases.offers WHERE run_id=$1', [runId])).toEqual([
+        {
+          data: expect.objectContaining({
+            productId: 'AL-200',
+            policyEdition: 'AUTO-2025',
+            fullyEvidenceVerified: false,
+            amount: '250000.00',
+          }),
+        },
+      ]);
+    } else if (result.recommendation === 'DECLINE') {
+      await post(`assessments/${runId}/decisions`, reviewer)
+        .send({
+          action: 'reject',
+          expectedVersion: 1,
+          comment: 'Verified down payment below the product minimum.',
+          clause: 'PS-9',
+        })
+        .expect(201);
+      expect(
+        await db.query(
+          'SELECT clause, source_file, policy_edition FROM cases.rejection_notices WHERE run_id=$1',
+          [runId],
+        ),
+      ).toEqual([
+        { clause: 'PS-9', source_file: 'synthetic-auto-product.md', policy_edition: 'AUTO-2025' },
+      ]);
+    }
+  }
+});
+
+it('isolates dated auto and personal sources through retrieval and policy Q&A', async () => {
+  const { retrieval } = JSON.parse(await readFile('data/evaluation/auto-loan-cases.json', 'utf8'));
+  const question = retrieval.question as string;
+  const date = retrieval.asOfDate as string;
+  for (const strategy of ['vector', 'hybrid'] as const) {
+    const search = new RetrievalService(db, provider, strategy);
+    const [auto, personal, preEffective] = await Promise.all([
+      search.search(question, date, 'AL-200'),
+      search.search(question, date, 'PL-100'),
+      search.search(question, '2025-02-28', 'AL-200'),
+    ]);
+    expect(auto.length).toBeGreaterThan(0);
+    expect(personal.length).toBeGreaterThan(0);
+    expect(auto.every(({ chunk }) => chunk.product === 'AL-200')).toBe(true);
+    expect(personal.every(({ chunk }) => chunk.product === 'PL-100')).toBe(true);
+    expect(preEffective).toHaveLength(0);
+  }
+  const owner = await account();
+  const answer = await post('questions', owner)
+    .send({ product: 'AL-200', edition: 'AUTO-2025', question, asOfDate: date })
+    .expect(201);
+  expect(answer.body.refused).toBe(false);
+  expect(answer.body.citations).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        documentId: retrieval.auto.documentId,
+        section: retrieval.auto.section,
+      }),
+    ]),
+  );
+  expect(
+    answer.body.citations.every(({ sourceFile }: { sourceFile: string }) =>
+      sourceFile.startsWith('synthetic-auto-'),
+    ),
+  ).toBe(true);
+  await post('questions', owner)
+    .send({ product: 'PL-100', edition: 'AUTO-2025', question })
+    .expect(422);
+  await post('questions', owner)
+    .send({ product: 'AL-200', edition: 'CP-2025', question })
+    .expect(422);
 });
 it('prevents concurrent assessment jobs and persists fraud referral without provider calls', async () => {
   const s = await account(),

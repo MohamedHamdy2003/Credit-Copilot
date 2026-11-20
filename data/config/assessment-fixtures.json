@@ -1,0 +1,42 @@
+[
+  {
+    "reference": "APP-001",
+    "filename": "APP-001.pdf",
+    "sha256": "63dec47c4daf2baeef4a7465d1610df8df1525b3ad5ce944e428e15a975e4918"
+  },
+  {
+    "reference": "APP-002",
+    "filename": "APP-002.pdf",
+    "sha256": "d6ab7255e68782babe996e07c8bb714b69eac577601c7f10f475c1b55906b8ac"
+  },
+  {
+    "reference": "APP-003",
+    "filename": "APP-003.pdf",
+    "sha256": "23cb1ec5ace5e42fccdc6721bb8040a5b249449ab5dbaf1e99a358595a3e88a1"
+  },
+  {
+    "reference": "APP-004",
+    "filename": "APP-004.pdf",
+    "sha256": "96dc4f3be95b5bf424363f3f2b6f0b7138335f5be04fe25caf783a749ec1c9d9"
+  },
+  {
+    "reference": "APP-005",
+    "filename": "APP-005.pdf",
+    "sha256": "d049a26352d763d93aa495cdaf8ed461bae2b9aede72caa64a91104812116933"
+  },
+  {
+    "reference": "AUTO-001",
+    "filename": "AUTO-001.pdf",
+    "sha256": "790473ab4fbd036ff5ae57481a142d41192b3421cbbb184f5f179fd8f6b575d9"
+  },
+  {
+    "reference": "AUTO-002",
+    "filename": "AUTO-002.pdf",
+    "sha256": "5fbc90773bb5362e707afe4aaa5b723b55bd02363ac4ea8a1e7fe14bf9a5f197"
+  },
+  {
+    "reference": "AUTO-003",
+    "filename": "AUTO-003.pdf",
+    "sha256": "ad29e9e06a9723757186c74005a0b245cfae3b56567c7f84f21da10f51344879"
+  }
+]
