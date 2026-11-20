@@ -1,9 +1,8 @@
 # Current checkpoint —20 November2026
 
-Read agent.md and FEATURES.md first. Current feature: feature/hybrid-search.
-Core evaluation went through PR17 into dev and PR18 into main after green CI.
-Hybrid implementation and evidence are in PR19. Check GitHub for merge status.
-The measured core and hybrid gates pass. Final submission work is listed below.
+Read agent.md and FEATURES.md first. Current feature: feature/query-rewriting.
+Core evaluation went through PR17/18 and hybrid search through PR19/20 after CI.
+Hybrid is on main at 527886d. The measured core and hybrid gates pass.
 
 ## Implemented
 
@@ -78,6 +77,16 @@ numerics 17/17, security/audit 80/80 and Strict packs 5/5. First result hit was
 with ProviderUnavailable in Q03 and Q02 respectively. All reports are committed.
 The evaluator retains ranks before generation and allows at most two upstream
 case retries per live run. Case-level retries used in the passing report: 0.
+
+## Query rewriting implementation
+
+Hybrid Q&A appends up to two fixed search aliases by default. The original masked
+question drives the embedding, original lexical search and evidence generation.
+Both lexical variants use one database snapshot and the same trusted scope.
+An alternate only fills an original slot below the configured cosine floor if
+it is new and passes the floor. Approval bypasses use the original search.
+Set QUERY_REWRITE_MAX_EXPANSIONS=0 to disable it, or compare pnpm evaluate --hybrid
+and pnpm evaluate --rewrite. The clean live comparison is pending.
 
 ## Next and honest readiness
 

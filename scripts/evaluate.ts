@@ -25,20 +25,29 @@ import { invariant } from '../packages/domain/src/errors.js';
 const args = process.argv.slice(2);
 const mode = args.includes('--offline') ? 'offline' : 'live';
 invariant(
-  args.length <= 1 && args.every((arg) => ['--offline', '--vector', '--hybrid'].includes(arg)),
+  args.length <= 1 &&
+    args.every((arg) => ['--offline', '--vector', '--hybrid', '--rewrite'].includes(arg)),
   'InvalidEvaluationArguments',
-  'Use at most one of --offline, --vector or --hybrid',
+  'Use at most one of --offline, --vector, --hybrid or --rewrite',
 );
 const config = configSchema.parse({
   ...process.env,
   RETRIEVAL_STRATEGY:
     args[0] === '--vector'
       ? 'vector'
-      : args[0] === '--hybrid'
+      : args[0] === '--hybrid' || args[0] === '--rewrite'
         ? 'hybrid'
         : process.env.RETRIEVAL_STRATEGY,
+  QUERY_REWRITE_MAX_EXPANSIONS:
+    args[0] === '--vector' || args[0] === '--hybrid' ? 0 : process.env.QUERY_REWRITE_MAX_EXPANSIONS,
 });
+invariant(
+  args[0] !== '--rewrite' || config.QUERY_REWRITE_MAX_EXPANSIONS > 0,
+  'InvalidEvaluationArguments',
+  '--rewrite requires a positive QUERY_REWRITE_MAX_EXPANSIONS',
+);
 const hybrid = mode === 'live' && config.RETRIEVAL_STRATEGY === 'hybrid';
+const rewriteBudget = hybrid ? config.QUERY_REWRITE_MAX_EXPANSIONS : 0;
 const id = new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomUUID().slice(0, 8);
 const path = `artifacts/evaluation/${mode}-${id}.json`;
 const dataset = evaluationSetSchema.parse(
@@ -87,6 +96,7 @@ const files = [
   'prompts/extraction.txt',
   'prompts/questions.txt',
   'packages/application/src/questions.ts',
+  'packages/application/src/query-rewrite.ts',
   'packages/application/src/document-assessment.ts',
   'packages/application/src/credit-memo.ts',
   'packages/application/src/extraction.ts',
@@ -138,6 +148,9 @@ const report: { [key: string]: unknown } = {
           ? 'bm25-pgvector-rrf'
           : 'vector-only',
     ...(hybrid ? { hybridRanking } : {}),
+    ...(rewriteBudget
+      ? { queryRewrite: { method: 'glossary', maxExpansions: rewriteBudget } }
+      : {}),
     answerContext:
       'Separate date/product-filtered operative source references and the read-only approval procedure. Citation coverage includes this context.',
     database: 'dedicated suffix only; credentials omitted',

@@ -65,7 +65,7 @@ export class CoreEvaluation {
       db,
       meter,
       config,
-      search ?? new RetrievalService(db, meter, config.RETRIEVAL_STRATEGY),
+      search ?? new RetrievalService(db, meter, config.RETRIEVAL_STRATEGY, config),
     );
     r.policies = JSON.parse(await readFile('data/config/policies.json', 'utf8'));
     r.product = JSON.parse(await readFile('data/config/personal-loan.json', 'utf8'));
@@ -240,7 +240,10 @@ export class CoreEvaluation {
         const before = await this.db.query(
           'SELECT (SELECT count(*) FROM cases.approvals)::int AS approvals,(SELECT count(*) FROM cases.offers)::int AS offers',
         );
-        const hits = await this.search.search(c.question!, c.date!);
+        const { hits, rewrite } =
+          this.search instanceof RetrievalService
+            ? await this.search.searchWithTrace(c.question!, c.date!)
+            : { hits: await this.search.search(c.question!, c.date!), rewrite: undefined };
         const keys = hits.map((h) => `${h.chunk.documentId}:${h.chunk.section}`);
         r.retrieval = {
           hitAt5: c.expectedRefusal ? null : c.gold!.some((g) => keys.includes(g)),
@@ -257,6 +260,7 @@ export class CoreEvaluation {
             ...('ranking' in h ? { ranking: h.ranking } : {}),
           })),
           retrievalThreshold: this.config.RETRIEVAL_MIN_SIMILARITY,
+          ...(rewrite ? { rewrite } : {}),
         };
         r.observed = observed;
         const answer = await answerPolicyQuestion(

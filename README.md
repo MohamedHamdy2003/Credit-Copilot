@@ -53,6 +53,7 @@ pnpm test:e2e
 pnpm build
 pnpm evaluate --vector
 pnpm evaluate --hybrid
+pnpm evaluate --rewrite
 ```
 
 integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ شغّلها بالتتابع. لو غير موجودة، أنشئها مرة عبر `docker compose exec -T db psql -U copilot -d postgres -c "CREATE DATABASE credit_copilot_test"`. e2e تفرغ حسابات/طلبات قاعدة الاختبار، وتشغّل API4304 وVite5174. الصور/traces خارج Git. offline لا يقيس جودة semantic/LLM.
@@ -75,7 +76,8 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 | GENERATION_MODEL | gemini-3.5-flash-lite؛ اسم النموذج المسجل في القياس |
 | EMBEDDING_MODEL / EMBEDDING_DIMENSIONS | gemini-embedding-001 /768؛ تغييرهما يحتاج إعادة فهرسة وbaseline جديد |
 | RETRIEVAL_STRATEGY | hybrid افتراضيًا؛ vector لتشغيل البحث الدلالي وحده |
-| RETRIEVAL_MIN_SIMILARITY | 0.65؛ عتبة cosine للأدلة في الوضعين |
+| RETRIEVAL_MIN_SIMILARITY | 0.65 عتبة cosine للأدلة |
+| QUERY_REWRITE_MAX_EXPANSIONS | 2 مصطلح إضافي كحد أقصى افتراضيًا في hybrid. من 0 إلى 4. قيمة 0 توقف إعادة الصياغة |
 | ASSESSMENT_MODE / ALLOW_DEMO_MODE | strict /false؛ Demo يحتاج تمكينًا واختيارًا صريحًا لبيانات synthetic |
 | UPLOAD_MAX_BYTES | 10485760؛ PDF/CSV/MD، وحد100 صفحة PDF، بلا OCR |
 | DEMO_PASSWORD | محلي12–256 حرفًا لإنشاء حسابات التدريب |
