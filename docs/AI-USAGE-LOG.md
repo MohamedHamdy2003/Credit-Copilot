@@ -1,5 +1,14 @@
 # AI usage log
 
+## 2026-11-20 local Ollama fallback
+
+Codex implemented bounded Gemini-to-Ollama generation fallback and kept the
+existing sanitized input, source validators and embedding provider. Unit and
+PostgreSQL/HTTP tests inject provider failures and cover the audit path.
+Clean commit `01beb5d` also passed two real local generation checks against
+Ollama on CPU with an injected Gemini outage. The assessment memo was produced
+by code. Memory and elapsed times are recorded under Evaluation.
+
 ## 2026-11-20 query rewriting
 
 Codex added a typed lexical expansion budget and tested the original and expanded

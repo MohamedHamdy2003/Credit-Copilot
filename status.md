@@ -94,19 +94,26 @@ Glossary expansion ran for Q01, Q02, Q03 and promoted 0 candidates. The run used
 7 embedding calls, 12 generation calls and 0 case-level provider retries. See
 query-rewrite-core-evaluation.json for the trace and case results.
 
-## Local fallback implementation
+## Verified local fallback
 
 API and CLI wire generation fallback only when OLLAMA_FALLBACK_ENABLED=true.
 Gemini retries transient HTTP/transport failures before making one local Ollama
 request. Authentication, configuration and invalid generation responses return
 errors. All embeddings stay on Gemini. The source-verification gate and human
 approval flow apply to local output. Both model attempts get separate usage
-records and the assessment records a fallback audit event. Real local smoke is
-pending while Docker pulls the image and model.
+records and the assessment records a fallback audit event.
+
+Clean commit 01beb5d passed both real Ollama 0.40.16 smoke cases with
+qwen3:4b-instruct-2507-q4_K_M on CPU and an injected Gemini outage.
+APP-001 source-verified extraction and the code-filled pending memo took
+55.35 s. Grounded CP-4.1 quote took 29.18 s. The Docker container
+used 5.531 GiB after the run. Recorded in ollama-fallback-smoke.json.
+Locally passed 111 unit, 32 integration, 8 Chromium, offline 15/15 and
+type checks, lint, format, and build. Implementation and evidence are in PR23.
 
 ## Next and honest readiness
 
-Local Model Fallback (P12) is next in the PR plan. Seven stretches remain.
+Typed Tool-Calling Agents (P13) is next in the PR plan. Six stretches remain.
 The core memo and audit use plain wording as allowed by the brief. Final video and interactive clean-clone
 walkthrough are pending. Before this feature history had25 non-merge commits over
 only3 real Cairo dates(17,19,20 November); four-date brief requirement is unmet.
