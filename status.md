@@ -1,8 +1,9 @@
 # Current checkpoint —20 November2026
 
-Read agent.md and FEATURES.md first. Current feature: feature/local-model-fallback.
-Core evaluation went through PR17/18, hybrid search through PR19/20 and query
-rewriting through PR21/22 after CI. Query rewriting is on main at f13150d.
+Read agent.md and FEATURES.md first. Current feature: feature/agent-orchestration.
+Core evaluation went through PR17/18, hybrid search through PR19/20, query
+rewriting through PR21/22 and local fallback through PR23/24 after CI.
+Local fallback is on main at da37033.
 
 ## Implemented
 
@@ -110,6 +111,16 @@ APP-001 source-verified extraction and the code-filled pending memo took
 used 5.531 GiB after the run. Recorded in ollama-fallback-smoke.json.
 Locally passed 111 unit, 32 integration, 8 Chromium, offline 15/15 and
 type checks, lint, format, and build. Implementation and evidence are in PR23.
+
+## Typed agent implementation
+
+Opt in with ASSESSMENT_ORCHESTRATION=agents in API and CLI. Each of three
+Mastra agents requests one tool through a strict provider JSON contract. The
+server binds sanitized extraction inputs, dated policy scope and verified
+memo inputs. A rejected or unavailable planner routes the same operation through
+the baseline. A started tool never reruns. Preflight referrals skip model calls.
+Tool outcomes and planner usage are recorded without prompts or applicant data.
+The workflow default and existing lifecycle remain. Live verification is pending.
 
 ## Next and honest readiness
 

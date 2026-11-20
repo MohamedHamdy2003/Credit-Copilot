@@ -88,7 +88,14 @@ export async function extractVerified(
   provider: GenerationPort,
   prompt: string,
 ) {
-  const sanitized = sanitizeEvidence(document);
+  return extractSanitized(sanitizeEvidence(document), provider, prompt);
+}
+
+export async function extractSanitized(
+  sanitized: ReturnType<typeof sanitizeEvidence>,
+  provider: GenerationPort,
+  prompt: string,
+) {
   if (sanitized.tampered)
     throw new DomainError(
       'SuspectedTampering',

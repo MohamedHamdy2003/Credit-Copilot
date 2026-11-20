@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { assessmentAgents } from '../packages/infrastructure/src/workflows/assessment-agents.js';
 import { ParserRegistry } from '../packages/infrastructure/src/parsers/registry.js';
 import { chunkDocument } from '../packages/infrastructure/src/parsers/chunker.js';
 import { extractPricing } from '../packages/infrastructure/src/parsers/pricing.js';
@@ -307,3 +308,48 @@ it('refers invalid local extraction and keeps both generation attempts in the as
     ],
   });
 });
+
+it('keeps Strict and Demo assessment outcomes identical for all five original packs in agent mode', async () => {
+  const plannerInputs: string[] = [];
+  const routed: GenerationPort = {
+    completeStructured: async (system, data, schema) => {
+      const request = JSON.parse(data) as { assessmentAgent?: string; tool?: string };
+      if (!request.assessmentAgent) return deps.provider.completeStructured(system, data, schema);
+      plannerInputs.push(data);
+      return {
+        value: { tool: request.tool, arguments: {} },
+        model: 'fixture-planner',
+        usage: { inputTokens: 10, outputTokens: 3 },
+      };
+    },
+  };
+  for (const strict of [true, false]) {
+    for (const reference of ['APP-001', 'APP-002', 'APP-003', 'APP-004', 'APP-005']) {
+      const baseline = (await run(reference, {}, strict)).result!;
+      const actual = (
+        await run(reference, { provider: routed, agents: assessmentAgents('agents') }, strict)
+      ).result!;
+      const { agentToolCalls, usageRecords, ...outcome } = actual;
+      expect({
+        ...outcome,
+        usageRecords: usageRecords?.filter((record) => !record.operation),
+      }).toEqual(baseline);
+      if (strict || reference === 'APP-004') {
+        expect(agentToolCalls).toBeUndefined();
+        expect(usageRecords).toEqual([]);
+      } else {
+        expect(agentToolCalls).toEqual([
+          { agent: 'evidence', tool: 'extract_verified_evidence', status: 'executed' },
+          { agent: 'policy', tool: 'read_operative_policy_clauses', status: 'executed' },
+          { agent: 'memo', tool: 'render_credit_memo', status: 'executed' },
+        ]);
+        expect(
+          usageRecords?.filter((record) => record.operation === 'assessment_agent_planning'),
+        ).toHaveLength(3);
+      }
+    }
+  }
+  expect(plannerInputs).toHaveLength(12);
+  for (const input of plannerInputs)
+    expect(Object.keys(JSON.parse(input)).sort()).toEqual(['assessmentAgent', 'task', 'tool']);
+}, 30000);

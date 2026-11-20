@@ -70,6 +70,7 @@ export class PostgresAssessmentRepository implements AssessmentRepository {
         reason: 'reason' in result ? result.reason : null,
       });
       await audit('POLICY_EVIDENCE_RETRIEVED', { chunkIds: result.retrievedChunkIds ?? [] });
+      for (const call of result.agentToolCalls ?? []) await audit('ASSESSMENT_AGENT_TOOL', call);
       for (const usage of result.usageRecords ?? []) {
         await manager.query(
           'INSERT INTO cases.llm_usage(id,actor_id,run_id,model,operation,input_tokens,output_tokens,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
@@ -78,7 +79,7 @@ export class PostgresAssessmentRepository implements AssessmentRepository {
             record.actorId,
             record.id,
             usage.model,
-            'assessment_extraction',
+            usage.operation ?? 'assessment_extraction',
             usage.inputTokens,
             usage.outputTokens,
             record.at,

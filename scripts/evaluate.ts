@@ -23,15 +23,17 @@ import {
 } from '../tests/helpers/evaluation-provider.js';
 import { invariant } from '../packages/domain/src/errors.js';
 const args = process.argv.slice(2);
-const mode = args.includes('--offline') ? 'offline' : 'live';
+const flags = ['--offline', '--offline-agents', '--vector', '--hybrid', '--rewrite', '--agents'];
+const mode = args[0]?.startsWith('--offline') ? 'offline' : 'live';
 invariant(
-  args.length <= 1 &&
-    args.every((arg) => ['--offline', '--vector', '--hybrid', '--rewrite'].includes(arg)),
+  args.length <= 1 && args.every((arg) => flags.includes(arg)),
   'InvalidEvaluationArguments',
-  'Use at most one of --offline, --vector, --hybrid or --rewrite',
+  `Use at most one of ${flags.join(', ')}`,
 );
 const config = configSchema.parse({
   ...process.env,
+  ASSESSMENT_ORCHESTRATION:
+    args[0] === '--agents' || args[0] === '--offline-agents' ? 'agents' : 'workflow',
   RETRIEVAL_STRATEGY:
     args[0] === '--vector'
       ? 'vector'
@@ -98,6 +100,8 @@ const files = [
   'packages/application/src/questions.ts',
   'packages/application/src/query-rewrite.ts',
   'packages/application/src/document-assessment.ts',
+  'packages/application/src/assessment-agents.ts',
+  'packages/infrastructure/src/workflows/assessment-agents.ts',
   'packages/application/src/credit-memo.ts',
   'packages/application/src/extraction.ts',
   'packages/application/src/evidence-facts.ts',
@@ -136,6 +140,7 @@ const report: { [key: string]: unknown } = {
   scope:
     'Full15-case functional evaluation; standalone financial/rule checks never replace missing-evidence workflow outcomes.',
   configuration: {
+    assessmentOrchestration: config.ASSESSMENT_ORCHESTRATION,
     generationModel: mode === 'live' ? config.GENERATION_MODEL : 'test-only-evaluation',
     embeddingModel: mode === 'live' ? config.EMBEDDING_MODEL : 'test-only-hash-v1',
     dimensions: mode === 'live' ? config.EMBEDDING_DIMENSIONS : 64,

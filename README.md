@@ -54,6 +54,8 @@ pnpm build
 pnpm evaluate --vector
 pnpm evaluate --hybrid
 pnpm evaluate --rewrite
+pnpm evaluate --offline-agents
+pnpm evaluate --agents
 ```
 
 integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ شغّلها بالتتابع. لو غير موجودة، أنشئها مرة عبر `docker compose exec -T db psql -U copilot -d postgres -c "CREATE DATABASE credit_copilot_test"`. e2e تفرغ حسابات/طلبات قاعدة الاختبار، وتشغّل API4304 وVite5174. الصور/traces خارج Git. offline لا يقيس جودة semantic/LLM.
@@ -61,6 +63,15 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 `pnpm evaluate` يشغّل15 حالة فعلية عبر Gemini في قاعدة منفصلة تنتهي بـ_eval، وينشئها إن كانت صلاحية المستخدم تسمح. لا يغيّر بيانات الطلبات في قاعدة التطبيق. يقرأ cache موثوقًا لمتجهات السياسات المطابقة للنص/model/dimensions، بينما embeddings الأسئلة والاستدعاءات التوليدية live. يحفظ كل تشغيل، حتى الفاشل، في `artifacts/evaluation/`، ويخرج بكود فشل إذا لم تمر البوابة. يلزم مفتاح وquota؛ هذا الأمر يستهلكها.
 
 الحالات الذهبية في `data/evaluation/cases.json` والتقارير الفعلية في `data/evaluation/results/`. الـvector والـhybrid عدّوا 15/15 وhit@5 كان 4/4 في الوضعين على الأسئلة القابلة للإجابة. شغّل `pnpm evaluate --vector` و`pnpm evaluate --hybrid` و`pnpm evaluate --rewrite` للمقارنة. البحث الافتراضي يدمج BM25 وpgvector بـRRF ويضيف مصطلحات بحث من قاموس ثابت. التقييم مع إعادة الصياغة حقق 15/15 وhit@5 ‏4/4. التفاصيل وتقارير الفشل في `docs/EVALUATION.md`. `pnpm evaluate:smoke` يحتفظ بفحص الـvector القديم لخمس حالات، و`pnpm evaluate:offline` يشغّل regression tests بسيطة من غير DB.
+
+## تقييم الطلبات باستخدام الـAgents
+
+اضبط `ASSESSMENT_ORCHESTRATION=agents` لتجربة ثلاث أدوات Mastra من خلال الـAPI أو
+`pnpm assess`. السيرفر بيحدد مدخلات كل أداة: بيانات منقّحة، سياسة بالتاريخ
+والمنتج، أو نتيجة التقييم للمذكرة المحسوبة. كل دور له محاولة تخطيط واحدة.
+لو طلب الأداة غير صالح أو التخطيط تعذّر، نفس مرحلة الـworkflow بتشتغل مباشرة.
+سجل التقييم بيحفظ نتيجة كل استدعاء واستخدام التخطيط. الفحص المعزول بيشتغل
+بـ`pnpm evaluate --offline-agents` أو بـ`pnpm evaluate --agents` مع Gemini.
 
 ## تشغيل Ollama كبديل محلي
 
@@ -102,6 +113,7 @@ APP-001، المذكرة المحسوبة واقتباس سياسة محدد. ت
 | RETRIEVAL_STRATEGY | hybrid افتراضيًا؛ vector لتشغيل البحث الدلالي وحده |
 | RETRIEVAL_MIN_SIMILARITY | 0.65 عتبة cosine للأدلة |
 | QUERY_REWRITE_MAX_EXPANSIONS | 2 مصطلح إضافي كحد أقصى افتراضيًا في hybrid. من 0 إلى 4. قيمة 0 توقف إعادة الصياغة |
+| ASSESSMENT_ORCHESTRATION | workflow افتراضيًا. agents يفعّل الأدوات المحددة لمراحل الاستخراج والسياسة والمذكرة |
 | ASSESSMENT_MODE / ALLOW_DEMO_MODE | strict /false؛ Demo يحتاج تمكينًا واختيارًا صريحًا لبيانات synthetic |
 | UPLOAD_MAX_BYTES | 10485760؛ PDF/CSV/MD، وحد100 صفحة PDF، بلا OCR |
 | DEMO_PASSWORD | محلي12–256 حرفًا لإنشاء حسابات التدريب |

@@ -1,6 +1,7 @@
 import type { AssessmentInput, AssessmentDependencies } from './assessment.js';
 import { assessApplication } from './assessment.js';
 import type { Usage } from './ports.js';
+import type { AgentToolCall } from './assessment-agents.js';
 
 export interface AssessmentResult {
   reference: string;
@@ -23,7 +24,12 @@ export interface AssessmentResult {
   fraudReferral: boolean;
   retrievedChunkIds?: string[];
   stageEvents?: { stage: string; status: 'executed' | 'skipped' | 'failed' }[];
-  usageRecords?: (Usage & { model: string; fallbackFrom?: string })[];
+  usageRecords?: (Usage & {
+    model: string;
+    fallbackFrom?: string;
+    operation?: 'assessment_agent_planning';
+  })[];
+  agentToolCalls?: AgentToolCall[];
 }
 export interface AssessmentRecord {
   id: string;

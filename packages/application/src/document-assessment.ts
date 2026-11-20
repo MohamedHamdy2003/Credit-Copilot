@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { normalizedDocumentSchema } from '../../contracts/src/documents.js';
 import { applicationFormSchema, parseApplicationForm } from './application-form.js';
-import { sanitizeEvidence, extractVerified } from './extraction.js';
+import { sanitizeEvidence, extractSanitized } from './extraction.js';
 import { deriveEvidenceFacts } from './evidence-facts.js';
 import { resolveMode, evaluateEvidence } from '../../domain/src/evidence-mode.js';
 import { selectPolicy, selectPricing, type Policy } from '../../domain/src/policy.js';
@@ -11,7 +11,8 @@ import type { AssessmentDependencies } from './assessment.js';
 import type { AssessmentRepository, AssessmentResult } from './assessment-record.js';
 import type { Chunk } from '../../contracts/src/documents.js';
 import { creditMemo } from './credit-memo.js';
-import type { Usage } from './ports.js';
+import type { GenerationPort, Usage } from './ports.js';
+import type { AgentToolCall, AssessmentAgent, AssessmentAgentPort } from './assessment-agents.js';
 
 export const documentAssessmentInputSchema = z
   .object({
@@ -28,6 +29,7 @@ export interface AssessmentClausePort {
 }
 export interface DocumentAssessmentDependencies extends AssessmentDependencies {
   clauses: AssessmentClausePort;
+  agents?: AssessmentAgentPort;
   persistence: {
     repository: AssessmentRepository;
     runId: string;
@@ -43,7 +45,7 @@ export interface AssessmentState {
   evidence?: ReturnType<typeof evaluateEvidence>;
   mode: 'strict' | 'demo';
   policy?: Policy;
-  extraction?: Awaited<ReturnType<typeof extractVerified>>;
+  extraction?: Awaited<ReturnType<typeof extractSanitized>>;
   rules?: ReturnType<typeof assessRules>;
   pricing?: import('../../domain/src/policy.js').PricingRow;
   clauses: Chunk[];
@@ -51,6 +53,7 @@ export interface AssessmentState {
   result?: AssessmentResult;
   steps: string[];
   usageRecords: NonNullable<AssessmentResult['usageRecords']>;
+  agentToolCalls: AgentToolCall[];
   stageEvents: NonNullable<AssessmentResult['stageEvents']>;
 }
 export const ASSESSMENT_STAGES = [
@@ -76,6 +79,7 @@ export function initialAssessmentState(
     clauses: [],
     steps: [],
     usageRecords: [],
+    agentToolCalls: [],
     stageEvents: [],
   };
 }
@@ -84,10 +88,72 @@ function recordGenerationUsage(
   model: string,
   usage: Usage,
   fallbackFrom?: string,
+  operation?: 'assessment_agent_planning',
 ) {
+  const purpose = operation ? { operation } : {};
   if (fallbackFrom)
-    state.usageRecords.push({ model: fallbackFrom, inputTokens: null, outputTokens: null });
-  state.usageRecords.push({ model, ...usage, ...(fallbackFrom ? { fallbackFrom } : {}) });
+    state.usageRecords.push({
+      model: fallbackFrom,
+      inputTokens: null,
+      outputTokens: null,
+      ...purpose,
+    });
+  state.usageRecords.push({
+    model,
+    ...usage,
+    ...purpose,
+    ...(fallbackFrom ? { fallbackFrom } : {}),
+  });
+}
+
+function meteredGeneration(
+  state: AssessmentState,
+  provider: GenerationPort,
+  operation?: 'assessment_agent_planning',
+): GenerationPort {
+  return {
+    completeStructured: async (system, data, schema) => {
+      try {
+        const response = await provider.completeStructured(system, data, schema);
+        recordGenerationUsage(
+          state,
+          response.model,
+          response.usage,
+          response.fallbackFrom,
+          operation,
+        );
+        return response;
+      } catch (error) {
+        const details = error instanceof DomainError ? error.details : {};
+        recordGenerationUsage(
+          state,
+          typeof details.model === 'string' ? details.model : 'provider-not-reported',
+          {
+            inputTokens: typeof details.inputTokens === 'number' ? details.inputTokens : null,
+            outputTokens: typeof details.outputTokens === 'number' ? details.outputTokens : null,
+          },
+          typeof details.fallbackFrom === 'string' ? details.fallbackFrom : undefined,
+          operation,
+        );
+        throw error;
+      }
+    },
+  };
+}
+
+async function runAssessmentOperation<T>(
+  agent: AssessmentAgent,
+  state: AssessmentState,
+  deps: DocumentAssessmentDependencies,
+  operation: () => Promise<T> | T,
+): Promise<T> {
+  if (!deps.agents || state.failure) return operation();
+  return deps.agents.run(
+    agent,
+    operation,
+    meteredGeneration(state, deps.provider, 'assessment_agent_planning'),
+    (call) => state.agentToolCalls.push(call),
+  );
 }
 
 export async function executeAssessmentStage(
@@ -135,39 +201,17 @@ export async function executeAssessmentStage(
         break;
       }
       case 'extract_data':
-        state.extraction = await extractVerified(
-          state.input.document,
-          {
-            completeStructured: async (system, data, schema) => {
-              try {
-                const response = await deps.provider.completeStructured(system, data, schema);
-                recordGenerationUsage(state, response.model, response.usage, response.fallbackFrom);
-                return response;
-              } catch (error) {
-                const details = error instanceof DomainError ? error.details : {};
-                recordGenerationUsage(
-                  state,
-                  typeof details.model === 'string' ? details.model : 'provider-not-reported',
-                  {
-                    inputTokens:
-                      typeof details.inputTokens === 'number' ? details.inputTokens : null,
-                    outputTokens:
-                      typeof details.outputTokens === 'number' ? details.outputTokens : null,
-                  },
-                  typeof details.fallbackFrom === 'string' ? details.fallbackFrom : undefined,
-                );
-                throw error;
-              }
-            },
-          },
-          deps.prompt,
+        state.extraction = await runAssessmentOperation('evidence', state, deps, () =>
+          extractSanitized(state.sanitized!, meteredGeneration(state, deps.provider), deps.prompt),
         );
         break;
       case 'retrieve_policy_clauses': {
-        state.clauses = await deps.clauses.loadRequired(
-          state.policy!.edition,
-          state.form!.applicationDate,
-          deps.product.id,
+        state.clauses = await runAssessmentOperation('policy', state, deps, () =>
+          deps.clauses.loadRequired(
+            state.policy!.edition,
+            state.form!.applicationDate,
+            deps.product.id,
+          ),
         );
         for (const section of [
           'CP-3.1',
@@ -277,7 +321,9 @@ export async function executeAssessmentStage(
             pricing: state.pricing,
           };
         }
-        state.result.memo = creditMemo(state.result, state.form);
+        state.result.memo = await runAssessmentOperation('memo', state, deps, () =>
+          creditMemo(state.result!, state.form),
+        );
         break;
       }
       case 'record_pending_review': {
@@ -287,6 +333,7 @@ export async function executeAssessmentStage(
           retrievedChunkIds: state.clauses.map((c) => c.id),
           usageRecords: state.usageRecords,
           stageEvents: state.stageEvents,
+          ...(state.agentToolCalls.length ? { agentToolCalls: state.agentToolCalls } : {}),
         };
         await deps.persistence.repository.save({
           id: deps.persistence.runId,
