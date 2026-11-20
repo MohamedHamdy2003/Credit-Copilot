@@ -34,9 +34,26 @@ const selectionSchema = z
       .max(5),
   })
   .strict();
-const generationSchema = z.toJSONSchema(
-  z.object({ citations: z.array(quotedCitation).max(5) }).strict(),
-);
+const sentences = new Intl.Segmenter('en', { granularity: 'sentence' });
+
+function generationSchema(candidates: Chunk[]) {
+  // The local decoder selects source text it can reproduce exactly, including
+  // the matching chunk ID. Cloud generation still uses the same input prompt.
+  const choices = candidates.map((chunk) => {
+    const spans = [
+      chunk.text,
+      ...chunk.text.split('\n'),
+      ...Array.from(sentences.segment(chunk.text), ({ segment }) => segment),
+    ]
+      .map((span) => span.trim())
+      .filter(Boolean);
+    return quotedCitation.extend({
+      chunkId: z.literal(chunk.id),
+      quote: z.enum([...new Set(spans)]),
+    });
+  });
+  return z.toJSONSchema(z.object({ citations: z.array(z.union(choices)).max(5) }).strict());
+}
 type FallbackAttribution = { generation?: { model: string; fallbackFrom: string; usage: Usage } };
 export const REFUSAL = 'The documents do not contain enough information to answer this question.';
 export const isApprovalBypass = (question: string) =>
@@ -150,7 +167,7 @@ export async function answerPolicyQuestion(
         effectiveTo: chunk.effectiveTo,
       })),
     }),
-    generationSchema,
+    generationSchema(candidates),
   );
   const attribution: FallbackAttribution = response.fallbackFrom
     ? {

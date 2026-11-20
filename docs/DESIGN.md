@@ -173,7 +173,9 @@ problems. An embedding outage returns a service failure before vector search.
 Ollama receives the same sanitized input and a JSON schema derived from the
 application validator through loopback HTTP with redirects disabled. Compose
 disables Ollama Cloud. Model replies still pass the source quote and extracted
-value checks. The assessment workflow records the failed Gemini logical call
+value checks. For citations, its schema pairs each allowed chunk ID with exact
+source spans and permits an empty selection. The assessment workflow records the
+failed Gemini logical call
 with unknown usage, the Ollama model and its reported counts, and a fallback
 event. Q&A includes local generation attribution in the answer or refusal when
 it receives a model completion. The memo remains code-generated.

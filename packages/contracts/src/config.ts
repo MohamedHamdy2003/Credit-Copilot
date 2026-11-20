@@ -24,7 +24,7 @@ export const ollamaSettingsSchema = z.object({
     .regex(/^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,127}$/)
     .refine((name) => !/[-:]cloud$/i.test(name), 'Ollama requires a local model')
     .default('qwen3:4b-instruct-2507-q4_K_M'),
-  OLLAMA_TIMEOUT_MS: z.coerce.number().int().min(100).max(180000).default(60000),
+  OLLAMA_TIMEOUT_MS: z.coerce.number().int().min(100).max(180000).default(120000),
 });
 export type OllamaSettings = z.infer<typeof ollamaSettingsSchema>;
 

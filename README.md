@@ -96,7 +96,7 @@ APP-001، المذكرة المحسوبة واقتباس سياسة محدد. ت
 | OLLAMA_FALLBACK_ENABLED | false افتراضيًا. true يفعّل التحويل للتوليد المحلي |
 | OLLAMA_BASE_URL | http://127.0.0.1:11434 افتراضيًا. يقبل عنوان HTTP محلي فقط |
 | OLLAMA_MODEL | qwen3:4b-instruct-2507-q4_K_M افتراضيًا. لازم النموذج يكون محمّل في Ollama |
-| OLLAMA_TIMEOUT_MS | 60000 مهلة محاولة التوليد المحلية بالمللي ثانية |
+| OLLAMA_TIMEOUT_MS | 120000 مهلة محاولة التوليد المحلية بالمللي ثانية |
 | GENERATION_MODEL | gemini-3.5-flash-lite؛ اسم النموذج المسجل في القياس |
 | EMBEDDING_MODEL / EMBEDDING_DIMENSIONS | gemini-embedding-001 /768؛ تغييرهما يحتاج إعادة فهرسة وbaseline جديد |
 | RETRIEVAL_STRATEGY | hybrid افتراضيًا؛ vector لتشغيل البحث الدلالي وحده |
