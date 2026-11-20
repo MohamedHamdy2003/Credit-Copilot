@@ -28,13 +28,14 @@ const mastraAssessmentAgents: AssessmentAgentPort = {
     const toolName = ASSESSMENT_AGENT_TOOLS[agent];
     type Result = Awaited<ReturnType<typeof operation>>;
     let execution: Promise<{ value: Result } | { error: unknown }> | undefined;
+    let toolsOpen = true;
     const tool = createTool({
       id: toolName,
       description: tasks[agent],
       inputSchema: toolInput,
       outputSchema: toolReceipt,
       execute: async () => {
-        if (execution) return { completed: false };
+        if (!toolsOpen || execution) return { completed: false };
         const pending = Promise.resolve().then(async () => {
           try {
             return { value: await operation() };
@@ -137,6 +138,7 @@ const mastraAssessmentAgents: AssessmentAgentPort = {
     } catch {
       // A runner failure before tool execution leaves the baseline operation available.
     }
+    toolsOpen = false;
     const outcome = await execution;
     if (outcome) {
       record({ agent, tool: toolName, status: 'value' in outcome ? 'executed' : 'failed' });

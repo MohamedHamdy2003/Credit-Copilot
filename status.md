@@ -120,7 +120,9 @@ server binds sanitized extraction inputs, dated policy scope and verified
 memo inputs. A rejected or unavailable planner routes the same operation through
 the baseline. A started tool never reruns. Preflight referrals skip model calls.
 Tool outcomes and planner usage are recorded without prompts or applicant data.
-The workflow default and existing lifecycle remain. Live verification is pending.
+The workflow default and existing lifecycle remain. The first live run scored
+12/15 after Gemini became unavailable. Its report is retained. A paced repeat
+will measure actual tool execution without changing the assessment runtime.
 
 ## Next and honest readiness
 

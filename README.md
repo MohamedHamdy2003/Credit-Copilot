@@ -72,6 +72,8 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 لو طلب الأداة غير صالح أو التخطيط تعذّر، نفس مرحلة الـworkflow بتشتغل مباشرة.
 سجل التقييم بيحفظ نتيجة كل استدعاء واستخدام التخطيط. الفحص المعزول بيشتغل
 بـ`pnpm evaluate --offline-agents` أو بـ`pnpm evaluate --agents` مع Gemini.
+لو احتجت فاصل بين طلبات التوليد في القياس اضبط
+`EVALUATION_GENERATION_INTERVAL_MS` بالمللي ثانية. الإعداد خاص بالتقييم.
 
 ## تشغيل Ollama كبديل محلي
 

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import { execFileSync } from 'node:child_process';
 import { configSchema } from '../packages/contracts/src/config.js';
 import {
@@ -48,6 +49,16 @@ invariant(
   'InvalidEvaluationArguments',
   '--rewrite requires a positive QUERY_REWRITE_MAX_EXPANSIONS',
 );
+const generationIntervalMs =
+  mode === 'live'
+    ? z.coerce
+        .number()
+        .int()
+        .min(0)
+        .max(60000)
+        .default(0)
+        .parse(process.env.EVALUATION_GENERATION_INTERVAL_MS)
+    : 0;
 const hybrid = mode === 'live' && config.RETRIEVAL_STRATEGY === 'hybrid';
 const rewriteBudget = hybrid ? config.QUERY_REWRITE_MAX_EXPANSIONS : 0;
 const id = new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomUUID().slice(0, 8);
@@ -141,6 +152,7 @@ const report: { [key: string]: unknown } = {
     'Full15-case functional evaluation; standalone financial/rule checks never replace missing-evidence workflow outcomes.',
   configuration: {
     assessmentOrchestration: config.ASSESSMENT_ORCHESTRATION,
+    generationIntervalMs,
     generationModel: mode === 'live' ? config.GENERATION_MODEL : 'test-only-evaluation',
     embeddingModel: mode === 'live' ? config.EMBEDDING_MODEL : 'test-only-hash-v1',
     dimensions: mode === 'live' ? config.EMBEDDING_DIMENSIONS : 64,
@@ -185,7 +197,7 @@ try {
           config.EMBEDDING_DIMENSIONS,
         )
       : new OfflineEvaluationProvider();
-  const meter = new EvaluationMeter(provider, source),
+  const meter = new EvaluationMeter(provider, source, generationIntervalMs),
     ingestion = new IngestionService(db, meter, manifest);
   const ingested = [];
   for (const d of manifest)
