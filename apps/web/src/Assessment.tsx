@@ -292,7 +292,6 @@ export function Assessment({
               ) : (
                 <Empty>No detailed stage events recorded.</Empty>
               )}
-              <p className="muted">These are saved stages, not a live progress stream.</p>
             </>
           )}
         </div>

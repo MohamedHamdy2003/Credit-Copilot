@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { normalizedDocumentSchema } from '../../contracts/src/documents.js';
+import type { AssessmentStage } from '../../contracts/src/streams.js';
+export { ASSESSMENT_STAGES, type AssessmentStage } from '../../contracts/src/streams.js';
 import { applicationFormSchema, parseApplicationForm } from './application-form.js';
 import { sanitizeEvidence, extractSanitized } from './extraction.js';
 import { deriveEvidenceFacts } from './evidence-facts.js';
@@ -56,17 +58,6 @@ export interface AssessmentState {
   agentToolCalls: AgentToolCall[];
   stageEvents: NonNullable<AssessmentResult['stageEvents']>;
 }
-export const ASSESSMENT_STAGES = [
-  'load_application',
-  'remove_protected_attributes',
-  'select_policy',
-  'extract_data',
-  'retrieve_policy_clauses',
-  'calculate_and_check_rules',
-  'prepare_memo',
-  'record_pending_review',
-] as const;
-export type AssessmentStage = (typeof ASSESSMENT_STAGES)[number];
 
 export function initialAssessmentState(
   raw: unknown,

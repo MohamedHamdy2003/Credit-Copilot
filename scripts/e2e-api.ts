@@ -30,7 +30,16 @@ await db.query('TRUNCATE cases.users CASCADE');
 await db.query('DELETE FROM cases.login_attempts');
 const credentials = new ScryptCredentials();
 const hash = await credentials.hash('e2e-only-password');
-for (const username of ['basic', 'strict', 'demo', 'question', 'upload', 'head', 'reasons']) {
+for (const username of [
+  'basic',
+  'stream',
+  'strict',
+  'demo',
+  'question',
+  'upload',
+  'head',
+  'reasons',
+]) {
   await db.query(
     'INSERT INTO cases.users(id,username,password_hash,role,tier,can_ingest) VALUES($1,$2,$3,$4,$5,$6)',
     [

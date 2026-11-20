@@ -23,24 +23,31 @@ const stateSchema = z.custom<AssessmentState>((state: unknown) => {
   );
 });
 /** No workflow storage configured: raw evidence is not persisted into Mastra snapshots. */
-export function createDocumentAssessmentWorkflow(dependencies: DocumentAssessmentDependencies) {
+export function createDocumentAssessmentWorkflow(
+  dependencies: DocumentAssessmentDependencies,
+  observeStage?: (event: AssessmentState['stageEvents'][number]) => Promise<void>,
+) {
+  const execute = async (id: AssessmentStage, state: AssessmentState) => {
+    const next = await executeAssessmentStage(id, state, dependencies);
+    const event = next.stageEvents.at(-1);
+    if (event && observeStage && id !== 'record_pending_review') {
+      await observeStage(event).catch(() => undefined);
+    }
+    return next;
+  };
   const load = createStep({
     id: ASSESSMENT_STAGES[0],
     inputSchema: documentAssessmentInputSchema,
     outputSchema: stateSchema,
     execute: async ({ inputData }) =>
-      executeAssessmentStage(
-        ASSESSMENT_STAGES[0],
-        initialAssessmentState(inputData, dependencies),
-        dependencies,
-      ),
+      execute(ASSESSMENT_STAGES[0], initialAssessmentState(inputData, dependencies)),
   });
   const stage = (id: AssessmentStage) =>
     createStep({
       id,
       inputSchema: stateSchema,
       outputSchema: stateSchema,
-      execute: async ({ inputData }) => executeAssessmentStage(id, inputData, dependencies),
+      execute: async ({ inputData }) => execute(id, inputData),
     });
   return createWorkflow({
     id: 'document-assessment',

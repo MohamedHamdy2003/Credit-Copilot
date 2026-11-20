@@ -37,9 +37,9 @@ export interface Citation {
   sourceFile: string;
   section?: string;
   edition?: string;
-  pageStart?: number;
-  pageEnd?: number;
-  row?: number;
+  pageStart?: number | null;
+  pageEnd?: number | null;
+  row?: number | null;
   quote?: string;
   chunkId?: string;
   effectiveFrom?: string;

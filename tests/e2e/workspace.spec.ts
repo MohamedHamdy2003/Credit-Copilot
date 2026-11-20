@@ -54,6 +54,68 @@ test('login errors, restored cookie session, logout and mobile layout', async ({
   await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('assessment progress reconnects with a cursor and reaches the saved result', async ({
+  page,
+}) => {
+  await login(page, 'stream');
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+  });
+  await add(page);
+  await expect(page).toHaveTitle(/Credit Copilot/);
+  let starts = 0;
+  page.on('request', (req) => {
+    if (req.method() === 'POST' && req.url().endsWith('/assessment-streams')) starts++;
+  });
+  let requests = 0;
+  let resumeCursor: string | undefined;
+  let release!: () => void;
+  const reconnect = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/api/v1/assessment-streams/*', async (route) => {
+    requests++;
+    if (requests === 1) {
+      const response = await route.fetch();
+      const firstFrame = (await response.text()).split('\n\n')[0];
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: `${firstFrame}\n\n`,
+      });
+      return;
+    }
+    resumeCursor = route.request().headers()['last-event-id'];
+    await reconnect;
+    await route.continue();
+  });
+  await page.getByRole('button', { name: 'Run assessment', exact: true }).click();
+  try {
+    await expect(page.getByRole('progressbar', { name: 'Assessment progress' })).toHaveAttribute(
+      'value',
+      '1',
+    );
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Reconnecting to assessment' }),
+    ).toBeVisible();
+    await page.screenshot({ path: shot('stream-desktop'), fullPage: true });
+  } finally {
+    release();
+  }
+  await expect(page.getByText('Missing evidence: national id copy')).toBeVisible();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Assessment saved for human review.' }),
+  ).toBeVisible();
+  await expect(page.getByRole('progressbar')).toHaveCount(0);
+  expect(resumeCursor).toBe('1');
+  expect(requests).toBe(2);
+  expect(starts).toBe(1);
+  expect(errors).toEqual([]);
+});
+
 test('Strict default, evidence download, sources, workflow and fraud referral', async ({
   page,
 }) => {
@@ -113,11 +175,16 @@ test('grounded questions, refusal, conflicts and edition-specific code calculati
   page,
 }) => {
   await login(page, 'question');
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Policy questions', exact: true }).click();
   await page.getByLabel('Question', { exact: true }).fill('Maximum DBR in CP-2024?');
   await page.getByRole('button', { name: 'Ask question', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Verified source excerpts' })).toBeVisible();
   await expect(page.locator('.source strong').first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: shot('stream-mobile'), fullPage: true });
   await page.getByLabel('As-of date (optional)').fill('2025-04-03');
   await page.getByRole('button', { name: 'Ask question', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('ConflictingEdition');
@@ -134,6 +201,17 @@ test('grounded questions, refusal, conflicts and edition-specific code calculati
   await page.getByLabel('Calculation date').fill('2024-12-01');
   await page.getByRole('button', { name: 'Calculate affordability' }).click();
   await expect(page.getByText('EGP 382,000.00', { exact: true })).toBeVisible();
+  await page.route('**/api/v1/question-streams/*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: 'id: 1\ndata: {"kind":"failed","code":"QuestionUnavailable"}\n\n',
+    }),
+  );
+  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
+  await expect(page.getByRole('alert')).toContainText('Policy question service is unavailable');
+  await expect(page.getByRole('button', { name: 'Ask question', exact: true })).toBeEnabled();
+  expect(errors).toEqual([]);
 });
 test('real multipart upload, duplicate registration and mixed knowledge batch results', async ({
   page,
