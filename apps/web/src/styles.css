@@ -51,6 +51,12 @@ button:disabled {
   opacity: 0.55;
   cursor: wait;
 }
+.assessment-progress {
+  display: block;
+  width: min(100%, 20rem);
+  margin: 12px 0 6px;
+  accent-color: var(--accent);
+}
 a {
   color: var(--accent);
   text-underline-offset: 3px;

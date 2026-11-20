@@ -15,6 +15,7 @@ import {
   UploadedFile,
   UploadedFiles,
   Headers,
+  HttpCode,
   type CanActivate,
   type ExecutionContext,
   type ExceptionFilter,
@@ -32,6 +33,10 @@ import {
   ApiCookieAuth,
   ApiHeader,
   ApiConsumes,
+  ApiProduces,
+  ApiAcceptedResponse,
+  ApiOkResponse,
+  type SchemaObject,
 } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
 import cookieParser from 'cookie-parser';
@@ -43,11 +48,28 @@ import type { Actor } from '../../../packages/domain/src/access.js';
 import { DomainError, invariant } from '../../../packages/domain/src/errors.js';
 import type { OperationsService } from '../../../packages/application/src/operations.js';
 import type { CaseReviewService } from '../../../packages/application/src/case-review.js';
+import { sendEventStream } from './sse.js';
 
 const AUTH = Symbol('AUTH'),
   DECISIONS = Symbol('DECISIONS');
 const OPERATIONS = Symbol('OPERATIONS');
 const CASE_REVIEWS = Symbol('CASE_REVIEWS');
+const questionRequestBody: SchemaObject = {
+  type: 'object',
+  required: ['question'],
+  additionalProperties: false,
+  properties: {
+    question: { type: 'string', maxLength: 2000 },
+    asOfDate: { type: 'string', format: 'date' },
+    product: { type: 'string', enum: ['PL-100'] },
+    edition: { type: 'string', enum: ['CP-2024', 'CP-2025'] },
+  },
+};
+const assessmentRequestBody: SchemaObject = {
+  type: 'object',
+  additionalProperties: false,
+  properties: { mode: { type: 'string', enum: ['strict', 'demo'] } },
+};
 interface MemoryUpload {
   originalname: string;
   buffer: Buffer;
@@ -331,21 +353,48 @@ export async function createApi(deps: {
     }
     @Post('questions')
     @ApiHeader({ name: 'x-csrf-token', required: true })
-    @ApiBody({
-      schema: {
-        type: 'object',
-        required: ['question'],
-        additionalProperties: false,
-        properties: {
-          question: { type: 'string', maxLength: 2000 },
-          asOfDate: { type: 'string', format: 'date' },
-          product: { type: 'string', enum: ['PL-100'] },
-          edition: { type: 'string', enum: ['CP-2024', 'CP-2025'] },
-        },
-      },
-    })
+    @ApiBody({ schema: questionRequestBody })
     question(@Body() body: unknown) {
       return this.service().question(body);
+    }
+    @Post('questions/streams')
+    @HttpCode(202)
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    @ApiHeader({ name: 'Idempotency-Key', required: true })
+    @ApiBody({ schema: questionRequestBody })
+    @ApiAcceptedResponse({
+      schema: {
+        type: 'object',
+        required: ['streamId'],
+        properties: { streamId: { type: 'string', format: 'uuid' } },
+      },
+    })
+    startQuestionStream(
+      @Body() body: unknown,
+      @Headers('idempotency-key') key: unknown,
+      @Req() req: AuthRequest,
+    ) {
+      return this.service().startQuestionStream(req.actor, body, key);
+    }
+    @Get('question-streams/:id')
+    @ApiProduces('text/event-stream')
+    @ApiHeader({ name: 'Last-Event-ID', required: false })
+    @ApiOkResponse({
+      description: 'Verified citation excerpts followed by a terminal event',
+      schema: { type: 'string' },
+    })
+    questionStream(
+      @Param('id') id: string,
+      @Headers('last-event-id') cursor: unknown,
+      @Req() req: AuthRequest,
+      @Res() res: Response,
+    ) {
+      return sendEventStream(
+        res,
+        cursor,
+        () => this.service().questionEvents(req.actor, id),
+        () => deps.auth.authenticate(req.cookies?.copilot_session),
+      );
     }
     @Post('calculations')
     @ApiHeader({ name: 'x-csrf-token', required: true })
@@ -410,13 +459,7 @@ export async function createApi(deps: {
     @Post('applications/:id/assessments')
     @ApiHeader({ name: 'x-csrf-token', required: true })
     @ApiHeader({ name: 'Idempotency-Key', required: false })
-    @ApiBody({
-      schema: {
-        type: 'object',
-        additionalProperties: false,
-        properties: { mode: { type: 'string', enum: ['strict', 'demo'] } },
-      },
-    })
+    @ApiBody({ schema: assessmentRequestBody })
     assess(
       @Param('id') id: string,
       @Body() body: unknown,
@@ -424,6 +467,46 @@ export async function createApi(deps: {
       @Req() req: AuthRequest,
     ) {
       return this.service().assess(req.actor, id, body ?? {}, req.requestId, key);
+    }
+    @Post('applications/:id/assessment-streams')
+    @HttpCode(202)
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    @ApiHeader({ name: 'Idempotency-Key', required: true })
+    @ApiBody({ schema: assessmentRequestBody })
+    @ApiAcceptedResponse({
+      schema: {
+        type: 'object',
+        required: ['runId'],
+        properties: { runId: { type: 'string', format: 'uuid' } },
+      },
+    })
+    startAssessmentStream(
+      @Param('id') id: string,
+      @Body() body: unknown,
+      @Headers('idempotency-key') key: unknown,
+      @Req() req: AuthRequest,
+    ) {
+      return this.service().startAssessmentStream(req.actor, id, body ?? {}, req.requestId, key);
+    }
+    @Get('assessment-streams/:id')
+    @ApiProduces('text/event-stream')
+    @ApiHeader({ name: 'Last-Event-ID', required: false })
+    @ApiOkResponse({
+      description: 'Assessment stages followed by a terminal event',
+      schema: { type: 'string' },
+    })
+    assessmentStream(
+      @Param('id') id: string,
+      @Headers('last-event-id') cursor: unknown,
+      @Req() req: AuthRequest,
+      @Res() res: Response,
+    ) {
+      return sendEventStream(
+        res,
+        cursor,
+        () => this.service().assessmentEvents(req.actor, id),
+        () => deps.auth.authenticate(req.cookies?.copilot_session),
+      );
     }
     @Get('applications/:id/evidence') async evidence(
       @Param('id') id: string,
@@ -490,7 +573,7 @@ export async function createApi(deps: {
   app.enableCors({
     origin: deps.webOrigin,
     credentials: true,
-    allowedHeaders: ['Content-Type', 'x-csrf-token', 'Idempotency-Key'],
+    allowedHeaders: ['Content-Type', 'x-csrf-token', 'Idempotency-Key', 'Last-Event-ID'],
     exposedHeaders: ['x-request-id', 'Content-Disposition'],
   });
   app.useGlobalFilters(new ApiErrors());

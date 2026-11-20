@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
+import type { StreamFrame } from '../packages/contracts/src/streams.js';
 import type { DataSource } from 'typeorm';
 import { createApi } from '../apps/api/src/app.js';
 import { createDataSource } from '../packages/infrastructure/src/db/data-source.js';
@@ -27,7 +28,9 @@ const url =
   'postgresql://copilot:copilot_local@localhost:54329/credit_copilot_test';
 if (!new URL(url).pathname.endsWith('_test')) throw new Error('Dedicated test DB required');
 let db: DataSource, app: INestApplication, hash: string;
-let primaryUnavailable = false;
+let primaryUnavailable = false,
+  localUnavailable = false,
+  forgeCitation = false;
 const localProvider = new WorkflowTestProvider();
 const provider = new WorkflowTestProvider(),
   password = `test-${randomUUID()}`;
@@ -64,14 +67,24 @@ beforeAll(async () => {
                 model: 'gemini-test',
                 retryable: true,
               });
+            if (forgeCitation)
+              return {
+                model: 'fake',
+                usage: { inputTokens: 1, outputTokens: 1 },
+                value: { citations: [{ chunkId: 'unknown', quote: 'UNVERIFIED_TEXT' }] },
+              };
             return provider.completeStructured(system, data);
           },
         },
         {
-          completeStructured: async (system, data) => ({
-            ...(await localProvider.completeStructured(system, data)),
-            model: 'ollama:test-local',
-          }),
+          completeStructured: async (system, data) => {
+            if (localUnavailable)
+              throw new DomainError('ProviderUnavailable', 'Fixture private provider detail', 503);
+            return {
+              ...(await localProvider.completeStructured(system, data)),
+              model: 'ollama:test-local',
+            };
+          },
         },
       ),
       config,
@@ -81,13 +94,15 @@ beforeAll(async () => {
     secureCookies: false,
     sessionHours: 8,
   });
-  await app.init();
+  await app.listen(0, '127.0.0.1');
 }, 60000);
 beforeEach(async () => {
   await db.query('DELETE FROM cases.login_attempts');
   provider.texts = [];
   localProvider.texts = [];
   primaryUnavailable = false;
+  localUnavailable = false;
+  forgeCitation = false;
 });
 afterAll(async () => {
   await app?.close();
@@ -119,6 +134,183 @@ async function select(s: Awaited<ReturnType<typeof account>>, reference = 'APP-0
   const result = await post(`applications/fixtures/${reference}`, s).send({}).expect(201);
   return result.body.id as string;
 }
+
+function readFrames<T>(body: string): StreamFrame<T>[] {
+  return [...body.matchAll(/^id: (\d+)\ndata: (.+)$/gm)].map(([, id, data]) => ({
+    id: Number(id),
+    data: JSON.parse(data!),
+  }));
+}
+const readStream = (path: string, owner: Awaited<ReturnType<typeof account>>) =>
+  request(app.getHttpServer()).get(`/api/v1/${path}`).set('Cookie', owner.cookie);
+
+it('streams owned assessment stages and resumes after disconnect without a duplicate job or approval', async () => {
+  const owner = await account();
+  const other = await account('senior');
+  const application = await select(owner);
+  const start = () =>
+    post(`applications/${application}/assessment-streams`, owner)
+      .set('Idempotency-Key', 'stream-review')
+      .send({ mode: 'demo' })
+      .expect(202);
+  let release!: () => void;
+  provider.gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const entered = new Promise<void>((resolve) => {
+    provider.onGeneration = resolve;
+  });
+  const controller = new AbortController();
+  const started = await start();
+  const runId = started.body.runId as string;
+  const path = `assessment-streams/${runId}`;
+  let received = 0;
+  try {
+    await entered;
+    await request(app.getHttpServer()).get(`/api/v1/${path}`).expect(401);
+    await readStream(path, other).expect(404);
+    await readStream(path, owner).set('Last-Event-ID', 'invalid').expect(422);
+    expect((await start()).body).toEqual({ runId });
+    const live = await fetch(`${await app.getUrl()}/api/v1/${path}`, {
+      headers: { Cookie: owner.cookie.map((cookie) => cookie.split(';')[0]).join('; ') },
+      signal: controller.signal,
+    });
+    expect(live.headers.get('content-type')).toContain('text/event-stream');
+    expect(live.headers.get('cache-control')).toContain('no-store');
+    expect(live.headers.get('x-accel-buffering')).toBe('no');
+    const reader = live.body!.getReader();
+    const decoder = new TextDecoder();
+    let content = '';
+    while (!content.includes('\n\n')) {
+      const chunk = await reader.read();
+      expect(chunk.done).toBe(false);
+      content += decoder.decode(chunk.value, { stream: true });
+    }
+    const frames = readFrames<{ kind: string; stage: string }>(content);
+    expect(frames[0]).toEqual({
+      id: 1,
+      data: { kind: 'stage', stage: 'load_application', status: 'executed' },
+    });
+    received = frames.at(-1)!.id;
+    expect(frames.every(({ data }) => data.kind === 'stage')).toBe(true);
+    controller.abort();
+  } finally {
+    controller.abort();
+    release();
+    provider.onGeneration = undefined;
+    provider.gate = undefined;
+  }
+  const replay = await readStream(path, owner).set('Last-Event-ID', String(received)).expect(200);
+  const remainder = readFrames(replay.text);
+  expect(remainder.map((f) => f.id)).toEqual(
+    Array.from({ length: 9 - received }, (_, i) => received + i + 1),
+  );
+  expect(remainder.at(-1)).toEqual({ id: 9, data: { kind: 'completed', runId } });
+  expect((await start()).body).toEqual({ runId });
+  const saved = await readStream(`assessments/${runId}`, owner).expect(200);
+  expect(saved.body.status).toBe('pending_approval');
+  expect(
+    await db.query(
+      'SELECT count(*)::int AS count FROM cases.assessment_jobs WHERE application_id=$1',
+      [application],
+    ),
+  ).toEqual([{ count: 1 }]);
+  expect(
+    await db.query(
+      'SELECT count(*)::int AS count FROM cases.assessment_runs WHERE application_id=$1',
+      [application],
+    ),
+  ).toEqual([{ count: 1 }]);
+  expect(provider.texts.filter((input) => input.startsWith('{'))).toHaveLength(1);
+});
+
+it('streams only verified policy citations and emits refusal or failure as terminal events', async () => {
+  const owner = await account();
+  const other = await account();
+  const body = {
+    question: 'maximum debt burden ratio for 28704121234567 phone 010-0000-0001',
+    asOfDate: '2025-04-03',
+  };
+  const start = (key: string) =>
+    post('questions/streams', owner).set('Idempotency-Key', key).send(body).expect(202);
+  await request(app.getHttpServer())
+    .post('/api/v1/questions/streams')
+    .set('Cookie', owner.cookie)
+    .set('Idempotency-Key', 'no-csrf')
+    .send(body)
+    .expect(403);
+  const { streamId } = (await start('citations')).body as { streamId: string };
+  expect((await start('citations')).body).toEqual({ streamId });
+  await post('questions/streams', owner)
+    .set('Idempotency-Key', 'citations')
+    .send({ ...body, question: 'a different question' })
+    .expect(409);
+  const path = `question-streams/${streamId}`;
+  await readStream(path, other).expect(404);
+  await request(app.getHttpServer()).get(`/api/v1/${path}`).expect(401);
+  const answer = await readStream(path, owner).expect(200);
+  const frames = readFrames<{ kind: string; citation?: { quote: string } }>(answer.text);
+  expect(frames[0]?.data.citation?.quote).toMatch(/45/);
+  expect(frames.at(-1)?.data).toEqual({
+    kind: 'completed',
+    asOfDate: '2025-04-03',
+    refused: false,
+  });
+  const reconnected = await readStream(path, owner).set('Last-Event-ID', '1').expect(200);
+  expect(readFrames(reconnected.text)).toEqual(frames.slice(1));
+  expect(provider.texts.filter((input) => input.startsWith('{'))).toHaveLength(1);
+  expect(answer.text + provider.texts.join(' ')).not.toMatch(/28704121234567|010-0000-0001/);
+  forgeCitation = true;
+  const forged = await start('forged');
+  const refusal = await readStream(`question-streams/${forged.body.streamId}`, owner).expect(200);
+  expect(refusal.text).not.toContain('UNVERIFIED_TEXT');
+  expect(readFrames(refusal.text)).toEqual([
+    { id: 1, data: { kind: 'completed', asOfDate: '2025-04-03', refused: true } },
+  ]);
+  primaryUnavailable = true;
+  localUnavailable = true;
+  const outage = await start('outage');
+  const failed = await readStream(`question-streams/${outage.body.streamId}`, owner).expect(200);
+  expect(failed.text).not.toContain('Fixture');
+  expect(readFrames(failed.text)).toEqual([
+    { id: 1, data: { kind: 'failed', code: 'QuestionUnavailable' } },
+  ]);
+});
+
+it('closes an open question stream when its session is revoked', async () => {
+  const owner = await account();
+  let release!: () => void;
+  provider.gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const entered = new Promise<void>((resolve) => {
+    provider.onGeneration = resolve;
+  });
+  const { streamId } = (
+    await post('questions/streams', owner)
+      .set('Idempotency-Key', 'logout-stream')
+      .send({ question: 'Maximum DBR in CP-2025?' })
+      .expect(202)
+  ).body;
+  const path = `question-streams/${streamId}`;
+  const controller = new AbortController();
+  try {
+    await entered;
+    const response = await fetch(`${await app.getUrl()}/api/v1/${path}`, {
+      headers: { Cookie: owner.cookie.map((cookie) => cookie.split(';')[0]).join('; ') },
+      signal: controller.signal,
+    });
+    expect(response.status).toBe(200);
+    await post('auth/logout', owner).send({}).expect(201);
+    expect(await response.text()).toBe('');
+    await readStream(path, owner).expect(401);
+  } finally {
+    controller.abort();
+    release();
+    provider.onGeneration = undefined;
+    provider.gate = undefined;
+  }
+});
 
 it('uploads original synthetic bytes idempotently and enforces evidence ownership', async () => {
   const owner = await account(),
@@ -347,6 +539,13 @@ it('recovers an abandoned job and prevents its late result from superseding the 
     "INSERT INTO cases.assessment_jobs(run_id,application_id,request_key,mode,status,created_at) VALUES($1,$2,'abandoned','demo','running',now()-interval '16 minutes')",
     [oldRun, id],
   );
+  const interrupted = await readStream(`assessment-streams/${oldRun}`, s).expect(200);
+  expect(readFrames(interrupted.text)).toEqual([
+    { id: 9, data: { kind: 'failed', code: 'AssessmentFailed' } },
+  ]);
+  expect(
+    await db.query('SELECT status FROM cases.assessment_jobs WHERE run_id=$1', [oldRun]),
+  ).toEqual([{ status: 'running' }]);
   const response = await post(`applications/${id}/assessments`, s)
     .set('Idempotency-Key', 'recovered')
     .send({ mode: 'demo' })

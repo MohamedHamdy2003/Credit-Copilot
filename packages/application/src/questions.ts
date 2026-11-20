@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { QUESTION_REFUSAL } from '../../contracts/src/streams.js';
 import type { Chunk } from '../../contracts/src/documents.js';
 import type { GenerationPort, Usage } from './ports.js';
 import { validDate } from '../../domain/src/calculations.js';
@@ -55,7 +56,7 @@ function generationSchema(candidates: Chunk[]) {
   return z.toJSONSchema(z.object({ citations: z.array(z.union(choices)).max(5) }).strict());
 }
 type FallbackAttribution = { generation?: { model: string; fallbackFrom: string; usage: Usage } };
-export const REFUSAL = 'The documents do not contain enough information to answer this question.';
+export const REFUSAL = QUESTION_REFUSAL;
 export const isApprovalBypass = (question: string) =>
   /\bapprove\b[\s\S]{0,160}\bwithout\b[\s\S]{0,80}\b(?:human|reviewer|approval)\b/i.test(question);
 function citation(chunk: Chunk, quote: string) {

@@ -1,6 +1,6 @@
 # Current checkpoint —20 November2026
 
-Read agent.md and FEATURES.md first. Current feature: feature/agent-orchestration.
+Read agent.md and FEATURES.md first. Current feature: feature/sse-progress.
 Core evaluation went through PR17/18, hybrid search through PR19/20, query
 rewriting through PR21/22 and local fallback through PR23/24 after CI.
 Local fallback is on main at da37033.
@@ -128,9 +128,29 @@ and Demo. Local checks passed 121 unit, 32 integration, 8 Chromium, both offline
 suites 15/15, type checks, lint, formatting and build. See PR25 and the reports
 under data/evaluation/results.
 
+## Review fixes and streaming
+
+Review fixed two problems before P14. The embedding index now keeps distinct
+dimensions for the same chunk and provider model. Reingestion verifies that
+the current active chunks actually have the requested model and dimensions.
+Direct retrieval masks Egyptian IDs and phone numbers before provider or
+lexical search, including callers outside the policy question API.
+
+P14 adds authenticated, owner-scoped SSE for eight assessment stages and
+verified policy citations. React resumes from the last event ID. Idempotent
+starts and read-only reconnects keep one run and one review record even if the
+reader disconnects. Revoking the session closes the stream. Assessments
+replay from PostgreSQL. Policy citation replay stays in the API process for
+five minutes after completion. The synchronous endpoints remain available.
+Local checks covered 121 unit tests, 36 PostgreSQL/HTTP tests, 9 Chromium
+journeys, type checks, lint, formatting and builds. The offline workflow and
+agent evaluations each passed 15/15 using deterministic fixtures. Live model
+quality was measured in the prior baseline and agent runs.
+
 ## Next and honest readiness
 
-SSE Streaming (P14) is next in the PR plan. Five stretches remain.
+P15 extends the synthetic corpus and adds the auto-loan product. Four stretches
+remain after P14.
 The core memo and audit use plain wording as allowed by the brief. Final video and interactive clean-clone
 walkthrough are pending. Before this feature history had25 non-merge commits over
 only3 real Cairo dates(17,19,20 November); four-date brief requirement is unmet.

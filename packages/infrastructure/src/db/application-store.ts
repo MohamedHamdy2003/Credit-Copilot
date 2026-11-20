@@ -6,6 +6,13 @@ import type { NormalizedDocument } from '../../../contracts/src/documents.js';
 import { parseApplicationForm } from '../../../application/src/application-form.js';
 import { invariant } from '../../../domain/src/errors.js';
 import type { AssessmentMode } from '../../../domain/src/evidence-mode.js';
+import {
+  ASSESSMENT_STAGES,
+  assessmentStageEvent,
+  type AssessmentStage,
+  type AssessmentStreamEvent,
+  type StreamFrame,
+} from '../../../contracts/src/streams.js';
 interface Stored {
   id: string;
   preparer_id: string;
@@ -14,6 +21,21 @@ interface Stored {
   latest_assessment_id: string | null;
   filename: string;
 }
+interface StoredProgress {
+  application_id: string;
+  status: 'running' | 'succeeded' | 'failed';
+  expired: boolean;
+  progress: unknown[];
+}
+const assessmentProgressQuery = `
+  SELECT j.application_id, j.status,
+         (j.status='running' AND j.created_at < clock_timestamp()-interval '15 minutes') AS expired,
+         COALESCE(r.result->'stageEvents', j.progress) AS progress
+    FROM cases.assessment_jobs j
+    JOIN cases.applications a ON a.id=j.application_id
+    LEFT JOIN cases.assessment_runs r ON r.id=j.run_id
+   WHERE j.run_id=$1 AND a.preparer_id=$2`;
+
 export class PostgresApplicationStore implements ApplicationStore {
   constructor(private readonly db: DataSource) {}
   async register(actor: Actor, document: NormalizedDocument, bytes: Uint8Array) {
@@ -69,7 +91,7 @@ export class PostgresApplicationStore implements ApplicationStore {
       preparerId: row.preparer_id,
     };
   }
-  async start(actor: Actor, id: string, key: string, mode: AssessmentMode) {
+  async start(actor: Actor, id: string, key: string, mode: AssessmentMode, resume = false) {
     return this.db.transaction(async (manager) => {
       const rows = (await manager.query('SELECT * FROM cases.applications WHERE id=$1 FOR UPDATE', [
         id,
@@ -83,7 +105,7 @@ export class PostgresApplicationStore implements ApplicationStore {
         403,
       );
       await manager.query(
-        "UPDATE cases.assessment_jobs SET status='failed',error_code='AssessmentInterrupted' WHERE application_id=$1 AND status='running' AND created_at<now()-interval '15 minutes'",
+        "UPDATE cases.assessment_jobs SET status='failed',error_code='AssessmentInterrupted' WHERE application_id=$1 AND status='running' AND created_at<clock_timestamp()-interval '15 minutes'",
         [id],
       );
       const jobs = (await manager.query(
@@ -97,6 +119,13 @@ export class PostgresApplicationStore implements ApplicationStore {
           'Use a different key for a different assessment mode',
           409,
         );
+        if (resume)
+          return {
+            runId: jobs[0].run_id,
+            document: row.normalized,
+            synthetic: row.synthetic,
+            resumed: true as const,
+          };
         const records = (await manager.query(
           'SELECT result FROM cases.assessment_runs WHERE id=$1',
           [jobs[0].run_id],
@@ -148,6 +177,55 @@ export class PostgresApplicationStore implements ApplicationStore {
       );
       return { runId, document: row.normalized, synthetic: row.synthetic };
     });
+  }
+  async recordAssessmentStage(runId: string, event: unknown) {
+    const stage = assessmentStageEvent.parse(event);
+    await this.db.query(
+      "UPDATE cases.assessment_jobs SET progress=progress || $2::jsonb WHERE run_id=$1 AND status='running'",
+      [runId, JSON.stringify([stage])],
+    );
+  }
+  async assessmentEvents(actor: Actor, runId: string) {
+    const params = [runId, actor.id];
+    const initial = (await this.db.query(assessmentProgressQuery, params)) as StoredProgress[];
+    const job = initial[0]?.expired
+      ? await this.db.transaction(async (manager) => {
+          // Let a result already being saved settle before reporting a terminal interruption.
+          await manager.query('SELECT id FROM cases.applications WHERE id=$1 FOR SHARE', [
+            initial[0]!.application_id,
+          ]);
+          const settled = (await manager.query(
+            assessmentProgressQuery,
+            params,
+          )) as StoredProgress[];
+          return settled[0];
+        })
+      : initial[0];
+    invariant(job, 'NotFound', 'Assessment stream not found', 404);
+    const status = job.expired ? 'failed' : job.status;
+    const stages = new Map<AssessmentStage, 'executed' | 'skipped' | 'failed'>();
+    for (const raw of job.progress) {
+      const stage = assessmentStageEvent.safeParse(raw);
+      if (stage.success) stages.set(stage.data.stage, stage.data.status);
+    }
+    const events: StreamFrame<AssessmentStreamEvent>[] = [];
+    for (const [index, stage] of ASSESSMENT_STAGES.entries()) {
+      const stageStatus = stages.get(stage);
+      // Delaying the rest of the live sequence leaves room for gaps to be filled by the saved run.
+      if (!stageStatus && status === 'running') break;
+      if (stageStatus)
+        events.push({ id: index + 1, data: { kind: 'stage', stage, status: stageStatus } });
+    }
+    if (status !== 'running') {
+      events.push({
+        id: ASSESSMENT_STAGES.length + 1,
+        data:
+          status === 'succeeded'
+            ? { kind: 'completed', runId }
+            : { kind: 'failed', code: 'AssessmentFailed' },
+      });
+    }
+    return events;
   }
   async fail(runId: string, code: string) {
     await this.db.query(
