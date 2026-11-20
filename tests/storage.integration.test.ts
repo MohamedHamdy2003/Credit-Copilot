@@ -214,3 +214,22 @@ it('atomically preserves immutable assessment, demo assumptions and fraud referr
     await db.query('SELECT id FROM cases.assessment_runs WHERE id=$1', [forbiddenRun]),
   ).toEqual([]);
 });
+it('loads operative conflict context by date/product without changing the vector top5 or using customer data', async () => {
+  const embedding = new FakeEmbedding(),
+    service = new IngestionService(db, embedding, manifest);
+  for (const doc of manifest)
+    await service.ingest(doc.filename, await readFile(`data/corpus/policy/${doc.filename}`));
+  const retrieval = new RetrievalService(db, embedding);
+  const primary = await retrieval.search('minimum income', '2025-04-03');
+  const context = await retrieval.related('Minimum income?', '2025-04-03', 'PL-100', primary);
+  const income = context.chunks.find((c) => c.section === 'CP-3.3');
+  expect(income?.edition).toBe('CP-2025');
+  expect(income?.pageStart).toBe(1);
+  expect(context.chunks.map((c) => c.section)).toEqual(['CP-3.3', 'PS-2', 'CP-14']);
+  const historical = await retrieval.related('Minimum income?', '2024-12-01', 'PL-100', primary);
+  expect(historical.chunks.find((c) => c.section === 'CP-3.3')?.edition).toBe('CP-2024');
+  const unrelated = await retrieval.related('Minimum income?', '2025-04-03', 'UNKNOWN', primary);
+  expect(unrelated.chunks).toEqual([]);
+  const again = await retrieval.search('minimum income', '2025-04-03');
+  expect(again.map((h) => h.chunk.id)).toEqual(primary.map((h) => h.chunk.id));
+});

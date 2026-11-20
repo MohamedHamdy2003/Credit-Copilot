@@ -1,109 +1,212 @@
+import 'dotenv/config';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
-import { runtime } from './runtime.js';
-import { RetrievalService } from '../packages/infrastructure/src/knowledge/retrieval.js';
-import { answerPolicyQuestion } from '../packages/application/src/questions.js';
-
-const cases = [
-  {
-    id: 'live-dbr-2024',
-    question: 'What is the maximum debt burden ratio?',
-    date: '2024-12-01',
-    gold: ['CP-2024:CP-4.1'],
-    refuse: false,
-  },
-  {
-    id: 'live-dbr-2025',
-    question: 'What is the maximum debt burden ratio?',
-    date: '2025-04-03',
-    gold: ['CP-2025:CP-4.1'],
-    refuse: false,
-  },
-  {
-    id: 'live-tenor',
-    question: 'Can PL-100 be offered for 72 months?',
-    date: '2025-04-03',
-    gold: ['CP-2025:CP-14', 'PS-PL-100:PS-3'],
-    refuse: false,
-  },
-  {
-    id: 'live-crypto',
-    question: 'What is the policy for crypto-backed loans?',
-    date: '2025-04-03',
-    gold: [],
-    refuse: true,
-  },
-  {
-    id: 'live-sme',
-    question: 'What fees apply to an SME revolving credit line?',
-    date: '2025-04-03',
-    gold: [],
-    refuse: true,
-  },
-];
-const { db, provider, config } = await runtime();
+import { createHash, randomUUID } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
+import { configSchema } from '../packages/contracts/src/config.js';
+import {
+  evaluationSetSchema,
+  summarizeEvaluation,
+  type EvaluationResult,
+} from '../packages/application/src/evaluation.js';
+import { createDataSource } from '../packages/infrastructure/src/db/data-source.js';
+import { GeminiAdapter } from '../packages/infrastructure/src/llm/gemini.js';
+import { EvaluationMeter } from '../packages/infrastructure/src/evaluation-meter.js';
+import { CoreEvaluation } from './evaluation/runner.js';
+import {
+  IngestionService,
+  type ManifestEntry,
+} from '../packages/infrastructure/src/knowledge/ingestion.js';
+import {
+  OfflineEvaluationProvider,
+  offlineEvaluationSearch,
+} from '../tests/helpers/evaluation-provider.js';
+import { invariant } from '../packages/domain/src/errors.js';
+const mode = process.argv.includes('--offline') ? 'offline' : 'live';
+invariant(
+  process.argv.slice(2).every((arg) => arg === '--offline'),
+  'InvalidEvaluationArguments',
+  'Only --offline is supported',
+);
+const config = configSchema.parse(process.env);
+const id = new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomUUID().slice(0, 8);
+const path = `artifacts/evaluation/${mode}-${id}.json`;
+const dataset = evaluationSetSchema.parse(
+  JSON.parse(await readFile('data/evaluation/cases.json', 'utf8')),
+);
+const url = new URL(
+  mode === 'live'
+    ? (config.EVALUATION_DATABASE_URL ?? config.DATABASE_URL)
+    : (process.env.TEST_DATABASE_URL ?? config.DATABASE_URL),
+);
+if (mode === 'live' && !config.EVALUATION_DATABASE_URL && !url.pathname.endsWith('_eval'))
+  url.pathname += '_eval';
+if (mode === 'offline' && !url.pathname.endsWith('_test')) url.pathname += '_test';
+invariant(
+  new RegExp(mode === 'live' ? '_eval$' : '_test$').test(url.pathname),
+  'UnsafeEvaluationDatabase',
+  'Use a dedicated _eval (live) or _test (offline) database',
+);
+const name = decodeURIComponent(url.pathname.slice(1));
+invariant(
+  /^[a-z][a-z0-9_]{0,62}$/.test(name),
+  'InvalidDatabaseName',
+  'Evaluation database name must be a simple identifier',
+);
+const adminUrl = new URL(url);
+adminUrl.pathname = '/postgres';
+const admin = await createDataSource(adminUrl.toString()).initialize();
 try {
-  const search = new RetrievalService(db, provider);
-  const prompt = await readFile('prompts/questions.txt', 'utf8');
-  const results = [];
-  for (const test of cases) {
-    try {
-      const hits = await search.search(test.question, test.date);
-      // Replay retrieved candidates to avoid a second embedding request for the same query.
-      const answer = await answerPolicyQuestion(
-        { question: test.question, asOfDate: test.date },
-        {
-          search: { search: async () => hits },
-          provider,
-          prompt,
-          minimumSimilarity: config.RETRIEVAL_MIN_SIMILARITY,
-        },
-      );
-      const hit = test.gold.some((gold) =>
-        hits.some((h) => `${h.chunk.documentId}:${h.chunk.section}` === gold),
-      );
-      results.push({
-        id: test.id,
-        expectedRefusal: test.refuse,
-        hitAt5: test.refuse ? null : hit,
-        refusalCorrect: answer.refused === test.refuse,
-        candidates: hits.map((h) => ({
-          id: h.chunk.id,
-          source: h.chunk.documentId,
-          section: h.chunk.section,
-          similarity: h.similarity,
-        })),
-        answer,
-      });
-      console.log(test.id, 'refused:', answer.refused, 'hit@5:', test.refuse ? 'N/A' : hit);
-    } catch (error) {
-      results.push({
-        id: test.id,
-        error: error instanceof Error ? error.message : 'Unknown failure',
-      });
-      console.error(test.id, 'failed');
-    }
-  }
-  const report = {
-    scope: 'Five-case live vector smoke baseline, NOT the full fifteen-case FR-6 evaluation',
-    at: new Date().toISOString(),
-    model: config.GENERATION_MODEL,
-    embedding: config.EMBEDDING_MODEL,
-    dimensions: config.EMBEDDING_DIMENSIONS,
+  const existing = (await admin.query('SELECT 1 FROM pg_database WHERE datname=$1', [
+    name,
+  ])) as unknown[];
+  if (!existing.length) await admin.query(`CREATE DATABASE "${name}"`);
+} finally {
+  await admin.destroy();
+}
+const db = await createDataSource(url.toString()).initialize();
+let source: ReturnType<typeof createDataSource> | undefined, runner: CoreEvaluation | undefined;
+const results: EvaluationResult[] = [];
+const files = [
+  'data/evaluation/cases.json',
+  'data/config/policies.json',
+  'data/config/personal-loan.json',
+  'data/config/corpus-manifest.json',
+  'prompts/extraction.txt',
+  'prompts/questions.txt',
+  'packages/application/src/questions.ts',
+  'packages/application/src/document-assessment.ts',
+  'packages/application/src/credit-memo.ts',
+  'packages/application/src/extraction.ts',
+  'packages/application/src/evidence-facts.ts',
+  'packages/application/src/evaluation.ts',
+  'packages/infrastructure/src/knowledge/retrieval.ts',
+  'packages/infrastructure/src/llm/gemini.ts',
+  'packages/infrastructure/src/evaluation-meter.ts',
+  'packages/domain/src/calculations.ts',
+  'packages/domain/src/rules.ts',
+  'scripts/evaluation/runner.ts',
+];
+const hashes: Record<string, string> = {};
+for (const file of files)
+  hashes[file] = createHash('sha256')
+    .update((await readFile(file, 'utf8')).replace(/\r\n/g, '\n'))
+    .digest('hex');
+const manifest = JSON.parse(
+  await readFile('data/config/corpus-manifest.json', 'utf8'),
+) as ManifestEntry[];
+for (const d of manifest)
+  hashes[d.filename] = createHash('sha256')
+    .update(await readFile(`data/corpus/policy/${d.filename}`))
+    .digest('hex');
+for (let n = 1; n <= 5; n++) {
+  const name = `APP-00${n}.pdf`;
+  hashes[`evidence/${name}`] = createHash('sha256')
+    .update(await readFile(`data/corpus/evidence/${name}`))
+    .digest('hex');
+}
+const report: { [key: string]: unknown } = {
+  id,
+  at: new Date().toISOString(),
+  mode,
+  dataset: dataset.version,
+  scope:
+    'Full15-case functional evaluation; standalone financial/rule checks never replace missing-evidence workflow outcomes.',
+  configuration: {
+    generationModel: mode === 'live' ? config.GENERATION_MODEL : 'test-only-evaluation',
+    embeddingModel: mode === 'live' ? config.EMBEDDING_MODEL : 'test-only-hash-v1',
+    dimensions: mode === 'live' ? config.EMBEDDING_DIMENSIONS : 64,
     minimumSimilarity: config.RETRIEVAL_MIN_SIMILARITY,
     k: 5,
-    results,
+    retrieval:
+      mode === 'live' ? 'vector-only' : 'deterministic-source-fixtures-NOT-semantic-quality',
+    answerContext:
+      'Separate date/product-filtered operative source references; primary vector top5 is unchanged. Citation coverage includes this context.',
+    database: 'dedicated suffix only; credentials omitted',
+  },
+  gitHead: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+  workingTreeDirty:
+    execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim().length > 0,
+  hashes,
+  hashConvention:
+    'SHA256; code/config text normalized to LF; supplied source-document bytes unchanged',
+  completed: false,
+  results,
+};
+await mkdir('artifacts/evaluation', { recursive: true });
+const persist = () => writeFile(path, JSON.stringify(report, null, 2));
+try {
+  await db.runMigrations();
+  if (mode === 'live') source = await createDataSource(config.DATABASE_URL).initialize();
+  const provider =
+    mode === 'live'
+      ? new GeminiAdapter(
+          config.GEMINI_API_KEY,
+          config.GENERATION_MODEL,
+          config.EMBEDDING_MODEL,
+          config.EMBEDDING_DIMENSIONS,
+        )
+      : new OfflineEvaluationProvider();
+  const meter = new EvaluationMeter(provider, source),
+    ingestion = new IngestionService(db, meter, manifest);
+  const ingested = [];
+  for (const d of manifest)
+    ingested.push(
+      await ingestion.ingest(d.filename, await readFile(`data/corpus/policy/${d.filename}`)),
+    );
+  report.ingestion = {
+    documents: ingested,
+    documentEmbeddingCacheHits: meter.cacheHits,
+    providerMetrics: meter.metrics(0),
   };
-  await mkdir('artifacts', { recursive: true });
-  await writeFile('artifacts/live-vector-smoke.json', JSON.stringify(report, null, 2));
-  if (
-    results.some(
-      (r) =>
-        'error' in r ||
-        ('refusalCorrect' in r && !r.refusalCorrect) ||
-        ('hitAt5' in r && r.hitAt5 === false),
-    )
-  )
-    process.exitCode = 1;
+  runner = await CoreEvaluation.create(
+    db,
+    meter,
+    config,
+    mode === 'offline' ? offlineEvaluationSearch(db) : undefined,
+  );
+  report.strictChecks = await runner.strictChecks();
+  for (const c of dataset.cases) {
+    const result = await runner.run(c);
+    results.push(result);
+    await persist();
+    console.log(
+      `${c.id} ${result.passed ? 'PASS' : 'FAIL'} ${result.error ?? ''} ${result.latencyMs}ms`,
+    );
+    if (!result.passed)
+      console.log(
+        '  failed:',
+        result.assertions
+          .filter((a) => !a.passed)
+          .map((a) => a.name)
+          .join(', '),
+      );
+  }
+  const summary = summarizeEvaluation(results, mode);
+  const strictRows = report.strictChecks as { passed: boolean }[];
+  const strict = strictRows.length === 5 && strictRows.every((s) => s.passed);
+  report.summary = {
+    ...summary,
+    strictChecksPassed: strict,
+    liveQualityGate:
+      mode === 'live'
+        ? summary.behaviorGatePassed && strict
+          ? 'passed'
+          : 'failed'
+        : 'not_measured',
+  };
+  report.totalProviderMetrics = meter.metrics(0);
+  report.completed = true;
+  console.log(JSON.stringify(report.summary, null, 2));
+  if (!summary.behaviorGatePassed || !strict) process.exitCode = 1;
+} catch (error) {
+  report.errorCode = error instanceof Error ? error.name : 'EvaluationInfrastructureFailure';
+  report.completed = false;
+  process.exitCode = 1;
+  console.error('Evaluation failed; sanitized failure retained in report.');
 } finally {
+  await persist();
+  console.log(`Report: ${path}`);
+  if (runner) await runner.close();
+  if (source?.isInitialized) await source.destroy();
   await db.destroy();
 }

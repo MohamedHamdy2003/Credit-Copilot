@@ -1,69 +1,86 @@
 # Current checkpoint —20 November2026
 
-Read agent.md and FEATURES.md first. Current increment: feature/referrals-written-reasons.
-Previous React delivery PR13/14 is on main c25a2a8; CI44713937697 green. Check git/GitHub
-for current promotion status. Next work is full15-case evaluation/core gate, not stretches.
+Read agent.md and FEATURES.md first. Current feature: feature/full-core-evaluation.
+Previous referrals PR15/16 merged on main0c96d9e, CI44721070688 green. Check git/PRs
+for current promotion. Functional core gate passes measured15 cases; this is not
+final-submission certification. Hybrid BM25+pgvector/RRF is next.
 
 ## Implemented
 
-PM-4/5/7/9 case reviews: pure review-policy.ts, Application CaseReviewService ports,
-PostgresCaseReviewStore and explicit CaseReviews migration1794916800005, registered
-in data-source.ts and applied locally. Production/E2E composition wires the service.
-Nest routes: GET referrals, GET referrals/:id, POST referrals/:id/reviews; GET
-assessments/:id/written-reason and POST assessments/:id/reason-requests. Existing
-session/CSRF/origin/schema/error guards apply. Mutations reread active actor in TX.
+Frozen cases data/evaluation/cases.json; scorer/schema in application/evaluation.ts;
+CLI orchestration scripts/evaluate.ts + scripts/evaluation/runner.ts; hash/token
+meter in infrastructure/evaluation-meter.ts. Live mode uses an isolated *_eval DB,
+real Gemini/vector query calls, actual Mastra/private persistence and real Nest
+HTTP authority transitions. Exact source/model/dimension document vectors can be
+reused from trusted KB; no private case records touched in app DB. Offline mode
+uses a *_test DB with source/provider fixtures, reports semantic hit-rate as null
+and live quality as not_measured. CLI writes timestamped immutable ignored reports,
+nonzero exit on failure; cases/initial/final sanitized JSON evidence are committed.
+CI runs pnpm evaluate:core:offline after integration, never concurrently on *_test.
+Old five-question smoke moved to evaluate:smoke; simple unit subset stays
+pnpm evaluate:offline.
 
-Rejection now permits only a verified failed criterion or customer-declined alternative,
-not missing evidence/fraud/bureau-only referral. Notice snapshots store failed criterion
-and human justification, clause, original edition/source and decision time. Legacy
-backfill uses recorded clause/edition only; incomplete history returns ReasonUnavailable.
-PM-9 request is recorded by the preparer on applicant behalf, with a deterministic
-written reply from the stored human decision (no LLM/appeal/credit-state change).
-Inclusive30-calendar-day window from rejection date in Cairo; DB clock, no client date.
-Concurrent/repeated requests return one stored reply/audit pair; old replies remain
-readable after expiry. Demo assumptions and verified=false are retained.
+Initial real run:11/15 despite raw vector hit4/4, refusal7/7,OOC3/3,numerics17/17.
+Q01/02/03 omitted operative/conflict citations; Q11 fraud referral skipped policy
+selection and persisted null edition. Fixes: source metadata to generation;
+separate date/product-filtered operative source-reference context for income/
+tenor conflicts, retained verbatim after a valid non-refusal model choice. Primary
+vector top5/ranking/threshold remain unchanged; this is NOT BM25/RRF/rewriting or
+semantic re-ranking. Forged/blank quotes, weak hits or model refusals still refuse.
+Policy selection now executes on a valid form date after tampering detection;
+model/rules remain skipped. A repeat run scored 14/15 because the model refused Q10 without procedure
+citations. Q10 now explicitly rejects the bypass and quotes dated PM-1/2/3 when
+supported by a qualifying procedure hit. The repeat failure report is retained.
 
-Referrals route to Senior/Head; ordinary Credit queue omits them. Independent Senior
-can record awaiting-evidence/reassessment/internal-fraud notes under version/latest
-and active-job checks. Notes never approve/reject/clear fraud or waive missing evidence.
-Fraud Unit routing is internal record only, no external message sent. PM-4 two-business-
-day estimate uses data/config/review-calendar.json: Fri/Sat default, no public holidays
-invented; configure trustworthy holidays and restart. Estimate never changes outcome.
+Code-filled credit-memo.ts supplies safe memo even for referrals and CSV provenance;
+no LLM arithmetic/prose. Failed JSON retains reported usage; unavailable usage is
+null, never invented zero. Production provider config accepts Gemini only; test
+fakes are explicit injection, not silently selected runtime adapters. Removed dead
+DATA_DIR/Ollama placeholders from active config. No new DB migration.
 
-UI CaseReview.tsx adds written requests/replies and referral queue/history/forms, using
-existing components/styles. Assessment hides decision form for missing/fraud referrals.
-README/FEATURES/DESIGN/EVALUATION/AI-USAGE updated; no extra docs created.
+pnpm dev now waits for Compose health, runs explicit migrations and launches API/
+Vite using matching PORT/WEB_ORIGIN. Ctrl+C stops its API/web, DB retained. Smoke
+passed on4306/5176 (health ok,web200); both ports closed on stop. It is local setup,
+not deployment. README rewritten compactly with all config, data sent to provider,
+numbered demo path and repeatable commands. DESIGN/EVALUATION/AI log and FEATURES
+updated without extra docs.
 
-## Verified
+## Verified and remaining evidence step
 
-84 unit +27 real PostgreSQL/HTTP integration +8 Chromium e2e passed. Typecheck,
-lint, format and API/web builds passed. New cases: day0/30/31/future/leap calendar,
-configured weekends/holidays, permissions/CSRF/extra fields, concurrent idempotent
-reply and unchanged rejected/version2, Demo false, late replay, Senior queue/notes,
-unsafe rejection and unavailable legacy reasons. Browser PM-9 reply and independent
-Senior note paths pass; screenshots inspected at1488x1058 and390x844 with no mobile
-overflow, framework overlay or runtime error in the written-reply journey. Browser
-plugin absent, regular Playwright used. Test-only controlled age-failure fixture
-uses real pure rules/decision store with Demo ID presence only, no fabricated ID,
-and is never ingested in production or substituted for original packs. Fake providers
-remain confined to test wiring; no new live Gemini quality metric claimed. Screenshots
-and traces remain outside git in OS temp. Local E2E servers stop after tests.
+95 unit,28 PostgreSQL/HTTP integration,8 Chromium e2e,offline15-case evaluation and
+live15-case evaluation passed; types/lint/format/build pass. The evidence-consistency scorer rechecks committed results instead of trusting pass flags. Cases assert financial-only/rule outputs separately from original
+APP002/003/005 missing-probation referrals; no invented probation or ID. Q15 paired
+normalized protected changes have equal provider-input hashes/rules/calcs/memo;
+no original PDF replaced or indexed. Billing/embedding/retry token cost remains
+unknown; only available generation tokens reported. Initial failed report retained.
 
-## Next
+Clean live vector baseline f04a6dc passed 15/15, hit@5 4/4, evidence coverage
+8/8, OOC 3/3, exact numerics 17/17, security/audit 80/80 and Strict packs 5/5.
+Gemini reported 7666 input and 1891 output tokens across 12 generation calls,
+with 7 query embeddings. Immutable report published as vector-core-baseline.json.
+Both the 11/15 and 14/15 failure reports remain committed. Core promotion through
+green feature→dev and dev→main PRs follows this evidence.
 
-Implement/run full15-case FR-6 evaluation against real vector baseline; document
-failures honestly, address core gaps and validate gate before nine stretches. Check
-remaining partial FEATURES rows (canonical memo/audit) against actual brief; never
-mark the entire core complete just because transport/UI tests pass. Keep feature->dev
-->main after green CI and professional What/Why/How tested descriptions.
+## Next and honest readiness
+
+Hybrid BM25+vector/RRF with real before/after evaluation using same corpus, dates,
+model/dimensions, questions, threshold and source-context policy. All9 stretches
+still pending. Functional core memo/audit rows are baseline-complete; plain wording
+is an intentional cut allowed by the brief. Final video and interactive clean-clone
+walkthrough are pending. Before this feature history had25 non-merge commits over
+only3 real Cairo dates(17,19,20 November); four-date brief requirement is unmet.
+Never fabricate dates, history, billing costs or final submission status. No email
+or video upload authorized/performed.
 
 ## Fixed decisions
 
-Strict default missing ID=>REFER_TO_HUMAN CP-8/PS-7. Enabled synthetic Demo assumes
-only ID presence, retaining actual missing reality/verified=false in result/audit/
-offer/written reply. Never assume probation or fabricate evidence. CP2024/2025 DBR
-50%/45%, capacity382000/330000 through unchanged Decimal formula; policy source wins
-over Appendix E. Strip protected fields before model/rules; packs never KB. Authority
-0/250k/500k/1m plus four-eyes. No unresolved-referral/pricing/policy exception bypass.
-DB54329; web localhost5173 must match WEB_ORIGIN. Secrets local.env only; CLI fixture
-accounts cannot log in. Integration and e2e share *_test DB: run sequentially only.
+Strict default; missing ID=>REFER_TO_HUMAN CP-8/PS-7. Explicit synthetic Demo assumes
+only ID presence, with actual missing reality/verified=false retained through offer/
+written reply. Never invent ID/probation. CP2024/2025 DBR50%/45%,capacity382000/330000
+through unchanged Decimal formula; actual source wins over Appendix E. Remove
+protected attributes before model/rules; customer packs never KB. Authority0/250k/
+500k/1m and four-eyes. No missing-evidence/pricing/policy-exception bypass. PM-9 is
+written reasons, not an appeal override; Cairo inclusive30 calendar days from recorded
+rejection. PM-4 target is indicative with configured Fri/Sat/holidays. Fraud routing
+internal only. Secrets local.env; never print them. Tests *_test, live eval *_eval;
+no concurrent suites against shared test DB. DB54329; web origin must match browser.

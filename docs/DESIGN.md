@@ -1,193 +1,162 @@
 # Credit Copilot design
 
-## Sessions and human decisions
-
-Application defines AuthStore/Credentials/DecisionStore ports. Infrastructure uses
-scrypt password hashes,32-byte random sessions (only SHA256 token hashes in DB),
-expiry/revocation/active-user checks and atomic per-IP login throttling. Transport
-uses HttpOnly SameSite Strict cookies, optional Secure for HTTPS, CSRF headers and
-an origin allowlist. Body schemas reject client role/tier/amount/approver overrides;
-server roles are reread inside decision transactions. No public user registration
-or role-upgrade endpoint exists. Local seed accounts are synthetic demo tooling.
-
-Approval requires a different preparer/reviewer, positive recommended amount within
-the server authority tier, complete resolved assessment and recorded acceptance
-for alternatives. Missing/tampered referrals cannot be waived; corrected evidence
-requires reassessment. Rejection cites a verified failed clause, or CP-4.1 after
-the customer rejects an alternative. State transitions lock application/run rows
-and check expectedVersion plus latest assessment pointer. The original assessment
-snapshot stays immutable; status/version, decisions and audit are separate records.
-Issuance requires stored approval, tier check and source-policy maturity recheck;
-unique constraints prevent double decisions/offers. Demo flags propagate to offers.
-Authenticated ingestion/assessment REST and React core screens are implemented.
-
-## Document assessment workflow
-
-The supported fixture entry point is scripts/assess.ts and the eight-stage Mastra
-adapter packages/infrastructure/src/workflows/document-assessment.ts. Application
-stages live in packages/application/src/document-assessment.ts: local form schema,
-protected-field stripping/local evidence facts, policy selection, verified model
-extraction, exact required-clause retrieval, pure rules, canonical memo, pending
-review persistence. The new input rejects client evidence/verifiedFacts properties.
-No Mastra snapshot storage is configured; originals stay in the private case store.
-
-The local CLI derives non-model facts from supported English evidence layouts;
-unknown purpose, missing certificate/default evidence or contradictory employers
-refer. Permanent employment alone does not prove probation completion. Required
-policy clauses are loaded by edition/product/date from the active reviewed index;
-missing clauses or DBR-source/config drift refer. Records include retrieved IDs,
-executed/skipped/failed stage events, and provider usage even when returned JSON
-later fails validation. Usage unavailable on transport failures remains unknown.
-Saving failure fails the run rather than reporting success. No approval/offer is
-issued. Internal legacy assessment helpers remain test harnesses; public transport
-must use the document workflow and derive identity/synthetic status server-side.
-
-## Versioned policy index
-
-Clause chunking uses pinned cl100k_base tokenization (js-tiktoken1.0.21),800-token
-maximum and60-token overlap only within oversized clauses. Small clauses/tables
-stay intact. This tokenizer is a documented chunking budget, not Gemini usage.
-Index migrations preserve legacy chunks and revision snapshots; a successful
-transaction activates the new pipeline's chunks and deactivates previous ones.
-Failures leave the old active index intact. Historical chunk IDs remain stored
-for earlier citations. Changing bytes under the same reviewed document version
-is rejected rather than silently replacing source evidence.
-
-Numeric questions use a strict structured input contract through `pnpm calculate`.
-The code chooses source-backed policy/pricing and returns calculation citations;
-caller-supplied rates/DBR thresholds are rejected. Conversational number/date
-extraction is not part of this baseline. Q&A returns exact source spans; the
-explicit `text` alias accommodates observed provider JSON without trusting prose.
-
-Implementation is incremental; README and status.md distinguish completed behavior from future work.
-
-## Source-authoritative arithmetic
-
-The pure decimal calculation engine receives thresholds from versioned policy configuration.
-CP-2024 CP-4.1 sets maximum DBR50%; CP-2025 CP-4.1 sets45%. With net income30,000,
-obligations4,000, annual rate24% and60 months, the inverse annuity formula yields
-382,369.7534… at50% and330,228.4234… at45%. Floor to EGP1,000 gives382,000 and330,000.
-Appendix E incorrectly labels the case CP-2025 while retaining382,000 from the50% example.
-The engine does not special-case the example or modify the formula to match Appendix E.
-Tests cover both editions using the same function. EMI rounds half-up to cents; DBR
-is compared using the exact numerator against income multiplied by policy limit,
-not the displayed rounded percentage. Policy configuration is reviewed source-backed
-data, never a request-level override. Pricing must come from parsed CSV rows.
-
-## Evidence modes
-
-Configuration defaults to ASSESSMENT_MODE=strict and ALLOW_DEMO_MODE=false. Missing
-national ID copy in Strict mode produces REFER_TO_HUMAN/MISSING_REQUIRED_EVIDENCE,
-citing CP-8 and PS-7. Explicit enabled Demo is restricted to synthetic cases and can
-assume only ID-copy presence. The result and audit events record the assumption,
-actual missing evidence, actor/time and verified=false. No document is fabricated.
-Other missing evidence, including probation confirmation, still requires referral.
-Demo assessments are never presented as fully evidence-verified; changes of mode
-require a new assessment, not relabeling an earlier result.
-
-## Domain isolation
-
-Case-review ports separate PM-9 written-reason requests from credit decisions.
-Rejection snapshots retain the actual failed criterion, human justification, clause,
-original policy edition/source and decision time. A locked, owner-recorded request
-returns that snapshot in writing and appends request/provision audit events once;
-it never changes assessment status/version. Inclusive30-calendar-day counting
-starts at the recorded rejection date in Cairo (implementation interpretation;
-no separate notification date is supplied). Late first requests are rejected;
-existing replies remain readable. Legacy backfill uses recorded clause/edition
-only; incomplete history requires human review instead of invented reasons.
-
-Referrals route to Senior/Head; standard Credit queues omit them. Independent
-Senior notes cannot clear fraud, waive evidence, approve or reject a referral for
-missing evidence. Verified failures and customer-declined alternatives are the only
-rejection grounds. Fraud routing is an internal record, not external delivery.
-PM-4's two-business-day target is indicative: configurable weekend/holiday dates,
-Friday/Saturday default and no invented public holidays. Neither target nor notes
-change credit rules. All new mutations use session/CSRF, active-user rechecks,
-application/run locks, version/latest-run checks where appropriate and audit logs.
-
-React presentation is split into session shell, application selection/assessment,
-policy questions/calculations, knowledge ingestion and human reviews. A shared
-HTTP client sends HttpOnly cookies and keeps CSRF in memory, never localStorage.
-Session restoration re-reads server identity;401 removes protected screens. Read
-requests cancel on navigation, network errors expose retry/request IDs, assessment
-retry keeps its idempotency key after an uncertain network result. Calculations,
-policy selection and authorization stay on the server. The API exposes canAssess
-and an issued offer ID for relevant controls; these do not replace authorization.
-Demo warnings appear on assessments and offers; saved workflow events are labeled
-as history, not live SSE. React renders source text directly, never raw HTML.
-
-Authenticated REST uses OperationsService application ports, composed by Nest's
-main entry point with existing parsers, knowledge services, calculation functions
-and the eight-stage Mastra workflow. Controllers validate transport shape and
-session/CSRF; the server derives actor identity and reviewed synthetic status.
-Only byte hashes of the five supplied packs are accepted for customer uploads;
-only the seven reviewed manifest documents enter policy knowledge. Original pack
-bytes stay in cases.evidence_documents with owner/reviewer-only downloads. Safe
-application reads omit personal identifiers and protected fields. Q&A masks IDs
-and Egyptian phones before both embedding and generation. Explicit date/edition
-selectors must agree with dates/editions in the question; otherwise fail closed.
-
-Assessment jobs reserve one active run per application under an application lock.
-Idempotency keys bind the application and mode; success replays the immutable
-result, concurrent attempts return409, failures require a new key. Job completion,
-snapshot, latest pointer and audit events commit together. A new attempt can expire
-jobs older than15 minutes; expired jobs cannot persist late results. Decisions
-share the application lock and reject while a reassessment is running; the review
-queue omits superseded runs. Issued applications cannot start another assessment.
-The15-minute lease is fixed for now, not a background queue or resumable worker.
-
-Application defines assessment, authentication and decision repository ports;
-Infrastructure implements PostgreSQL transactions. Assessment snapshots are insert-only,
-while explicit decisions update lifecycle status/version and append audit records.
-The latest-assessment pointer is updated under the same application lock as saving
-new runs, preventing an older run from being approved after reassessment. New entry
-points use the eight-stage document workflow; legacy wrappers are test harnesses.
-
-Pure domain functions have no database, network, NestJS, Mastra or model imports.
-ESLint enforces the infrastructure boundary. Dates use UTC calendar-only values and
-month-end clamping; maturity is compared with the60th birthday. Strict configuration
-validation prevents the string "false" from being treated as a true boolean.
-
-## Architecture and source constraints
+## Architecture and boundaries
 
 ```mermaid
 flowchart TD
-  P[React and Nest presentation] --> A[Application use cases and ports]
-  A --> D[Pure Domain rules and calculations]
-  I[Infrastructure adapters] --> A
+  P[React / Nest controllers] --> A[Application use cases and ports]
+  A --> D[Pure Domain: policy / calculations / rules]
+  I[Infrastructure: TypeORM / pgvector / parsers / Gemini / Mastra] --> A
   I --> D
+  C[API main / CLI composition] --> I
 ```
 
-PostgreSQL knowledge/cases schemas and repositories separate trusted policy from
-untrusted customer evidence. PDF/CSV/MD only, maximum10MiB/file and100 PDF pages;
-no OCR. Clause/page/CSV-row provenance is retained; trusted source hashes live in
-data/config/corpus-manifest.json. Documents at data/corpus are authoritative.
-Provider prompts are files; Application generation/embed interfaces isolate Gemini.
-A new provider implements ports in packages/infrastructure/src/llm and is selected
-at the composition root (scripts/runtime.ts and apps/api/src/main.ts).
+Domain has no database, model, network, NestJS or vector-store imports; ESLint
+checks the boundary. Application owns validation/orchestration and ports.
+Infrastructure implements I/O. Nest controllers bind authenticated transport to
+those use cases; React never supplies authority, evidence verification or synthetic
+status. Evaluation orchestration belongs in scripts/evaluation/runner.ts, not the
+production pipeline. PostgreSQL knowledge/cases schemas isolate trusted policy
+from untrusted case evidence. synchronize=false; explicit TypeORM migrations only.
+`pnpm dev` runs Compose health, the migration CLI and API/web processes; it retains
+the DB on shutdown. It is a local launcher, not production hosting/deployment.
 
-Application date selects half-open policy intervals; missing/ambiguous coverage
-refers. CP2025 income10,000 overrides product's old8,000; PL-100 remains20,000–1m
-and12–60 months despite circular72. Bureau score below600 refers, defaults decline,
-verified hard eligibility failures decline; affordability follows eligibility.
-Age at final maturity uses calendar dates, maximum60th birthday; minimum age21,
-employment6 completed months, stamped salary evidence within60 days. Include all
-bureau obligations/card minima; variable annual commission is not monthly salary.
-Fees: admin1% deducted at disbursement, early settlement2% outstanding, late150EGP;
-do not add them to regular principal/DBR without an applicable source rule.
+## Ingestion and retrieval
 
-Protected fields are removed locally before model/rules; model sees allowlisted
-salary/bureau lines, not form names/IDs/phones. Verify labeled quotes and values,
-not merely a number occurring somewhere. Tampering requires fraud referral. Human
-approval must enforce authority0/250k/500k/1m and different preparer/approver; referred
-approval requires Senior and written justification, exceptions Head approval, and
-pricing deviations Credit Committee authorization. Records retained7 years; written
-rejection reasons cite clause/edition and complaint requests have30-day window.
-Historical pre-March2025 operational procedures are not supplied; do not invent them.
+ParserRegistry dispatches PDF/CSV/MD only, checks extension/MIME/signature,10MiB
+and100 PDF-page limits, then normalizes into a Zod-validated document schema.
+Blank/encrypted/corrupt PDFs fail by name; no OCR is provided. Source text/page/
+CSV-row provenance is retained. Seven policy files are SHA256-manifest trusted;
+five synthetic application PDFs are hash-recognized but never indexed as policy.
 
-Remaining scope: full
-15-case evaluation, then all nine stretches (hybrid BM25+pgvector/RRF, rewriting,
-new synthetic documents, typed agents, SSE, local fallback, second product, offer
-PDF/schedule, per-user usage/cost). PostgreSQL ts_rank is not BM25. Before hybrid,
-retain vector baseline; compare actual results without assuming improvement.
+Clause/page/row-aware chunks use cl100k_base, maximum800 tokens and60 overlap for
+oversized spans. This is a stable budget tokenizer, not Gemini's exact tokenizer.
+Index revisions retain historical chunks/citations; active revision/model/dimensions
+and half-open effective dates filter search. Ingestion is atomic and idempotent;
+one failed file is reported without claiming the entire batch succeeded.
+
+The baseline ranks raw top5 cosine pgvector hits at threshold0.65. PostgreSQL FTS/
+GIN storage exists, but BM25/RRF are not yet implemented; ts_rank is not BM25.
+Evaluation exposed good hits with incomplete final source coverage. A separate
+source-reference context now loads operative income/product/precedence or tenor/
+product/circular clauses when a relevant primary hit exists. It filters the same
+product/date, takes operative clauses before annex comparison rows and does not
+change vector scores/rankings. This is deterministic source completeness, not a
+keyword search, query rewrite or re-ranking stretch.
+
+Generation receives source metadata and exact evidence, chooses quoted spans,
+and the verifier rejects unknown IDs/changed words/numbers (whitespace folding and
+explicit text→quote alias only). After a valid non-refusal selection, the answer
+includes the associated canonical verbatim references so conflicts are not shown
+one-sidedly. Weak primary search, invalid model output or model refusal still
+refuse; linked context cannot create an answer on its own. The interface deliberately
+returns evidence excerpts rather than unrestricted model prose. Date/edition
+selectors and explicit question references must agree; default is today's Cairo
+calendar date. Numeric calculations use the structured calculator, never an LLM.
+
+## Source authority and arithmetic
+
+Application date selects a unique policy edition. CP-2024 applies50% DBR/minimum
+income8000; CP-2025 applies45%/10000 from2025-03-01. PL-100 stays20000–1000000 and
+12–60 months even though Circular2025/02 conditionally allows72. CP-14/PS-3 require
+the stricter product cap; cite both sides. Pricing selects latest applicable CSV
+row by date, tenor and payroll-transfer segment. Policy/pricing values never come
+from the caller. Unsupported/ambiguous dates or rows fail/referral explicitly.
+
+Decimal uses isolated50-digit precision; EMI rounds half up to cents. DBR compares
+exact instalment/obligation values before display rounding; capacity floors to1000.
+One unchanged formula yields EMI8630.39 and max382000 under50% or330000 under45%
+for income30000/debts4000/rate24%/60 months. Appendix E incorrectly labels the50%
+capacity as CP-2025. The actual source policy wins; no example-specific hardcode.
+Eligibility precedes affordability: employment6 completed months, confirmed
+probation, net income, age>=21, final maturity no later than60th birthday, bureau
+score>=600, no default, permitted purpose, salary certificate/stamp within60 days.
+Unknown evidence refers. Below600 refers rather than auto-declines. Product bounds
+are checked. Admin1%, early settlement2% and late150EGP are not silently added to
+principal/DBR without an applicable source rule. Dates clamp calendar month-end.
+
+## Assessment, evidence and privacy
+
+The supported Mastra adapter executes eight typed stages: load form, locally
+remove protected fields/derive evidence facts, select policy, verified extraction,
+retrieve applicable clauses, code rules/calculations, code memo, transactional
+pending-review persistence. Tampering skips model/rules but still records policy
+when a valid form date exists. Missing clauses or source/config drift refer.
+Original packs have no ID copy: Strict is default and refers under CP-8/PS-7.
+Explicit enabled synthetic Demo assumes ID presence only, records actual missing
+reality/actor/time/verified=false in result/audit/offer/reply, and fabricates no ID.
+Permanent employment alone is not completed probation; APP-002/003/005 continue to
+refer even in Demo. Original pack financial-only/rule evaluations must be labeled
+separately from whole-application recommendations; no fixture is silently completed.
+
+Raw forms and protected gender/religion/marital-status/nationality values stay out
+of model/rule input. The model sees only allowlisted salary/bureau labels and source
+provenance, no names/IDs/phones; quoted values are verified against their exact
+labeled source field. Q&A masks14-digit ID/Egyptian phones, not arbitrary PII; do
+not put customer profiles into questions. Injection in customer evidence has no
+authority; APP-004's18000 cannot become injected200000. Fraud routing is recorded
+internally, not claimed externally delivered. React renders text, never model HTML.
+
+Each persisted run records request/actor IDs, stage statuses, retrieved chunk IDs,
+policy edition, removed-field names and reported token usage. Invalid JSON retains
+available usage; unreported usage is null/unknown, never invented zero. Code-filled
+plain memos include mode, evidence, source rules, CSV rate provenance and computed
+numbers, including a safe summary for referrals. No model generates lending numbers.
+Fairness pairs compare sanitized-provider-input hashes, rules, calculations,
+recommendation and canonical memo after only protected attributes change.
+
+## Sessions, human decisions and case review
+
+Server sessions are random32-byte tokens stored only as SHA256 digests; passwords
+are scrypt hashed. HttpOnly/SameSite Strict cookies, CSRF/origin checks, expiry/
+revocation, active-user checks and atomic per-IP login throttle apply. No public
+registration/role-upgrade endpoint. Loan Officer authority0; Credit250k, Senior500k,
+Head1m. Different preparer/approver, current version/latest run, complete eligibility
+and customer alternative acceptance precede approval. Only stored human approval
+can issue, with a source-policy maturity recheck. Demo is never relabeled verified.
+
+Application locks bind one running assessment and idempotency key/mode. Retry
+replays its immutable result; failed attempts need a new key. New attempts expire
+abandoned15-minute jobs and reject late writes. Decisions wait for reassessment;
+issued applications cannot be reassessed. Assessment result/latest pointer/audit/
+usage commit together; queue omits superseded runs. No waiver or pricing exception
+endpoint is provided. Originals and decisions/approver identity remain in private
+case storage with seven-year retention metadata.
+
+Senior/Head handle referrals, with independent written evidence/reassessment/fraud
+notes that never clear missing evidence or change eligibility. Standard Credit
+queues omit referrals. PM-4's two-business-day target is indicative, using the
+configured Fri/Sat/default holiday list; no public holidays are invented. Verified
+failed clauses or a customer-declined alternative support rejection; missing
+ID/fraud/bureau-only referral does not. A notice snapshots failed criterion, human
+justification, applied clause, original edition/source and decision time.
+
+PM-9 requests a written reason, not an appeal outcome. The preparer records the
+applicant request within30 inclusive calendar days of the recorded Cairo rejection
+date (documented interpretation: no separate notification timestamp supplied).
+Locked concurrent retries return one stored deterministic written reply/audit pair,
+without changing credit status/version; replies remain readable after expiry.
+Legacy history is backfilled only from recorded clause/edition; missing history
+requires human review instead of a fabricated response.
+
+## Provider, evaluation and intentional limits
+
+GenerationPort/EmbeddingPort live in packages/application/src/ports.ts. The working
+adapter is packages/infrastructure/src/llm/gemini.ts; API main and scripts/runtime.ts
+compose it using local config. To add another provider, add an adapter file under
+that llm directory implementing the same ports, validate its configuration and
+select it at those composition roots; no Domain or assessment-stage edits are
+needed. Only Gemini is currently shipped for runtime use; fake providers are
+explicit test injection. Ollama fallback remains a later stretch.
+
+The frozen fifteen-case live baseline and failed first run are committed as JSON;
+EVALUATION.md defines denominators, source-context distinction and limitations.
+Offline CI uses deterministic source/provider fixtures, explicitly not measured
+semantic quality. Live runs use isolated *_eval DBs, known source-vector reuse and
+fresh query/generation calls. No raw credentials/customer forms are exported.
+
+Plain memo wording is an intentional acceptable cut, not missing calculations.
+All nine stretches still follow the passing functional core gate. Final submission
+video, interactive clean-clone review and the missing fourth actual commit date
+remain explicit readiness gaps; the measured functional gate does not certify
+those deliverables. No paid-provider cost, general quality or deployment is claimed.
