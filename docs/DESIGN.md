@@ -105,7 +105,8 @@ evidence extraction, operative policy retrieval and code memo operations as tool
 The provider proposes one tool call in a strict JSON contract. A bridge passes
 only validated calls into Mastra. Arguments must be empty because the workflow
 already binds the sanitized evidence, edition, effective date, product and
-assessment result. The planner sees a generic task and receives a tool receipt.
+assessment result. The planner sees a generic task. The Mastra runtime receives
+a tool receipt, and the result stays in the assessment workflow.
 Each role gets one planning turn and can execute its single tool once. A rejected
 or unavailable plan uses the baseline operation. A started tool retains its normal
 failure semantics. Preflight referrals and fraud stay on the code-only path.

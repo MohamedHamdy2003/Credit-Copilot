@@ -112,7 +112,7 @@ used 5.531 GiB after the run. Recorded in ollama-fallback-smoke.json.
 Locally passed 111 unit, 32 integration, 8 Chromium, offline 15/15 and
 type checks, lint, format, and build. Implementation and evidence are in PR23.
 
-## Typed agent implementation
+## Verified typed agents
 
 Opt in with ASSESSMENT_ORCHESTRATION=agents in API and CLI. Each of three
 Mastra agents requests one tool through a strict provider JSON contract. The
@@ -120,13 +120,17 @@ server binds sanitized extraction inputs, dated policy scope and verified
 memo inputs. A rejected or unavailable planner routes the same operation through
 the baseline. A started tool never reruns. Preflight referrals skip model calls.
 Tool outcomes and planner usage are recorded without prompts or applicant data.
-The workflow default and existing lifecycle remain. The first live run scored
-12/15 after Gemini became unavailable. Its report is retained. A paced repeat
-will measure actual tool execution without changing the assessment runtime.
+The first live run scored 12/15 after Gemini became unavailable and is retained.
+A clean rerun at 2cf9a5d with 6500 ms generation pacing passed 15/15 and verified
+18 executed and persisted tool calls, security/audit 94/94, exact numerics 17/17,
+hit@5 4/4 and Strict packs 5/5. Paired tests matched all original packs in Strict
+and Demo. Local checks passed 121 unit, 32 integration, 8 Chromium, both offline
+suites 15/15, type checks, lint, formatting and build. See PR25 and the reports
+under data/evaluation/results.
 
 ## Next and honest readiness
 
-Typed Tool-Calling Agents (P13) is next in the PR plan. Six stretches remain.
+SSE Streaming (P14) is next in the PR plan. Five stretches remain.
 The core memo and audit use plain wording as allowed by the brief. Final video and interactive clean-clone
 walkthrough are pending. Before this feature history had25 non-merge commits over
 only3 real Cairo dates(17,19,20 November); four-date brief requirement is unmet.
