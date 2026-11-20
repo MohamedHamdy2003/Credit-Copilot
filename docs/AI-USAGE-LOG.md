@@ -1,5 +1,13 @@
 # AI usage log
 
+## 2026-11-20 query rewriting
+
+Codex added a typed lexical expansion budget and tested the original and expanded
+glossary queries against one PostgreSQL snapshot. Integration checks exercise
+a qualifying promotion, preserved original hits, product and date constraints,
+an unchanged embedding input and the human approval bypass. Gemini measured
+the existing 15 cases at clean commit `a1b855b`. The glossary ran locally.
+
 ## 2026-11-20 hybrid retrieval
 
 Codex implemented PostgreSQL BM25 and reciprocal rank fusion over the existing

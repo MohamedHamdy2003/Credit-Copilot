@@ -1,9 +1,8 @@
 # Current checkpoint —20 November2026
 
-Read agent.md and FEATURES.md first. Current feature: feature/hybrid-search.
-Core evaluation went through PR17 into dev and PR18 into main after green CI.
-Hybrid implementation and evidence are in PR19. Check GitHub for merge status.
-The measured core and hybrid gates pass. Final submission work is listed below.
+Read agent.md and FEATURES.md first. Current feature: feature/query-rewriting.
+Core evaluation went through PR17/18 and hybrid search through PR19/20 after CI.
+Hybrid is on main at 527886d. Query rewriting and evidence are in PR21.
 
 ## Implemented
 
@@ -79,11 +78,28 @@ with ProviderUnavailable in Q03 and Q02 respectively. All reports are committed.
 The evaluator retains ranks before generation and allows at most two upstream
 case retries per live run. Case-level retries used in the passing report: 0.
 
+## Verified query rewriting
+
+Hybrid Q&A appends up to two fixed search aliases by default. The original masked
+question drives the embedding, original lexical search and evidence generation.
+Both lexical variants use one database snapshot and the same trusted scope.
+An alternate only fills an original slot below the configured cosine floor if
+it is new and passes the floor. Approval bypasses use the original search.
+Set QUERY_REWRITE_MAX_EXPANSIONS=0 to disable it, or compare pnpm evaluate --hybrid
+and pnpm evaluate --rewrite. Local 100 unit, 31 integration and 8 Chromium
+checks passed. The offline suite passed 15/15, and type, lint, format and build
+checks passed.
+
+Clean Gemini run a1b855b passed 15/15 with hit@5 4/4, citation coverage 8/8,
+OOC refusals 3/3, exact numerics 17/17, security/audit 80/80 and Strict packs 5/5.
+Glossary expansion ran for Q01, Q02, Q03 and promoted 0 candidates. The run used
+7 embedding calls, 12 generation calls and 0 case-level provider retries. See
+query-rewrite-core-evaluation.json for the trace and case results.
+
 ## Next and honest readiness
 
-Query Rewriting is next. Preserve date, product and user intent, and compare with
-the hybrid benchmark. Eight stretches remain. The core memo and audit use plain
-wording as allowed by the brief. Final video and interactive clean-clone
+Local Model Fallback (P12) is next in the PR plan. Seven stretches remain.
+The core memo and audit use plain wording as allowed by the brief. Final video and interactive clean-clone
 walkthrough are pending. Before this feature history had25 non-merge commits over
 only3 real Cairo dates(17,19,20 November); four-date brief requirement is unmet.
 Never fabricate dates, history, billing costs or final submission status. No email

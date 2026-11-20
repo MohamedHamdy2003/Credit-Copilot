@@ -12,7 +12,7 @@ try {
       await answerPolicyQuestion(
         { question, asOfDate },
         {
-          search: new RetrievalService(db, provider, config.RETRIEVAL_STRATEGY),
+          search: new RetrievalService(db, provider, config.RETRIEVAL_STRATEGY, config),
           provider,
           prompt: await readFile('prompts/questions.txt', 'utf8'),
           minimumSimilarity: config.RETRIEVAL_MIN_SIMILARITY,

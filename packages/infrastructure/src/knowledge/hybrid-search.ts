@@ -8,7 +8,7 @@ export const eligibleChunks = `
 
 // Use the GIN-indexed tsvector for matches and its positions for term frequencies
 // and document lengths. Corpus statistics cover every eligible chunk.
-export const hybridSearch = `
+const rankHybridSearch = (lexicalInput: '$8' | 'variant.question') => `
   WITH eligible AS NOT MATERIALIZED (
     SELECT c.id, c.metadata, c.search_vector, e.embedding
     ${eligibleChunks}
@@ -20,7 +20,7 @@ export const hybridSearch = `
     LIMIT $7
   ),
   query_terms AS (
-    SELECT unnest(tsvector_to_array(to_tsvector('english', $8))) AS lexeme
+    SELECT unnest(tsvector_to_array(to_tsvector('english', ${lexicalInput}))) AS lexeme
   ),
   lexical_query AS (
     SELECT string_agg(array_to_tsvector(ARRAY[lexeme])::text, ' | ')::tsquery AS terms
@@ -89,3 +89,12 @@ export const hybridSearch = `
   FROM fused JOIN eligible USING (id)
   ORDER BY fused.rrf_score DESC, fused.id
   LIMIT $6`;
+
+export const hybridSearch = rankHybridSearch('$8');
+
+// Evaluate both lexical inputs against a single PostgreSQL snapshot.
+export const hybridSearchWithRewrite = `
+  SELECT variant.kind, hit.*
+  FROM (VALUES ('original', $8::text), ('rewrite', $9::text)) variant(kind, question)
+  CROSS JOIN LATERAL (${rankHybridSearch('variant.question')}) hit
+  ORDER BY variant.kind, (hit.ranking->>'rrfScore')::double precision DESC, hit.chunk->>'id'`;

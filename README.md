@@ -53,13 +53,14 @@ pnpm test:e2e
 pnpm build
 pnpm evaluate --vector
 pnpm evaluate --hybrid
+pnpm evaluate --rewrite
 ```
 
 integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ شغّلها بالتتابع. لو غير موجودة، أنشئها مرة عبر `docker compose exec -T db psql -U copilot -d postgres -c "CREATE DATABASE credit_copilot_test"`. e2e تفرغ حسابات/طلبات قاعدة الاختبار، وتشغّل API4304 وVite5174. الصور/traces خارج Git. offline لا يقيس جودة semantic/LLM.
 
 `pnpm evaluate` يشغّل15 حالة فعلية عبر Gemini في قاعدة منفصلة تنتهي بـ_eval، وينشئها إن كانت صلاحية المستخدم تسمح. لا يغيّر بيانات الطلبات في قاعدة التطبيق. يقرأ cache موثوقًا لمتجهات السياسات المطابقة للنص/model/dimensions، بينما embeddings الأسئلة والاستدعاءات التوليدية live. يحفظ كل تشغيل، حتى الفاشل، في `artifacts/evaluation/`، ويخرج بكود فشل إذا لم تمر البوابة. يلزم مفتاح وquota؛ هذا الأمر يستهلكها.
 
-الحالات الذهبية في `data/evaluation/cases.json` والتقارير الفعلية في `data/evaluation/results/`. الـvector والـhybrid عدّوا 15/15 وhit@5 كان 4/4 في الوضعين على الأسئلة القابلة للإجابة. شغّل `pnpm evaluate --vector` و`pnpm evaluate --hybrid` للمقارنة. البحث الافتراضي يدمج BM25 وpgvector بـRRF، وQ&A يطبّق عتبة الـcosine على الأدلة. التفاصيل وتقارير الفشل في `docs/EVALUATION.md`. `pnpm evaluate:smoke` يحتفظ بفحص الـvector القديم لخمس حالات، و`pnpm evaluate:offline` يشغّل regression tests بسيطة من غير DB.
+الحالات الذهبية في `data/evaluation/cases.json` والتقارير الفعلية في `data/evaluation/results/`. الـvector والـhybrid عدّوا 15/15 وhit@5 كان 4/4 في الوضعين على الأسئلة القابلة للإجابة. شغّل `pnpm evaluate --vector` و`pnpm evaluate --hybrid` و`pnpm evaluate --rewrite` للمقارنة. البحث الافتراضي يدمج BM25 وpgvector بـRRF ويضيف مصطلحات بحث من قاموس ثابت. التقييم مع إعادة الصياغة حقق 15/15 وhit@5 ‏4/4. التفاصيل وتقارير الفشل في `docs/EVALUATION.md`. `pnpm evaluate:smoke` يحتفظ بفحص الـvector القديم لخمس حالات، و`pnpm evaluate:offline` يشغّل regression tests بسيطة من غير DB.
 
 ## Configuration
 
@@ -75,7 +76,8 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 | GENERATION_MODEL | gemini-3.5-flash-lite؛ اسم النموذج المسجل في القياس |
 | EMBEDDING_MODEL / EMBEDDING_DIMENSIONS | gemini-embedding-001 /768؛ تغييرهما يحتاج إعادة فهرسة وbaseline جديد |
 | RETRIEVAL_STRATEGY | hybrid افتراضيًا؛ vector لتشغيل البحث الدلالي وحده |
-| RETRIEVAL_MIN_SIMILARITY | 0.65؛ عتبة cosine للأدلة في الوضعين |
+| RETRIEVAL_MIN_SIMILARITY | 0.65 عتبة cosine للأدلة |
+| QUERY_REWRITE_MAX_EXPANSIONS | 2 مصطلح إضافي كحد أقصى افتراضيًا في hybrid. من 0 إلى 4. قيمة 0 توقف إعادة الصياغة |
 | ASSESSMENT_MODE / ALLOW_DEMO_MODE | strict /false؛ Demo يحتاج تمكينًا واختيارًا صريحًا لبيانات synthetic |
 | UPLOAD_MAX_BYTES | 10485760؛ PDF/CSV/MD، وحد100 صفحة PDF، بلا OCR |
 | DEMO_PASSWORD | محلي12–256 حرفًا لإنشاء حسابات التدريب |
@@ -97,6 +99,6 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 
 **ما يُرسل إلى Gemini:** للسياسات: السؤال بعد إخفاء ID ذي14 رقمًا والتليفونات المصرية، ونصوص السياسات المسترجعة ومراجعها. للاستخراج: اسم pack، الصفحة/القسم، وأربعة أنواع سطور فقط: صافي الدخل، الالتزامات، بدء العمل والـbureau score. لا تُرسل الاستمارة الخام أو الأسماء أو قيم gender/religion/marital status/nationality أو صورة البطاقة. لا تدخل بيانات أشخاص في الأسئلة؛ masking ليس redaction عامًا لكل شكل PII. تحفظ النسخ الأصلية في cases الخاصة مع صلاحية owner/reviewer، ولا تُعرض مخرجات النموذج كـHTML.
 
-البوابة الوظيفية اجتازت العينة المحددة؛ هذا ليس تعميمًا لجودة RAG. تكلفة الفاتورة وتوكنات embedding/retries غير متاحة من الـports وتُسجل unknown. كل الـstretch goals لاحقًا حسب FEATURES.md. التسليم النهائي ما زال يحتاج فيديو3–5 دقائق ومراجعة clean-clone؛ تاريخ Git الفعلي يغطي3 أيام Cairo فقط، وليس4، ولن نصطنع تاريخ commits. لا توجد رسالة تقديم أو نشر تلقائي.
+البوابة الوظيفية اجتازت العينة المحددة؛ هذا ليس تعميمًا لجودة RAG. تكلفة الفاتورة وتوكنات embedding/retries غير متاحة من الـports وتُسجل unknown. Hybrid Search وQuery Rewriting اكتملوا. باقي المراحل في FEATURES.md. التسليم النهائي ما زال يحتاج فيديو3–5 دقائق ومراجعة clean-clone؛ تاريخ Git الفعلي يغطي3 أيام Cairo فقط، وليس4، ولن نصطنع تاريخ commits. لا توجد رسالة تقديم أو نشر تلقائي.
 
 اقرأ `docs/DESIGN.md` للقرارات، `docs/EVALUATION.md` للأرقام، `docs/AI-USAGE-LOG.md` لاستخدام AI، و`FEATURES.md` للحالة.

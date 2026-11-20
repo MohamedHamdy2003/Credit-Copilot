@@ -49,6 +49,17 @@ actual cosine similarity of at least 0.65 by default, including for candidates
 found only by BM25. Set `RETRIEVAL_STRATEGY=vector` for the cosine-only baseline.
 The existing indexes and ingestion pipeline support both modes.
 
+Hybrid Q&A also supports deterministic query rewriting. A fixed glossary appends
+up to two equivalent search phrases by default. The original masked question
+drives the embedding, original hybrid rank, source lookup and evidence prompt.
+PostgreSQL scores the two lexical variants within one database snapshot using
+the same product, effective date, active revisions and vector. The alternate
+can replace an original candidate below the cosine floor only with a different
+candidate that clears the floor. Qualified original hits keep their slots.
+The original search handles unsupported aliases, disabled budgets and approval
+bypass requests. Set `QUERY_REWRITE_MAX_EXPANSIONS` between 0 and 4. Zero runs the
+plain hybrid search. A rewrite adds no provider calls.
+
 With a qualifying primary hit, a separate date- and product-filtered lookup can
 load the operative income, tenor or approval procedure clauses. It takes the
 operative clauses before annex comparison rows. Relevant approval bypass
