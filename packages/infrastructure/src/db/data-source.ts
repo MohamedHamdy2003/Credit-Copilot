@@ -5,6 +5,7 @@ import { IndexRevisions1794916800001 } from './migrations/IndexRevisions.js';
 import { ApprovalAccess1794916800002 } from './migrations/ApprovalAccess.js';
 import { LatestAssessment1794916800003 } from './migrations/LatestAssessment.js';
 import { AssessmentJobs1794916800004 } from './migrations/AssessmentJobs.js';
+import { CaseReviews1794916800005 } from './migrations/CaseReviews.js';
 export function createDataSource(url: string) {
   return new DataSource({
     type: 'postgres',
@@ -18,6 +19,7 @@ export function createDataSource(url: string) {
       ApprovalAccess1794916800002,
       LatestAssessment1794916800003,
       AssessmentJobs1794916800004,
+      CaseReviews1794916800005,
     ],
   });
 }

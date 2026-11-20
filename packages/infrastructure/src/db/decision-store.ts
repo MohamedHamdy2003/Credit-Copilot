@@ -8,6 +8,7 @@ import { addMonths, compareMoney } from '../../../domain/src/calculations.js';
 import { parseApplicationForm } from '../../../application/src/application-form.js';
 import type { NormalizedDocument } from '../../../contracts/src/documents.js';
 import { selectPolicy, type Policy } from '../../../domain/src/policy.js';
+import { rejectionClauses } from '../../../domain/src/review-policy.js';
 interface RunRow {
   latest_assessment_id?: string | null;
   id: string;
@@ -41,7 +42,8 @@ export class PostgresDecisionStore implements DecisionStore {
   async queue(actor: Actor) {
     requireReviewer(actor);
     return this.db.query(
-      "SELECT r.id,r.application_id,r.status,r.version,r.result->>'recommendation' AS recommendation,r.result->>'recommendedAmount' AS recommended_amount,r.created_at FROM cases.assessment_runs r JOIN cases.applications a ON a.id=r.application_id WHERE r.status IN ('pending_review','pending_approval','pending_customer_acceptance') AND (a.latest_assessment_id IS NULL OR a.latest_assessment_id=r.id) ORDER BY r.created_at,r.id",
+      "SELECT r.id,r.application_id,r.status,r.version,r.result->>'recommendation' AS recommendation,r.result->>'recommendedAmount' AS recommended_amount,r.created_at FROM cases.assessment_runs r JOIN cases.applications a ON a.id=r.application_id WHERE r.status IN ('pending_review','pending_approval','pending_customer_acceptance') AND (a.latest_assessment_id IS NULL OR a.latest_assessment_id=r.id) AND (r.recommendation<>'REFER_TO_HUMAN' OR $1) ORDER BY r.created_at,r.id",
+      [['senior', 'head'].includes(actor.tier)],
     );
   }
   async execute(actor: Actor, runId: string, command: DecisionCommand, requestId: string) {
@@ -198,36 +200,55 @@ export class PostgresDecisionStore implements DecisionStore {
             'Referral decisions require Senior Credit Officer',
             403,
           );
-        const failed = (result.results ?? [])
-          .filter((r) => r.result !== 'pass')
-          .map((r) => r.rule.split(' ')[0]);
         const customerDeclined = (await manager.query(
           'SELECT accepted FROM cases.customer_responses WHERE run_id=$1',
           [runId],
         )) as { accepted: boolean }[];
-        const allowed = [
-          ...failed,
-          ...(result.citations ?? result.evidence.referral?.citations ?? []),
-        ];
-        if (customerDeclined[0]?.accepted === false) allowed.push('CP-4.1');
+        const allowed = rejectionClauses({
+          fraudReferral: result.fraudReferral,
+          missing: result.evidence.missing,
+          results: result.results ?? [],
+          customerDeclined: customerDeclined[0]?.accepted === false,
+        });
         invariant(
           allowed.includes(command.clause),
           'InvalidRejectionReason',
-          'Rejection must cite a failed/missing requirement or declined alternative',
+          'Rejection must cite a verified failed clause or declined alternative',
         );
+        const policy = this.policies.find((p) => p.edition === result.policyEdition);
+        invariant(
+          policy,
+          'PolicyUnavailable',
+          'Original policy edition is required for written reasons',
+          409,
+        );
+        const approvalId = randomUUID();
+        const sourceFile = command.clause.startsWith('PS-')
+          ? 'product-sheet-personal-loan.md'
+          : policy.sourceFile;
+        const criterion =
+          result.results?.find(
+            (r) => r.result === 'fail' && r.rule.split(' ')[0] === command.clause,
+          )?.reason ?? 'Customer declined the maximum eligible alternative under CP-4.1';
+        const writtenReason = `${criterion}. Reviewer justification: ${command.comment}`;
         await manager.query(
           'INSERT INTO cases.approvals(id,run_id,approver_id,decision,comment,assessment_version) VALUES($1,$2,$3,$4,$5,$6)',
           [
-            randomUUID(),
+            approvalId,
             runId,
             actor.id,
             'rejected',
-            `${command.clause}: ${command.comment}`,
+            `${command.clause}: ${writtenReason}`,
             run.version,
           ],
         );
+        await manager.query(
+          'INSERT INTO cases.rejection_notices(run_id,approval_id,clause,policy_edition,source_file,reason_text) VALUES($1,$2,$3,$4,$5,$6)',
+          [runId, approvalId, command.clause, policy.edition, sourceFile, writtenReason],
+        );
         next = 'rejected';
         await audit('ASSESSMENT_REJECTED', {
+          sourceFile,
           clause: command.clause,
           edition: result.policyEdition,
           comment: command.comment,

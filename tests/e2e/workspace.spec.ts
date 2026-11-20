@@ -1,6 +1,20 @@
 import { test, expect, type Page } from '@playwright/test';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { Client } from 'pg';
+test.beforeEach(async () => {
+  const url =
+    process.env.TEST_DATABASE_URL ??
+    'postgresql://copilot:copilot_local@localhost:54329/credit_copilot_test';
+  if (!new URL(url).pathname.endsWith('_test')) throw new Error('Dedicated test DB required');
+  const db = new Client({ connectionString: url });
+  await db.connect();
+  try {
+    await db.query('DELETE FROM cases.login_attempts');
+  } finally {
+    await db.end();
+  }
+});
 const shot = (name: string) => join(tmpdir(), `credit-copilot-${name}.png`);
 async function login(page: Page, username: string) {
   await page.goto('/');
@@ -169,4 +183,61 @@ test('expired session clears protected UI and a network outage can be retried', 
   await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible();
   await expect(page.getByText('Your session ended.', { exact: false })).toBeVisible();
   await expect(page.getByRole('navigation')).toHaveCount(0);
+});
+test('PM-9 request returns the original written human rejection without changing lifecycle', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await login(page, 'reasons');
+  await expect(page).toHaveTitle('Credit Copilot');
+  await page.getByRole('button', { name: 'Open TEST-DECLINE', exact: true }).click();
+  await page
+    .getByLabel('Request message (optional)')
+    .fill('Please provide the decision reason in writing.');
+  await page.getByRole('button', { name: 'Request written reason', exact: true }).click();
+  const reply = page.getByRole('article', { name: 'Written reply' });
+  await expect(reply).toContainText('CP-3.5 · CP-2025');
+  await expect(reply).toContainText('credit-policy-2025.pdf');
+  await expect(reply).toContainText('Demo decision — not fully evidence-verified.');
+  await expect(
+    page.getByRole('button', { name: 'Request written reason', exact: true }),
+  ).toHaveCount(0);
+  await reply.screenshot({ path: shot('reply-detail') });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: shot('written-reason'), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(reply).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: shot('written-reason-mobile'), fullPage: true });
+  expect(errors).toEqual([]);
+});
+test('Senior records an internal referral review without approving or rejecting missing evidence', async ({
+  page,
+}) => {
+  await login(page, 'reasons');
+  await add(page, 'APP-001');
+  await page.getByRole('button', { name: 'Run assessment', exact: true }).click();
+  await expect(page.getByText('Missing evidence: national id copy')).toBeVisible();
+  const records = (await (await page.request.get('/api/v1/applications')).json()) as {
+    reference: string;
+    latest_assessment_id: string;
+  }[];
+  const id = records.find((r) => r.reference === 'APP-001')!.latest_assessment_id;
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await login(page, 'head');
+  await page.getByRole('button', { name: 'Review queue', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Senior referral queue' })).toBeVisible();
+  await page.getByRole('button', { name: `Review referral ${id}`, exact: true }).click();
+  await page
+    .getByLabel('Referral justification')
+    .fill('Await the actual required ID evidence before reassessment.');
+  await page.getByRole('button', { name: 'Record referral review', exact: true }).click();
+  await expect(
+    page.getByText('Await the actual required ID evidence before reassessment.', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Record decision', exact: true })).toHaveCount(0);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: shot('referral-review'), fullPage: true });
 });
