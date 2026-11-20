@@ -42,6 +42,7 @@ jobs:
       - run: pnpm db:migrate
       - run: pnpm test:integration
       - run: pnpm evaluate:core:offline
+      - run: pnpm evaluate --offline-agents
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
       - run: pnpm build

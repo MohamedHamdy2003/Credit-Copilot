@@ -8,8 +8,16 @@ export class OfflineEvaluationProvider extends FakeEmbedding {
   async completeStructured(_system: string, data: string): Promise<Completion> {
     const value = JSON.parse(data) as {
       question?: string;
+      assessmentAgent?: string;
+      tool?: string;
       evidence: { text: string; chunkId?: string; section?: string }[];
     };
+    if (value.assessmentAgent)
+      return {
+        model: 'test-only-evaluation',
+        usage: { inputTokens: null, outputTokens: null },
+        value: { tool: value.tool, arguments: {} },
+      };
     if (value.question)
       return {
         model: 'test-only-evaluation',

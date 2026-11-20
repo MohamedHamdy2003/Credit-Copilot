@@ -16,6 +16,7 @@ import { PostgresAssessmentClauses } from './knowledge/assessment-clauses.js';
 import { PostgresAssessmentRepository } from './db/assessment-repository.js';
 import { PostgresApplicationStore } from './db/application-store.js';
 import { createDocumentAssessmentWorkflow } from './workflows/document-assessment.js';
+import { assessmentAgents } from './workflows/assessment-agents.js';
 export async function createOperations(
   db: DataSource,
   provider: GenerationPort & EmbeddingPort,
@@ -78,6 +79,7 @@ export async function createOperations(
     assess: async (input, context) => {
       const workflow = createDocumentAssessmentWorkflow({
         provider,
+        agents: assessmentAgents(config.ASSESSMENT_ORCHESTRATION),
         prompt: extractionPrompt,
         policies,
         product,

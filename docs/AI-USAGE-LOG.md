@@ -1,5 +1,14 @@
 # AI usage log
 
+## 2026-11-20 typed assessment agents
+
+Codex wired three Mastra agents to the existing source-verified operations.
+The provider proposes a bounded JSON tool call, and the server binds the task
+inputs. The paired fixture test verifies parity and rejects scope changes,
+unauthorized tools and multiple requests. The live run at `2cf9a5d` verified
+18 tool executions and their audit rows. The first report records the
+provider failure and the repeat uses explicit pacing.
+
 ## 2026-11-20 local Ollama fallback
 
 Codex implemented bounded Gemini-to-Ollama generation fallback and kept the

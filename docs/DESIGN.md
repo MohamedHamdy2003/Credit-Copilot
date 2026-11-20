@@ -100,6 +100,20 @@ principal/DBR without an applicable source rule. Dates clamp calendar month-end.
 
 ## Assessment, evidence and privacy
 
+With `ASSESSMENT_ORCHESTRATION=agents`, three Mastra agents invoke the existing
+evidence extraction, operative policy retrieval and code memo operations as tools.
+The provider proposes one tool call in a strict JSON contract. A bridge passes
+only validated calls into Mastra. Arguments must be empty because the workflow
+already binds the sanitized evidence, edition, effective date, product and
+assessment result. The planner sees a generic task. The Mastra runtime receives
+a tool receipt, and the result stays in the assessment workflow.
+Each role gets one planning turn and can execute its single tool once. A rejected
+or unavailable plan uses the baseline operation. A started tool retains its normal
+failure semantics. Preflight referrals and fraud stay on the code-only path.
+The assessment persists `ASSESSMENT_AGENT_TOOL` events and planner usage separately.
+The default `workflow` mode runs the same operations directly.
+[Mastra typed tools](https://mastra.ai/reference/tools/create-tool)
+
 The supported Mastra adapter executes eight typed stages: load form, locally
 remove protected fields/derive evidence facts, select policy, verified extraction,
 retrieve applicable clauses, code rules/calculations, code memo, transactional
