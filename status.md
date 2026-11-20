@@ -1,9 +1,9 @@
 # Current checkpoint —20 November2026
 
 Read agent.md and FEATURES.md first. Current feature: feature/hybrid-search.
-Previous referrals PR15/16 merged on main0c96d9e, CI44721070688 green. Check git/PRs
-for current promotion. Functional core gate passes measured15 cases; this is not
-final-submission certification. Hybrid BM25+pgvector/RRF is next.
+Core evaluation went through PR17 into dev and PR18 into main after green CI.
+Hybrid implementation and evidence are in PR19. Check GitHub for merge status.
+The measured core and hybrid gates pass. Final submission work is listed below.
 
 ## Implemented
 
@@ -58,10 +58,9 @@ Clean live vector baseline f04a6dc passed 15/15, hit@5 4/4, evidence coverage
 8/8, OOC 3/3, exact numerics 17/17, security/audit 80/80 and Strict packs 5/5.
 Gemini reported 7666 input and 1891 output tokens across 12 generation calls,
 with 7 query embeddings. Immutable report published as vector-core-baseline.json.
-Both the 11/15 and 14/15 failure reports remain committed. Core promotion through
-green feature→dev and dev→main PRs follows this evidence.
+Both the 11/15 and 14/15 vector failure reports remain committed.
 
-## Hybrid implementation checkpoint
+## Verified hybrid search
 
 PostgreSQL BM25 uses existing GIN-backed lexemes and positions with statistics
 scoped to the same active revision/date/product/model/dimensions as pgvector.
@@ -70,15 +69,21 @@ cosine similarity against 0.65. Hybrid is the default for policy Q&A and ask;
 RETRIEVAL_STRATEGY=vector and pnpm evaluate --vector retain the baseline.
 No additional migration or re-ingestion required. Two added PostgreSQL tests
 verify exact BM25 scores, shared filters, ties, deduplication and single-branch
-matches. Local 95 unit and 30 integration tests, type checks, lint, format and
-build passed. The clean live hybrid evaluation and comparison follow.
+matches. Local 96 unit, 30 integration and 8 Chromium checks passed, along with
+offline 15/15, type checks, lint, format and build.
+
+Clean hybrid run 7e9832f passed 15/15, hit@5 4/4, evidence coverage 8/8, OOC 3/3,
+numerics 17/17, security/audit 80/80 and Strict packs 5/5. First result hit was
+4/4, compared with 4/4 for vector. The first two hybrid runs returned 14/15
+with ProviderUnavailable in Q03 and Q02 respectively. All reports are committed.
+The evaluator retains ranks before generation and allows at most two upstream
+case retries per live run. Case-level retries used in the passing report: 0.
 
 ## Next and honest readiness
 
-Hybrid BM25+vector/RRF with real before/after evaluation using same corpus, dates,
-model/dimensions, questions, threshold and source-context policy. All9 stretches
-still pending. Functional core memo/audit rows are baseline-complete; plain wording
-is an intentional cut allowed by the brief. Final video and interactive clean-clone
+Query Rewriting is next. Preserve date, product and user intent, and compare with
+the hybrid benchmark. Eight stretches remain. The core memo and audit use plain
+wording as allowed by the brief. Final video and interactive clean-clone
 walkthrough are pending. Before this feature history had25 non-merge commits over
 only3 real Cairo dates(17,19,20 November); four-date brief requirement is unmet.
 Never fabricate dates, history, billing costs or final submission status. No email

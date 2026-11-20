@@ -59,7 +59,7 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 
 `pnpm evaluate` يشغّل15 حالة فعلية عبر Gemini في قاعدة منفصلة تنتهي بـ_eval، وينشئها إن كانت صلاحية المستخدم تسمح. لا يغيّر بيانات الطلبات في قاعدة التطبيق. يقرأ cache موثوقًا لمتجهات السياسات المطابقة للنص/model/dimensions، بينما embeddings الأسئلة والاستدعاءات التوليدية live. يحفظ كل تشغيل، حتى الفاشل، في `artifacts/evaluation/`، ويخرج بكود فشل إذا لم تمر البوابة. يلزم مفتاح وquota؛ هذا الأمر يستهلكها.
 
-الحالات الذهبية في `data/evaluation/cases.json` والتقارير الفعلية في `data/evaluation/results/`. الـvector baseline عدّى 15/15 وhit@5 كان 4/4 على الأسئلة القابلة للإجابة. شغّل `pnpm evaluate --vector` و`pnpm evaluate --hybrid` للمقارنة. البحث الافتراضي يدمج BM25 وpgvector بـRRF، وQ&A يطبّق عتبة الـcosine على الأدلة. التفاصيل وتقارير الفشل في `docs/EVALUATION.md`. `pnpm evaluate:smoke` يحتفظ بفحص الـvector القديم لخمس حالات، و`pnpm evaluate:offline` يشغّل regression tests بسيطة من غير DB.
+الحالات الذهبية في `data/evaluation/cases.json` والتقارير الفعلية في `data/evaluation/results/`. الـvector والـhybrid عدّوا 15/15 وhit@5 كان 4/4 في الوضعين على الأسئلة القابلة للإجابة. شغّل `pnpm evaluate --vector` و`pnpm evaluate --hybrid` للمقارنة. البحث الافتراضي يدمج BM25 وpgvector بـRRF، وQ&A يطبّق عتبة الـcosine على الأدلة. التفاصيل وتقارير الفشل في `docs/EVALUATION.md`. `pnpm evaluate:smoke` يحتفظ بفحص الـvector القديم لخمس حالات، و`pnpm evaluate:offline` يشغّل regression tests بسيطة من غير DB.
 
 ## Configuration
 

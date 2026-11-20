@@ -23,7 +23,7 @@
 
 وكل الـ**stretch goals** التالية مطلوبة، وهتتنفذ بعد نجاح الـcore:
 
-1. **Hybrid Search:** ‏BM25 + pgvector، ودمج النتائج بـRRF، مع مقارنة قبل/بعد.
+1. **Hybrid Search:** ✅ ‏BM25 + pgvector، ودمج بـRRF. ‏Gemini سجّل 15/15 وhit@5 ‏4/4 في الوضعين.
 2. **Query Rewriting:** تحسين صياغة البحث مع الحفاظ على التاريخ والمنتج والمقصود.
 3. **Synthetic Corpus Extension:** مستندات وحالات اختبار جديدة.
 4. **Typed Tool-Calling Agents:** ثلاثة agents للاستخراج، وبحث السياسات، والمذكرة.
@@ -33,4 +33,4 @@
 8. **Offer PDF & Repayment Schedule:** خطاب العرض المعتمد وجدول الأقساط.
 9. **Per-user Token & Cost Tracking:** متابعة الاستخدام والتكلفة لكل مستخدم وتقييم.
 
-**أول feature هنكملها:** Hybrid Search: ‏BM25 + pgvector + RRF، مع مقارنة حقيقية بنفس الحالات والـbaseline المحفوظ. البوابة الوظيفية نجحت؛ الفيديو ومراجعة التسليم وشرط أربعة تواريخ commits ما زالوا متبقّيين.
+**الـfeature اللي عليها الدور:** Query Rewriting بعد اكتمال Hybrid Search ومقارنته بالـvector baseline. البوابة الوظيفية نجحت؛ الفيديو ومراجعة التسليم وشرط أربعة تواريخ commits ما زالوا متبقّيين.
