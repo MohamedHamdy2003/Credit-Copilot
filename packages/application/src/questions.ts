@@ -5,6 +5,7 @@ import type { GenerationPort, Usage } from './ports.js';
 import { validDate } from '../../domain/src/calculations.js';
 import { invariant } from '../../domain/src/errors.js';
 
+export type PersonalLoanConflict = 'minimum-income' | 'maximum-tenor';
 export interface PolicySearch {
   search(
     question: string,
@@ -17,7 +18,7 @@ export interface PolicySearch {
     date: string,
     product: string,
     hits: { chunk: Chunk; similarity: number }[],
-  ): Promise<{ chunks: Chunk[]; reason: string }>;
+  ): Promise<{ chunks: Chunk[]; reason: string; conflict?: PersonalLoanConflict }>;
 }
 const quotedCitation = z.object({ chunkId: z.string(), quote: z.string().min(1) }).strict();
 const selectionSchema = z
@@ -73,6 +74,60 @@ function citation(chunk: Chunk, quote: string) {
     effectiveFrom: chunk.effectiveFrom,
     effectiveTo: chunk.effectiveTo,
   };
+}
+
+function explainPersonalLoanConflict(
+  conflict: PersonalLoanConflict,
+  citations: ReturnType<typeof citation>[],
+) {
+  if (conflict === 'minimum-income') {
+    const income = citations.find(
+      (c) => c.section === 'CP-3.3' && /^CP-20\d{2}$/.test(c.documentId),
+    );
+    const scope = citations.find(
+      (c) => c.documentId === income?.documentId && c.section === 'CP-1',
+    );
+    const product = citations.find((c) => c.documentId === 'PS-PL-100' && c.section === 'PS-2');
+    const policyAmounts = [...(income?.quote.matchAll(/\bEGP\s+([\d,]+)\b/g) ?? [])];
+    const policyMinimum = policyAmounts[0]?.[1];
+    const productMinimum = product?.quote.match(
+      /Minimum net monthly income\s*\|\s*EGP\s+([\d,]+)/i,
+    )?.[1];
+    if (
+      !income ||
+      !policyMinimum ||
+      !productMinimum ||
+      policyAmounts.length !== 1 ||
+      !/this policy governs[\s\S]+edition in force on the date/i.test(scope?.quote ?? '')
+    )
+      return undefined;
+    if (policyMinimum === productMinimum) {
+      return `The minimum net monthly income is EGP ${policyMinimum}. ${income.edition} CP-3.3 and the PL-100 product sheet (PS-2) set the same threshold.`;
+    }
+    if (Number(policyMinimum.replaceAll(',', '')) > Number(productMinimum.replaceAll(',', ''))) {
+      return `The applicable minimum net monthly income is EGP ${policyMinimum} under ${income.edition} CP-3.3. CP-1 makes the credit policy in force on the application date govern eligibility, so the EGP ${productMinimum} figure in PS-2 does not satisfy the stricter policy threshold.`;
+    }
+    return undefined;
+  }
+
+  const policy = citations.find((c) => c.documentId === 'CP-2025' && c.section === 'CP-14');
+  const product = citations.find((c) => c.documentId === 'PS-PL-100' && c.section === 'PS-3');
+  const circular = citations.find((c) => c.documentId === 'C-2025-02' && c.section === 'C-1');
+  const policyCap = policy?.quote.match(/\bremains\s+(\d{1,3})\s+months/i)?.[1];
+  const productCap = product?.quote.match(
+    /Maximum tenor\s*\|\s*(\d{1,3}) months[^\n]*whichever is lower/i,
+  )?.[1];
+  const circularCap = circular?.quote.match(/\braised to\s*\**(\d{1,3}) months/i)?.[1];
+  if (
+    !policyCap ||
+    !productCap ||
+    policyCap !== productCap ||
+    !circularCap ||
+    Number(productCap) >= Number(circularCap) ||
+    !/only after updating their\s+product sheets and system controls/i.test(circular?.quote ?? '')
+  )
+    return undefined;
+  return `PL-100 is capped at ${productCap} months under CP-14 and PS-3. Circular 2025/02 C-1 permits up to ${circularCap} months after product sheets and system controls are updated. The current product sheet keeps the lower limit.`;
 }
 export function maskPolicyQuestion(question: string) {
   return question
@@ -141,8 +196,11 @@ export async function answerPolicyQuestion(
       authority.some((c) => c.section === 'PM-2')
     ) {
       const citations = authority.map((c) => citation(c, c.text));
+      const resolution =
+        'Requested approval bypass rejected. The applicable human-approval procedure is quoted below.';
       return {
-        answer: `Requested approval bypass rejected. The applicable human-approval procedure is quoted below.\n\n${citations.map((c) => c.quote).join('\n\n')}`,
+        answer: `${resolution}\n\n${citations.map((c) => c.quote).join('\n\n')}`,
+        resolution,
         citations,
         refused: false,
         asOfDate: input.asOfDate,
@@ -218,10 +276,16 @@ export async function answerPolicyQuestion(
     if (!chunk || !sourceQuote) return refuse(attribution);
     citations.push(citation(chunk, sourceQuote));
   }
-  // Evidence-first baseline: only verified verbatim spans become answer text.
+  const resolution = related?.conflict && explainPersonalLoanConflict(related.conflict, citations);
+  if (related?.conflict && !resolution) return refuse(attribution);
+  // Only source-verified excerpts and code-derived resolutions become answer text.
   return {
     ...attribution,
-    answer: citations.map((citation) => citation.quote).join('\n\n'),
+    answer: [
+      ...(resolution ? [resolution] : []),
+      ...citations.map((citation) => citation.quote),
+    ].join('\n\n'),
+    ...(resolution ? { resolution } : {}),
     citations,
     refused: false,
     asOfDate: input.asOfDate,

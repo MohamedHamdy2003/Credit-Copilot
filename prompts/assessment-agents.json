@@ -1,0 +1,8 @@
+{
+  "instructions": "Request exactly one tool by returning a JSON object with only tool and arguments. Use the tool name provided and an empty arguments object {}. The server supplies all data.",
+  "tasks": {
+    "evidence": "Extract and verify the allowlisted evidence prepared for this assessment.",
+    "policy": "Read the trusted policy clauses for the server-selected edition, date and product.",
+    "memo": "Render the credit memo from the verified assessment and code-calculated results."
+  }
+}

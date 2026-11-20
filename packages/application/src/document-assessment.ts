@@ -27,7 +27,12 @@ export const documentAssessmentInputSchema = z
   .strict();
 export type DocumentAssessmentInput = z.infer<typeof documentAssessmentInputSchema>;
 export interface AssessmentClausePort {
-  loadRequired(edition: string, date: string, product: string): Promise<Chunk[]>;
+  loadRequired(
+    edition: string,
+    date: string,
+    product: string,
+    productSource: string,
+  ): Promise<Chunk[]>;
 }
 export interface DocumentAssessmentDependencies extends AssessmentDependencies {
   clauses: AssessmentClausePort;
@@ -183,9 +188,16 @@ export async function executeAssessmentStage(
           state.input.actorId,
           state.input.at,
         );
+        if (state.evidence.missing.includes('vehicle_quotation'))
+          state.evidence.referral?.citations.push('PS-9');
         break;
       }
       case 'select_policy': {
+        invariant(
+          (state.form!.productId ?? 'PL-100') === deps.product.id,
+          'ProductMismatch',
+          'Selected product does not match the application',
+        );
         state.policy = selectPolicy(deps.policies, state.form!.applicationDate);
         if (state.evidence?.referral && !state.failure)
           state.failure = state.evidence.referral.reason;
@@ -202,7 +214,19 @@ export async function executeAssessmentStage(
             state.policy!.edition,
             state.form!.applicationDate,
             deps.product.id,
+            deps.product.sourceFile,
           ),
+        );
+        const active = state.clauses.filter(
+          (clause) =>
+            clause.product === deps.product.id &&
+            clause.effectiveFrom <= state.form!.applicationDate &&
+            (!clause.effectiveTo || state.form!.applicationDate < clause.effectiveTo),
+        );
+        const policyClauses = active.filter(
+          (clause) =>
+            clause.edition === state.policy!.edition &&
+            clause.sourceFile === state.policy!.sourceFile,
         );
         for (const section of [
           'CP-3.1',
@@ -219,13 +243,7 @@ export async function executeAssessmentStage(
           'CP-11',
         ]) {
           invariant(
-            state.clauses.some(
-              (c) =>
-                c.edition === state.policy!.edition &&
-                c.section === section &&
-                c.effectiveFrom <= state.form!.applicationDate &&
-                (!c.effectiveTo || state.form!.applicationDate < c.effectiveTo),
-            ),
+            policyClauses.some((clause) => clause.section === section),
             'MissingPolicyClause',
             `Missing applicable ${section}`,
           );
@@ -233,20 +251,33 @@ export async function executeAssessmentStage(
         // Guard executable configuration against drift from the indexed source.
         // Ordered operative clause first: an annex's old50% value must not
         // validate an incorrect2025 executable configuration.
-        const dbr = state.clauses.find((c) => c.section === 'CP-4.1')!.text;
+        const dbr = policyClauses.find((clause) => clause.section === 'CP-4.1')!.text;
         const expected = Number(state.policy!.maxDbr) * 100;
         invariant(
           dbr.includes(`${expected}%`),
           'PolicyConfigurationMismatch',
           'DBR configuration disagrees with source',
         );
+        for (const section of ['PS-3', 'PS-7', ...(deps.product.auto ? ['PS-9'] : [])]) {
+          const clause = active.find(
+            (candidate) =>
+              candidate.sourceFile === deps.product.sourceFile && candidate.section === section,
+          );
+          invariant(clause, 'MissingPolicyClause', `Missing applicable ${section}`);
+          if (section === 'PS-9') {
+            const minimum = Number(deps.product.auto!.minimumDownPaymentPercent);
+            invariant(
+              clause.text.includes(`${minimum}%`),
+              'PolicyConfigurationMismatch',
+              'Down payment configuration disagrees with source',
+            );
+          }
+        }
         break;
       }
       case 'calculate_and_check_rules': {
         const f = state.form!,
           x = state.extraction!.fields;
-        const price = selectPricing(deps.pricing, f.applicationDate, f.months, f.payrollTransfer);
-        state.pricing = price;
         state.rules = assessRules(
           {
             ...state.derived!.facts,
@@ -258,11 +289,14 @@ export async function executeAssessmentStage(
             obligations: x.obligations.value,
             employmentStart: x.employmentStart.value,
             bureauScore: x.bureauScore.value,
+            vehiclePrice: f.vehiclePrice,
+            downPayment: f.downPayment,
           },
           state.policy!,
           deps.product,
-          price,
+          () => selectPricing(deps.pricing, f.applicationDate, f.months, f.payrollTransfer),
         );
+        state.pricing = 'pricing' in state.rules ? state.rules.pricing : undefined;
         break;
       }
       case 'prepare_memo': {
@@ -280,6 +314,14 @@ export async function executeAssessmentStage(
           evidence,
           policyEdition: state.policy?.edition ?? null,
           maxDbr: state.policy?.maxDbr ?? null,
+          ...(state.form
+            ? {
+                productId: state.form.productId,
+                ...(state.form.productId === deps.product.id
+                  ? { productSource: deps.product.sourceFile }
+                  : {}),
+              }
+            : {}),
           removedFields: state.sanitized?.removedFields ?? [],
           steps: state.steps,
         };

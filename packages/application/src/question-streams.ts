@@ -68,6 +68,7 @@ export class QuestionStreams {
             kind: 'completed',
             asOfDate: answer.asOfDate,
             refused: answer.refused,
+            resolution: 'resolution' in answer ? answer.resolution : undefined,
           }),
         ]);
       })

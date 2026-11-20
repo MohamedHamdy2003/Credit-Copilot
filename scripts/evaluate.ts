@@ -108,6 +108,7 @@ const files = [
   'data/config/corpus-manifest.json',
   'prompts/extraction.txt',
   'prompts/questions.txt',
+  'prompts/assessment-agents.json',
   'packages/application/src/questions.ts',
   'packages/application/src/query-rewrite.ts',
   'packages/application/src/document-assessment.ts',
@@ -130,9 +131,9 @@ for (const file of files)
   hashes[file] = createHash('sha256')
     .update((await readFile(file, 'utf8')).replace(/\r\n/g, '\n'))
     .digest('hex');
-const manifest = JSON.parse(
-  await readFile('data/config/corpus-manifest.json', 'utf8'),
-) as ManifestEntry[];
+const manifest = (
+  JSON.parse(await readFile('data/config/corpus-manifest.json', 'utf8')) as ManifestEntry[]
+).filter((entry) => entry.product === 'PL-100');
 for (const d of manifest)
   hashes[d.filename] = createHash('sha256')
     .update(await readFile(`data/corpus/policy/${d.filename}`))

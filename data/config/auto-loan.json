@@ -1,0 +1,9 @@
+{
+  "id": "AL-200",
+  "minimumAmount": "30000.00",
+  "maximumAmount": "750000.00",
+  "minimumMonths": 12,
+  "maximumMonths": 60,
+  "sourceFile": "synthetic-auto-product.md",
+  "auto": { "minimumDownPaymentPercent": "25" }
+}

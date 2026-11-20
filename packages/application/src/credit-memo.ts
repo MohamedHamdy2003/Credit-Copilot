@@ -10,6 +10,11 @@ export function creditMemo(result: AssessmentResult, form?: ApplicationForm) {
           `Requested EGP ${form.amount}; ${form.months} months; application date ${form.applicationDate}`,
         ]
       : []),
+    ...(result.autoFinance
+      ? [
+          `Vehicle price EGP ${result.autoFinance.vehiclePrice}; down payment EGP ${result.autoFinance.downPayment}; finance EGP ${result.autoFinance.financedAmount}`,
+        ]
+      : []),
     ...(result.reason ? [`Referral reason: ${result.reason}`] : []),
     ...(result.evidence.missing.length
       ? [`Missing evidence: ${result.evidence.missing.join(', ')}`]

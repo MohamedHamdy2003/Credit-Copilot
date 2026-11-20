@@ -38,6 +38,27 @@ describe('eligibility before affordability', () => {
     expect(result.recommendation).toBe('REFER_TO_HUMAN');
     expect(result.calculation).toBeNull();
   });
+  it('declines a documented default even when the bureau score also needs review', () => {
+    const result = assessRules(
+      { ...facts, bureauScore: 580, hasDefault: true },
+      policy,
+      product,
+      pricing,
+    );
+    expect(result.recommendation).toBe('DECLINE');
+    expect(result.results).toContainEqual(
+      expect.objectContaining({ rule: 'CP-6 default', result: 'fail' }),
+    );
+  });
+  it('resolves the verified product-tenor failure without looking up an inapplicable rate', () => {
+    const result = assessRules({ ...facts, months: 84 }, policy, product, () => {
+      throw new Error('Pricing should only be selected after eligibility passes');
+    });
+    expect(result.recommendation).toBe('DECLINE');
+    expect(result.results).toContainEqual(
+      expect.objectContaining({ rule: 'PS-3', result: 'fail' }),
+    );
+  });
   it('declines over-age and default cases without affordability', () => {
     expect(
       assessRules({ ...facts, birthDate: '1968-06-20' }, policy, product, pricing).recommendation,

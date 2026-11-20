@@ -9,6 +9,9 @@ export interface AssessmentResult {
   evidence: ReturnType<typeof import('../../domain/src/evidence-mode.js').evaluateEvidence>;
   policyEdition: string | null;
   maxDbr: string | null;
+  productId?: string;
+  productSource?: string;
+  autoFinance?: import('../../domain/src/rules.js').AutoFinance;
   removedFields: string[];
   steps: string[];
   recommendation: 'APPROVE' | 'DECLINE' | 'REFER_TO_HUMAN' | 'OFFER_ALTERNATIVE';

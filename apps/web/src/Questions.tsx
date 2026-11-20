@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { questionStreamEvent, QUESTION_REFUSAL } from '../../../packages/contracts/src/streams';
+import type { ProductId } from '../../../packages/contracts/src/products';
 import { api, ApiError } from './api';
 import type { Answer } from './types';
 import { ErrorNotice, Money } from './components';
@@ -12,7 +13,8 @@ interface Calculation {
   calculation: { monthlyInstallment: string; dbrPercent: string; maximumEligibleAmount: string };
 }
 export function Questions() {
-  const [answer, setAnswer] = useState<Answer>(),
+  const [product, setProduct] = useState<ProductId>('PL-100'),
+    [answer, setAnswer] = useState<Answer>(),
     [error, setError] = useState<unknown>(),
     [busy, setBusy] = useState(false),
     [reconnecting, setReconnecting] = useState(false),
@@ -33,6 +35,7 @@ export function Questions() {
     const data = new FormData(event.currentTarget);
     const body = {
       question: data.get('question'),
+      product,
       ...(data.get('date') ? { asOfDate: data.get('date') } : {}),
       ...(data.get('edition') ? { edition: data.get('edition') } : {}),
     };
@@ -73,6 +76,9 @@ export function Questions() {
           asOfDate: terminal.asOfDate,
           citations: [],
         });
+      } else if (terminal.kind === 'completed' && terminal.resolution) {
+        const resolution = terminal.resolution;
+        setAnswer((previous) => previous && { ...previous, resolution });
       }
     } catch (e) {
       if (controller.signal.aborted) return;
@@ -134,15 +140,31 @@ export function Questions() {
           </label>
           <div className="form-grid">
             <label>
+              Product
+              <select
+                value={product}
+                onChange={(event) => setProduct(event.target.value as ProductId)}
+              >
+                <option value="PL-100">Personal loan (PL-100)</option>
+                <option value="AL-200">Auto loan (AL-200)</option>
+              </select>
+            </label>
+            <label>
               As-of date (optional)
               <input type="date" name="date" />
             </label>
             <label>
               Policy edition
-              <select name="edition">
+              <select key={product} name="edition">
                 <option value="">Resolve from question / date</option>
-                <option>CP-2024</option>
-                <option>CP-2025</option>
+                {product === 'PL-100' ? (
+                  <>
+                    <option>CP-2024</option>
+                    <option>CP-2025</option>
+                  </>
+                ) : (
+                  <option>AUTO-2025</option>
+                )}
               </select>
             </label>
           </div>
@@ -164,6 +186,7 @@ export function Questions() {
           <section aria-live="polite" className="answer">
             <h3>{answer.refused ? 'Insufficient evidence' : 'Verified source excerpts'}</h3>
             <p className="muted">As of {answer.asOfDate}</p>
+            {answer.resolution && <p>{answer.resolution}</p>}
             {answer.refused ? (
               <p>{answer.answer}</p>
             ) : (
@@ -188,7 +211,7 @@ export function Questions() {
         )}
       </section>
       <section className="panel">
-        <h2>Affordability calculation</h2>
+        <h2>Personal-loan affordability calculation</h2>
         <p>Figures are calculated by code using the selected policy and pricing table.</p>
         <form onSubmit={calculate}>
           <div className="form-grid">

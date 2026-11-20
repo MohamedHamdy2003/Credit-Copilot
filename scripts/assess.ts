@@ -1,23 +1,22 @@
-import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { runtime } from './runtime.js';
 import { assessmentAgents } from '../packages/infrastructure/src/workflows/assessment-agents.js';
 import { ParserRegistry } from '../packages/infrastructure/src/parsers/registry.js';
-import { extractPricing } from '../packages/infrastructure/src/parsers/pricing.js';
 import { loadExtractionPrompt } from '../packages/infrastructure/src/llm/prompts.js';
 import { PostgresAssessmentRepository } from '../packages/infrastructure/src/db/assessment-repository.js';
 import { PostgresAssessmentClauses } from '../packages/infrastructure/src/knowledge/assessment-clauses.js';
 import { createDocumentAssessmentWorkflow } from '../packages/infrastructure/src/workflows/document-assessment.js';
 import { parseApplicationForm } from '../packages/application/src/application-form.js';
 import { invariant } from '../packages/domain/src/errors.js';
-import type { Policy, Product } from '../packages/domain/src/policy.js';
+import {
+  loadAssessmentFixtures,
+  loadProductCatalog,
+} from '../packages/infrastructure/src/product-catalog.js';
 
-const reference = process.argv[2];
-invariant(
-  reference && /^APP-00[1-5]$/.test(reference),
-  'InvalidApplication',
-  'Select a supplied synthetic APP-001 through APP-005',
+const fixture = (await loadAssessmentFixtures()).find(
+  (entry) => entry.reference === process.argv[2],
 );
+invariant(fixture, 'InvalidApplication', 'Select a reviewed APP or AUTO synthetic pack');
 invariant(
   process.argv.slice(3).every((arg) => arg === '--demo'),
   'InvalidApplication',
@@ -25,10 +24,11 @@ invariant(
 );
 const { db, provider, config } = await runtime();
 try {
-  const bytes = await readFile(`data/corpus/evidence/${reference}.pdf`);
-  const parser = new ParserRegistry();
-  const document = await parser.extract(`${reference}.pdf`, bytes);
+  const { bytes, filename } = fixture;
+  const parser = new ParserRegistry(config.UPLOAD_MAX_BYTES);
+  const document = await parser.extract(filename, bytes);
   const form = parseApplicationForm(document);
+  const catalog = await loadProductCatalog(parser);
   // This CLI is local synthetic-fixture tooling, not a public authenticated endpoint.
   const actorId = randomUUID(),
     applicationId = randomUUID(),
@@ -57,14 +57,7 @@ try {
     provider,
     agents: assessmentAgents(config.ASSESSMENT_ORCHESTRATION),
     prompt: await loadExtractionPrompt(process.cwd()),
-    policies: JSON.parse(await readFile('data/config/policies.json', 'utf8')) as Policy[],
-    product: JSON.parse(await readFile('data/config/personal-loan.json', 'utf8')) as Product,
-    pricing: extractPricing(
-      await parser.extract(
-        'pricing-table.csv',
-        await readFile('data/corpus/policy/pricing-table.csv'),
-      ),
-    ),
+    ...catalog[form.productId],
     settings: { allowDemo: config.ALLOW_DEMO_MODE, defaultMode: config.ASSESSMENT_MODE },
     clauses: new PostgresAssessmentClauses(db),
     persistence: {

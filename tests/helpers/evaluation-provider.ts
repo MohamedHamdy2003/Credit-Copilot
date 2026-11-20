@@ -2,6 +2,7 @@ import type { DataSource } from 'typeorm';
 import type { Chunk } from '../../packages/contracts/src/documents.js';
 import type { Completion } from '../../packages/application/src/ports.js';
 import { parseEnglishDate } from '../../packages/application/src/extraction.js';
+import { RetrievalService } from '../../packages/infrastructure/src/knowledge/retrieval.js';
 import { FakeEmbedding } from './fake-provider.js';
 /** Deterministic fixtures for workflow/verification regressions, NEVER semantic quality evidence. */
 export class OfflineEvaluationProvider extends FakeEmbedding {
@@ -25,7 +26,7 @@ export class OfflineEvaluationProvider extends FakeEmbedding {
         value: {
           citations: /crypto|SME|2027/i.test(value.question)
             ? []
-            : value.evidence.map((e) => ({ chunkId: e.chunkId, quote: e.text })),
+            : value.evidence.slice(0, 5).map((e) => ({ chunkId: e.chunkId, quote: e.text })),
         },
       };
     const field = (label: string) => {
@@ -47,18 +48,20 @@ export class OfflineEvaluationProvider extends FakeEmbedding {
   }
 }
 export function offlineEvaluationSearch(db: DataSource) {
+  const retrieval = new RetrievalService(db, new FakeEmbedding(), 'vector');
   return {
-    search: async (question: string, date: string) => {
+    related: retrieval.related.bind(retrieval),
+    search: async (question: string, date: string, product = 'PL-100') => {
       const sections = /crypto|SME|2027/i.test(question)
         ? []
         : /income/i.test(question)
-          ? ['CP-3.3', 'PS-2', 'CP-14']
+          ? ['CP-3.3', 'PS-2', 'CP-1']
           : /72|tenor/i.test(question)
             ? ['CP-14', 'PS-3', 'C-1']
             : ['PM-1', 'PM-2'];
       const rows = (await db.query(
-        "SELECT metadata FROM knowledge.chunks WHERE active AND metadata->>'section'=ANY($1) AND effective_from<=$2::date AND (effective_to IS NULL OR $2::date<effective_to) ORDER BY ordinal",
-        [sections, date],
+        "SELECT metadata FROM knowledge.chunks WHERE active AND metadata->>'section'=ANY($1) AND effective_from<=$2::date AND (effective_to IS NULL OR $2::date<effective_to) AND product=$3 ORDER BY ordinal,id",
+        [sections, date, product],
       )) as { metadata: Chunk }[];
       return rows
         .filter(

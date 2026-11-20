@@ -2,7 +2,8 @@
 
 ## Scope and reproducibility
 
-The15 frozen cases are in `data/evaluation/cases.json` (core-15-v1). They contain
+The current fifteen-case suite is in `data/evaluation/cases.json` (core-15-v2).
+The historical live reports below use the original case set. The scenarios contain
 three out-of-corpus cases, two edition-change pairs (Q01/02 andQ04/05), three
 calculation cases and two injection surfaces (Q10 question,Q11 applicant document).
 Expected answers come from supplied synthetic sources, not model output. Full
@@ -253,6 +254,19 @@ Production uses the existing provider timing.
 [Passing live report](../data/evaluation/results/agent-orchestration-core.json)
 [Initial failed report](../data/evaluation/results/agent-orchestration-initial-failure.json)
 
+## Source-audit case revision
+
+The historical live reports use `core-15-v1`. The original case file is
+preserved as `data/evaluation/cases-core-15-v1.json` and its SHA-256 matches
+the recorded hash in the live baseline. The default `core-15-v2` keeps the
+same fifteen scenarios and corrects the Q02 governing citation to CP-1. CP-14
+addresses tenor. Q02 and Q03 now require an explicit explanation backed by the
+applicable policy and product clauses and, for tenor, the current circular.
+Both offline modes passed 15/15 on `core-15-v2`, including these two new
+assertions. The workflow scored 80/80 security and audit checks and the agent
+mode scored 94/94. Both passed 8/8 citation coverage and 17/17 numeric checks.
+Live provider and semantic retrieval quality for version 2 remain unmeasured.
+
 ## P14 streaming regression — 20 November 2026
 
 PostgreSQL and HTTP tests cover stage delivery before a gated assessment has
@@ -266,6 +280,28 @@ Chromium exercises desktop assessment progress through an induced connection
 drop and mobile policy questions through success, refusal and terminal failure.
 These transport checks use deterministic provider fixtures.
 
+## Source review and supplemental auto-loan evaluation
+
+The original assessment brief and corpus inventory were reviewed alongside
+implementation and tests. All twelve provided documents match the uploaded
+SHA-256 values. The checked-in procedures PDF has a filename suffix and the
+same bytes. Personal-loan calculations use the policy in force despite the
+incompatible 45% and EGP 382,000 values printed together in Appendix E.
+
+The supplemental suite in `data/evaluation/auto-loan-cases.json` uses the
+authored synthetic AL-200 sources. The PostgreSQL and HTTP tests exercise
+the assessment cases, product and date isolation in vector and hybrid search,
+human approval and issuance, and the persisted PS-9 rejection source.
+
+| Case | Expected and verified outcome |
+| --- | --- |
+| A01 | EGP 250,000 financed after EGP 100,000 down. At 20%, the instalment is EGP 6,623.47, DBR 35.41%, eligible maximum EGP 262,000. |
+| A02 | EGP 50,000 down on EGP 350,000 fails PS-9. Human rejection records the auto product sheet. |
+| A03 | Missing documented vehicle price refers before generation. |
+
+The auto assessment and retrieval tests use deterministic provider fixtures.
+The original personal-loan evaluation remains a separate fifteen-case suite.
+
 ## Core gate and remaining submission work
 
 The measured functional gate passes: all15 cases, all critical safety/audit/numeric
@@ -278,8 +314,8 @@ API health and web200; stopping it closed its API/web ports. No deployment.
 
 This does not certify final submission: the3–5 minute unlisted video is still to be
 produced; an interactive clean-clone walkthrough remains pending (CI does install/
-check against a fresh checkout/DB). Git history had25 non-merge commits before this
-feature but only three actual Cairo dates:17,19,20 November. The brief's four-date
+check against a fresh checkout/DB). The P15 review found only three actual Cairo
+commit dates: 17, 19 and 20 November. The brief's four-date
 requirement is not met. The retrieval sample is small, browser checks cover
 Chromium, and provider billing data is unavailable. Hybrid search and query
 rewriting are complete.
