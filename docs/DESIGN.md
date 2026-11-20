@@ -35,21 +35,33 @@ Index revisions retain historical chunks/citations; active revision/model/dimens
 and half-open effective dates filter search. Ingestion is atomic and idempotent;
 one failed file is reported without claiming the entire batch succeeded.
 
-The baseline ranks raw top5 cosine pgvector hits at threshold0.65. PostgreSQL FTS/
-GIN storage exists, but BM25/RRF are not yet implemented; ts_rank is not BM25.
-Evaluation exposed good hits with incomplete final source coverage. A separate
-source-reference context now loads operative income/product/precedence or tenor/
-product/circular clauses when a relevant primary hit exists. It filters the same
-product/date, takes operative clauses before annex comparison rows and does not
-change vector scores/rankings. This is deterministic source completeness, not a
-keyword search, query rewrite or re-ranking stretch.
+Hybrid is the default policy search. PostgreSQL matches any distinct English
+query lexeme against the existing GIN-indexed `tsvector`. Lexeme positions give
+term frequencies and chunk lengths. BM25 uses k1=1.2 and b=0.75, with document
+frequency and mean length computed over the eligible chunks. Both branches share
+the active revision, product, effective date, embedding model and dimensions.
+[PostgreSQL 17 text search functions](https://www.postgresql.org/docs/17/functions-textsearch.html)
+
+Each branch contributes up to 20 results. Reciprocal rank fusion adds
+`1 / (60 + rank)` per branch in which the chunk appears, deduplicates by chunk ID
+and returns the top five with ties settled by chunk ID. Q&A still requires an
+actual cosine similarity of at least 0.65 by default, including for candidates
+found only by BM25. Set `RETRIEVAL_STRATEGY=vector` for the cosine-only baseline.
+The existing indexes and ingestion pipeline support both modes.
+
+With a qualifying primary hit, a separate date- and product-filtered lookup can
+load the operative income, tenor or approval procedure clauses. It takes the
+operative clauses before annex comparison rows. Relevant approval bypass
+requests receive the dated procedure excerpts and an explicit rejection of the
+requested action.
 
 Generation receives source metadata and exact evidence, chooses quoted spans,
 and the verifier rejects unknown IDs/changed words/numbers (whitespace folding and
 explicit text→quote alias only). After a valid non-refusal selection, the answer
 includes the associated canonical verbatim references so conflicts are not shown
 one-sidedly. Weak primary search, invalid model output or model refusal still
-refuse; linked context cannot create an answer on its own. The interface deliberately
+refuse. The read-only approval response also requires qualifying procedure
+evidence. The interface deliberately
 returns evidence excerpts rather than unrestricted model prose. Date/edition
 selectors and explicit question references must agree; default is today's Cairo
 calendar date. Numeric calculations use the structured calculator, never an LLM.

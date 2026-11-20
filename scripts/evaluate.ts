@@ -11,6 +11,7 @@ import {
 import { createDataSource } from '../packages/infrastructure/src/db/data-source.js';
 import { GeminiAdapter } from '../packages/infrastructure/src/llm/gemini.js';
 import { EvaluationMeter } from '../packages/infrastructure/src/evaluation-meter.js';
+import { hybridRanking } from '../packages/infrastructure/src/knowledge/hybrid-search.js';
 import { CoreEvaluation } from './evaluation/runner.js';
 import {
   IngestionService,
@@ -21,13 +22,23 @@ import {
   offlineEvaluationSearch,
 } from '../tests/helpers/evaluation-provider.js';
 import { invariant } from '../packages/domain/src/errors.js';
-const mode = process.argv.includes('--offline') ? 'offline' : 'live';
+const args = process.argv.slice(2);
+const mode = args.includes('--offline') ? 'offline' : 'live';
 invariant(
-  process.argv.slice(2).every((arg) => arg === '--offline'),
+  args.length <= 1 && args.every((arg) => ['--offline', '--vector', '--hybrid'].includes(arg)),
   'InvalidEvaluationArguments',
-  'Only --offline is supported',
+  'Use at most one of --offline, --vector or --hybrid',
 );
-const config = configSchema.parse(process.env);
+const config = configSchema.parse({
+  ...process.env,
+  RETRIEVAL_STRATEGY:
+    args[0] === '--vector'
+      ? 'vector'
+      : args[0] === '--hybrid'
+        ? 'hybrid'
+        : process.env.RETRIEVAL_STRATEGY,
+});
+const hybrid = mode === 'live' && config.RETRIEVAL_STRATEGY === 'hybrid';
 const id = new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomUUID().slice(0, 8);
 const path = `artifacts/evaluation/${mode}-${id}.json`;
 const dataset = evaluationSetSchema.parse(
@@ -66,6 +77,8 @@ try {
 const db = await createDataSource(url.toString()).initialize();
 let source: ReturnType<typeof createDataSource> | undefined, runner: CoreEvaluation | undefined;
 const results: EvaluationResult[] = [];
+const providerRetryLimit = mode === 'live' ? 2 : 0;
+const providerFailuresBeforeRetry: EvaluationResult[] = [];
 const files = [
   'data/evaluation/cases.json',
   'data/config/policies.json',
@@ -80,6 +93,7 @@ const files = [
   'packages/application/src/evidence-facts.ts',
   'packages/application/src/evaluation.ts',
   'packages/infrastructure/src/knowledge/retrieval.ts',
+  'packages/infrastructure/src/knowledge/hybrid-search.ts',
   'packages/infrastructure/src/llm/gemini.ts',
   'packages/infrastructure/src/evaluation-meter.ts',
   'packages/domain/src/calculations.ts',
@@ -118,9 +132,14 @@ const report: { [key: string]: unknown } = {
     minimumSimilarity: config.RETRIEVAL_MIN_SIMILARITY,
     k: 5,
     retrieval:
-      mode === 'live' ? 'vector-only' : 'deterministic-source-fixtures-NOT-semantic-quality',
+      mode === 'offline'
+        ? 'deterministic-source-fixtures-NOT-semantic-quality'
+        : hybrid
+          ? 'bm25-pgvector-rrf'
+          : 'vector-only',
+    ...(hybrid ? { hybridRanking } : {}),
     answerContext:
-      'Separate date/product-filtered operative source references; primary vector top5 is unchanged. Citation coverage includes this context.',
+      'Separate date/product-filtered operative source references and the read-only approval procedure. Citation coverage includes this context.',
     database: 'dedicated suffix only; credentials omitted',
   },
   gitHead: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
@@ -130,6 +149,8 @@ const report: { [key: string]: unknown } = {
   hashConvention:
     'SHA256; code/config text normalized to LF; supplied source-document bytes unchanged',
   completed: false,
+  providerRetryLimit,
+  providerFailuresBeforeRetry,
   results,
 };
 await mkdir('artifacts/evaluation', { recursive: true });
@@ -166,7 +187,16 @@ try {
   );
   report.strictChecks = await runner.strictChecks();
   for (const c of dataset.cases) {
-    const result = await runner.run(c);
+    let result = await runner.run(c);
+    if (
+      result.error === 'ProviderUnavailable' &&
+      providerFailuresBeforeRetry.length < providerRetryLimit
+    ) {
+      providerFailuresBeforeRetry.push(result);
+      await persist();
+      console.log(`${c.id} RETRY ${result.error} ${result.latencyMs}ms`);
+      result = await runner.run(c);
+    }
     results.push(result);
     await persist();
     console.log(

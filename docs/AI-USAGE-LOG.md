@@ -1,5 +1,15 @@
 # AI usage log
 
+## 2026-11-20 hybrid retrieval
+
+Codex implemented PostgreSQL BM25 and reciprocal rank fusion over the existing
+policy index, then checked hand-computed scores, shared filters, ties and
+single-branch hits on PostgreSQL. Two Gemini evaluations ended 14/15 after
+generation calls failed. Both full reports were retained. The evaluator now
+records retrieval before generation and can retry upstream errors within a
+small per-run limit. The clean hybrid run at `7e9832f` passed 15/15.
+The vector and hybrid runs both scored hit@5 4/4 on the same four questions.
+
 ## 2026-11-20 full evaluation/core checkpoint
 
 Codex implemented the fifteen-case evaluator, independent golden expectations,

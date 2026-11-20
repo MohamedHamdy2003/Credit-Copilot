@@ -29,6 +29,57 @@ it('recomputes the committed live evidence instead of trusting summary/pass flag
   expect(baseline.strictChecks).toHaveLength(5);
   expect(baseline.strictChecks.every((c) => c.passed)).toBe(true);
 });
+it('verifies the clean live hybrid comparison and keeps both provider failures in the evidence', () => {
+  type LiveReport = {
+    workingTreeDirty: boolean;
+    completed: boolean;
+    configuration: Record<string, unknown>;
+    hashes: Record<string, string>;
+    strictChecks: { passed: boolean }[];
+    results: EvaluationResult[];
+  };
+  const read = (name: string) =>
+    JSON.parse(readFileSync(`data/evaluation/results/${name}.json`, 'utf8')) as LiveReport;
+  const vector = read('vector-core-baseline');
+  const hybrid = read('hybrid-core-evaluation');
+  expect(vector).toMatchObject({ completed: true, workingTreeDirty: false });
+  expect(hybrid).toMatchObject({ completed: true, workingTreeDirty: false });
+  expect(hybrid.configuration).toMatchObject({
+    retrieval: 'bm25-pgvector-rrf',
+    generationModel: vector.configuration.generationModel,
+    embeddingModel: vector.configuration.embeddingModel,
+    dimensions: vector.configuration.dimensions,
+    minimumSimilarity: vector.configuration.minimumSimilarity,
+    k: vector.configuration.k,
+    hybridRanking: { branchLimit: 20, k1: 1.2, b: 0.75, rrfK: 60 },
+  });
+  for (const [path, hash] of Object.entries(vector.hashes)) {
+    if (path.endsWith('/knowledge/retrieval.ts') || path === 'scripts/evaluation/runner.ts')
+      continue;
+    expect(hybrid.hashes[path]).toBe(hash);
+  }
+  expect(hybrid.strictChecks).toHaveLength(5);
+  expect(hybrid.strictChecks.every((check) => check.passed)).toBe(true);
+  expect(summarizeEvaluation(hybrid.results, 'live')).toMatchObject({
+    cases: { passed: 15, total: 15 },
+    retrievalHitAt5: { passed: 4, total: 4 },
+    criticalEvidenceCoverage: { passed: 8, total: 8 },
+    liveQualityGate: 'passed',
+  });
+  for (const [name, id] of [
+    ['hybrid-initial-failure', 'Q03'],
+    ['hybrid-repeat-failure', 'Q02'],
+  ] as const) {
+    const failed = read(name);
+    expect(failed.results.filter((result) => !result.passed)).toMatchObject([
+      { id, error: 'ProviderUnavailable' },
+    ]);
+    expect(summarizeEvaluation(failed.results, 'live').cases).toMatchObject({
+      passed: 14,
+      total: 15,
+    });
+  }
+});
 function results(): EvaluationResult[] {
   return set.cases.map((c) => ({
     id: c.id,

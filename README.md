@@ -51,14 +51,15 @@ pnpm evaluate:core:offline
 pnpm exec playwright install chromium
 pnpm test:e2e
 pnpm build
-pnpm evaluate
+pnpm evaluate --vector
+pnpm evaluate --hybrid
 ```
 
 integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ شغّلها بالتتابع. لو غير موجودة، أنشئها مرة عبر `docker compose exec -T db psql -U copilot -d postgres -c "CREATE DATABASE credit_copilot_test"`. e2e تفرغ حسابات/طلبات قاعدة الاختبار، وتشغّل API4304 وVite5174. الصور/traces خارج Git. offline لا يقيس جودة semantic/LLM.
 
 `pnpm evaluate` يشغّل15 حالة فعلية عبر Gemini في قاعدة منفصلة تنتهي بـ_eval، وينشئها إن كانت صلاحية المستخدم تسمح. لا يغيّر بيانات الطلبات في قاعدة التطبيق. يقرأ cache موثوقًا لمتجهات السياسات المطابقة للنص/model/dimensions، بينما embeddings الأسئلة والاستدعاءات التوليدية live. يحفظ كل تشغيل، حتى الفاشل، في `artifacts/evaluation/`، ويخرج بكود فشل إذا لم تمر البوابة. يلزم مفتاح وquota؛ هذا الأمر يستهلكها.
 
-الحالات الذهبية في `data/evaluation/cases.json`، والنتيجة الأولية والفعلية الأخيرة محفوظتان في `data/evaluation/results/`. النتيجة:15/15، hit@5=4/4 على الأسئلة القابلة للإجابة فقط، refusals=7/7 وOOC3/3، calculation assertions17/17. مصدر التعارض المساند منفصل عن ترتيب vector top5؛ لا يوجد BM25/RRF بعد. التفاصيل والفشل الأول في `docs/EVALUATION.md`. `pnpm evaluate:smoke` يحتفظ بفحص الخمس حالات القديم؛ `pnpm evaluate:offline` يحافظ على regression tests البسيطة بلا DB.
+الحالات الذهبية في `data/evaluation/cases.json` والتقارير الفعلية في `data/evaluation/results/`. الـvector والـhybrid عدّوا 15/15 وhit@5 كان 4/4 في الوضعين على الأسئلة القابلة للإجابة. شغّل `pnpm evaluate --vector` و`pnpm evaluate --hybrid` للمقارنة. البحث الافتراضي يدمج BM25 وpgvector بـRRF، وQ&A يطبّق عتبة الـcosine على الأدلة. التفاصيل وتقارير الفشل في `docs/EVALUATION.md`. `pnpm evaluate:smoke` يحتفظ بفحص الـvector القديم لخمس حالات، و`pnpm evaluate:offline` يشغّل regression tests بسيطة من غير DB.
 
 ## Configuration
 
@@ -73,7 +74,8 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 | LLM_PROVIDER | gemini فقط حاليًا؛ fake يُحقن في الاختبارات، وليس اختيار production |
 | GENERATION_MODEL | gemini-3.5-flash-lite؛ اسم النموذج المسجل في القياس |
 | EMBEDDING_MODEL / EMBEDDING_DIMENSIONS | gemini-embedding-001 /768؛ تغييرهما يحتاج إعادة فهرسة وbaseline جديد |
-| RETRIEVAL_MIN_SIMILARITY | 0.65؛ لم يُخفض لاجتياز الحالات |
+| RETRIEVAL_STRATEGY | hybrid افتراضيًا؛ vector لتشغيل البحث الدلالي وحده |
+| RETRIEVAL_MIN_SIMILARITY | 0.65؛ عتبة cosine للأدلة في الوضعين |
 | ASSESSMENT_MODE / ALLOW_DEMO_MODE | strict /false؛ Demo يحتاج تمكينًا واختيارًا صريحًا لبيانات synthetic |
 | UPLOAD_MAX_BYTES | 10485760؛ PDF/CSV/MD، وحد100 صفحة PDF، بلا OCR |
 | DEMO_PASSWORD | محلي12–256 حرفًا لإنشاء حسابات التدريب |
