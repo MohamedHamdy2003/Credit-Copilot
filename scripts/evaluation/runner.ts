@@ -61,7 +61,12 @@ export class CoreEvaluation {
     config: Config,
     search?: PolicySearch,
   ) {
-    const r = new CoreEvaluation(db, meter, config, search ?? new RetrievalService(db, meter));
+    const r = new CoreEvaluation(
+      db,
+      meter,
+      config,
+      search ?? new RetrievalService(db, meter, config.RETRIEVAL_STRATEGY),
+    );
     r.policies = JSON.parse(await readFile('data/config/policies.json', 'utf8'));
     r.product = JSON.parse(await readFile('data/config/personal-loan.json', 'utf8'));
     r.pricing = extractPricing(
@@ -304,6 +309,7 @@ export class CoreEvaluation {
             key: `${h.chunk.documentId}:${h.chunk.section}`,
             id: h.chunk.id,
             similarity: h.similarity,
+            ...('ranking' in h ? { ranking: h.ranking } : {}),
           })),
           retrievalThreshold: this.config.RETRIEVAL_MIN_SIMILARITY,
         };

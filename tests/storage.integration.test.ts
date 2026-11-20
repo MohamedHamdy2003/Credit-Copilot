@@ -219,7 +219,7 @@ it('loads operative conflict context by date/product without changing the vector
     service = new IngestionService(db, embedding, manifest);
   for (const doc of manifest)
     await service.ingest(doc.filename, await readFile(`data/corpus/policy/${doc.filename}`));
-  const retrieval = new RetrievalService(db, embedding);
+  const retrieval = new RetrievalService(db, embedding, 'vector');
   const primary = await retrieval.search('minimum income', '2025-04-03');
   const context = await retrieval.related('Minimum income?', '2025-04-03', 'PL-100', primary);
   const income = context.chunks.find((c) => c.section === 'CP-3.3');
@@ -232,4 +232,123 @@ it('loads operative conflict context by date/product without changing the vector
   expect(unrelated.chunks).toEqual([]);
   const again = await retrieval.search('minimum income', '2025-04-03');
   expect(again.map((h) => h.chunk.id)).toEqual(primary.map((h) => h.chunk.id));
+});
+
+async function seedSearchChunks(
+  chunks: {
+    id: string;
+    text: string;
+    embedding: number[];
+    model?: string;
+    product?: string;
+    from?: string;
+    to?: string;
+    active?: boolean;
+  }[],
+) {
+  await db.query(
+    "INSERT INTO knowledge.documents(id,filename,hash,metadata,normalized) VALUES('fixture','fixture.md','hash','{}','{}')",
+  );
+  for (const [ordinal, chunk] of chunks.entries()) {
+    await db.query(
+      `INSERT INTO knowledge.chunks(id,document_id,ordinal,text,metadata,edition,product,effective_from,effective_to,active)
+       VALUES($1,'fixture',$2,$3,jsonb_build_object('id',$1::text),'fixture',$4,$5,$6,$7)`,
+      [
+        chunk.id,
+        ordinal,
+        chunk.text,
+        chunk.product ?? 'PL-100',
+        chunk.from ?? '2025-03-01',
+        chunk.to ?? null,
+        chunk.active ?? true,
+      ],
+    );
+    await db.query(
+      'INSERT INTO knowledge.embeddings(chunk_id,model,dimensions,embedding) VALUES($1,$2,$3,$4::vector)',
+      [
+        chunk.id,
+        chunk.model ?? 'ranking-test',
+        chunk.embedding.length,
+        JSON.stringify(chunk.embedding),
+      ],
+    );
+  }
+}
+
+const rankingEmbedding = {
+  model: 'ranking-test',
+  dimensions: 2,
+  embed: async () => [1, 0],
+};
+
+it('scores BM25 using eligible corpus statistics and fuses opposite ranks with a stable ID tie-break', async () => {
+  const excluded = { text: 'alpha alpha alpha', embedding: [1, 0] };
+  await seedSearchChunks([
+    { id: 'alpha-a', text: 'alpha alpha beta', embedding: [0.8, 0.6] },
+    { id: 'alpha-b', text: 'alpha beta beta beta', embedding: [1, 0] },
+    { id: 'gamma', text: 'gamma', embedding: [0, 1] },
+    { ...excluded, id: 'expired', from: '2024-01-01', to: '2025-03-01' },
+    { ...excluded, id: 'future', from: '2025-03-02' },
+    { ...excluded, id: 'other-product', product: 'OTHER' },
+    { ...excluded, id: 'inactive', active: false },
+    { ...excluded, id: 'old-model', model: 'old' },
+    { ...excluded, id: 'old-dimensions', embedding: [1, 0, 0] },
+  ]);
+  const hybrid = new RetrievalService(db, rankingEmbedding);
+  const vector = new RetrievalService(db, rankingEmbedding, 'vector');
+
+  const hits = await hybrid.search('alpha alpha', '2025-03-01');
+  expect(hits.map((hit) => hit.chunk.id)).toEqual(['alpha-a', 'alpha-b', 'gamma']);
+  expect(hits.map((hit) => hit.ranking)).toMatchObject([
+    { vectorRank: 2, bm25Rank: 1 },
+    { vectorRank: 1, bm25Rank: 2 },
+    { vectorRank: 3, bm25Rank: null, bm25Score: null },
+  ]);
+  // N=3, df(alpha)=2, avgdl=(3+4+1)/3. The query counts each lexeme once.
+  const idf = Math.log(1 + 1.5 / 2.5);
+  expect(hits[0]?.ranking?.bm25Score).toBeCloseTo(
+    (idf * 4.4) / (2 + 1.2 * (0.25 + (0.75 * 3) / (8 / 3))),
+    12,
+  );
+  expect(hits[1]?.ranking?.bm25Score).toBeCloseTo(
+    (idf * 2.2) / (1 + 1.2 * (0.25 + (0.75 * 4) / (8 / 3))),
+    12,
+  );
+  expect(hits[0]?.ranking?.rrfScore).toBeCloseTo(1 / 61 + 1 / 62, 12);
+  expect(hits[0]?.ranking?.rrfScore).toBe(hits[1]?.ranking?.rrfScore);
+  expect(hits[2]?.ranking?.rrfScore).toBeCloseTo(1 / 63, 12);
+  expect(hits[0]?.similarity).toBeCloseTo(0.8);
+
+  const vectorHits = await vector.search('alpha alpha', '2025-03-01');
+  expect(vectorHits.map((hit) => hit.chunk.id)).toEqual(['alpha-b', 'alpha-a', 'gamma']);
+  const withoutLexemes = await hybrid.search('the and', '2025-03-01');
+  expect(withoutLexemes.map(({ chunk, similarity }) => ({ chunk, similarity }))).toEqual(
+    vectorHits,
+  );
+  expect(withoutLexemes.every((hit) => hit.ranking?.bm25Rank === null)).toBe(true);
+  await expect(hybrid.search('alpha', '2025-03-01', 'UNKNOWN')).resolves.toEqual([]);
+});
+
+it('keeps a BM25-only hit outside vector top 20 with its actual cosine similarity', async () => {
+  await seedSearchChunks([
+    ...Array.from({ length: 21 }, (_, i) => ({
+      id: `vector-${String(i).padStart(2, '0')}`,
+      text: 'beta',
+      embedding: [1, 0],
+    })),
+    { id: 'weak-lexical', text: 'alpha', embedding: [0, 1] },
+  ]);
+  const search = new RetrievalService(db, rankingEmbedding);
+  const hits = await search.search('alpha', '2025-03-01');
+  expect(hits.map((hit) => hit.chunk.id)).toEqual([
+    'vector-00',
+    'weak-lexical',
+    'vector-01',
+    'vector-02',
+    'vector-03',
+  ]);
+  expect(hits[1]).toMatchObject({
+    similarity: 0,
+    ranking: { vectorRank: null, bm25Rank: 1, rrfScore: 1 / 61 },
+  });
 });
