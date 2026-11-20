@@ -28,8 +28,9 @@ tenor conflicts, retained verbatim after a valid non-refusal model choice. Prima
 vector top5/ranking/threshold remain unchanged; this is NOT BM25/RRF/rewriting or
 semantic re-ranking. Forged/blank quotes, weak hits or model refusals still refuse.
 Policy selection now executes on a valid form date after tampering detection;
-model/rules remain skipped. Real final baseline15/15,hit4/4,coverage8/8,refusal7/7,
-OOC3/3,numerics17/17,security+audit79/79 and all five Strict checks pass.
+model/rules remain skipped. A repeat run scored 14/15 because the model refused Q10 without procedure
+citations. Q10 now explicitly rejects the bypass and quotes dated PM-1/2/3 when
+supported by a qualifying procedure hit. The repeat failure report is retained.
 
 Code-filled credit-memo.ts supplies safe memo even for referrals and CSV provenance;
 no LLM arithmetic/prose. Failed JSON retains reported usage; unavailable usage is
@@ -46,20 +47,19 @@ updated without extra docs.
 
 ## Verified and remaining evidence step
 
-94 unit,28 PostgreSQL/HTTP integration,8 Chromium e2e,offline15-case evaluation and
+95 unit,28 PostgreSQL/HTTP integration,8 Chromium e2e,offline15-case evaluation and
 live15-case evaluation passed; types/lint/format/build pass. The evidence-consistency scorer rechecks committed results instead of trusting pass flags. Cases assert financial-only/rule outputs separately from original
 APP002/003/005 missing-probation referrals; no invented probation or ID. Q15 paired
 normalized protected changes have equal provider-input hashes/rules/calcs/memo;
 no original PDF replaced or indexed. Billing/embedding/retry token cost remains
 unknown; only available generation tokens reported. Initial failed report retained.
 
-Current public final report was captured before commit and labels dirty tree; after
-committing implementation, rerun live once from clean checkout, copy its immutable
-artifact to data/evaluation/results/vector-core-baseline.json, refresh measured
-latency/token figures and finalize evidence commit. Do not change source hashes or
-claim a run used a commit it did not. Then green feature->dev->main PRs, professional
-What/Why/How tested. Subsequent agent should inspect status/git for whether this
-final evidence step has already completed rather than rerun paid calls needlessly.
+Clean live vector baseline f04a6dc passed 15/15, hit@5 4/4, evidence coverage
+8/8, OOC 3/3, exact numerics 17/17, security/audit 80/80 and Strict packs 5/5.
+Gemini reported 7666 input and 1891 output tokens across 12 generation calls,
+with 7 query embeddings. Immutable report published as vector-core-baseline.json.
+Both the 11/15 and 14/15 failure reports remain committed. Core promotion through
+green feature→dev and dev→main PRs follows this evidence.
 
 ## Next and honest readiness
 

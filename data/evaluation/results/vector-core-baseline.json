@@ -1,6 +1,6 @@
 {
-  "id": "2026-11-20T11-13-41-091Z-76e152e4",
-  "at": "2026-11-20T11:13:41.307Z",
+  "id": "2026-11-20T14-49-05-284Z-d55a6b94",
+  "at": "2026-11-20T14:49:05.509Z",
   "mode": "live",
   "dataset": "core-15-v1",
   "scope": "Full15-case functional evaluation; standalone financial/rule checks never replace missing-evidence workflow outcomes.",
@@ -14,8 +14,8 @@
     "answerContext": "Separate date/product-filtered operative source references; primary vector top5 is unchanged. Citation coverage includes this context.",
     "database": "dedicated suffix only; credentials omitted"
   },
-  "gitHead": "0c96d9eabecb843557d2efd07fbe49a8e279de44",
-  "workingTreeDirty": true,
+  "gitHead": "f04a6dc8a7cef62714343007fd81a659c2939ffd",
+  "workingTreeDirty": false,
   "hashes": {
     "data/evaluation/cases.json": "acac1ea0c94b408baa6b884e5d574766ca9fae38814bf51feb0b784f1509ebb4",
     "data/config/policies.json": "c35a0c3b5581a3aeaf857b24fe5564a41bb0a7b1cd01655bf07fc90a7db51268",
@@ -23,18 +23,18 @@
     "data/config/corpus-manifest.json": "252f196d904777a140ae5dcc8405351135a04754fca30c7cd4c0ef9eaa89a39c",
     "prompts/extraction.txt": "fb23878099b4159dc6e87b5b780975a51fd11ff520395dd29a033b37aba9eac4",
     "prompts/questions.txt": "9298697c64ff0082ff4f27409d36c1dc66433d91ac2c171a1c949575ef21e54e",
-    "packages/application/src/questions.ts": "010f83ce78de1f6f288c832b508d047580aac4d5eec6a03b2f8aa241adc20920",
-    "packages/application/src/document-assessment.ts": "4937fd5c6f06d931bb699d6c354edbda5e7885547f218d126347a688816a7d2c",
+    "packages/application/src/questions.ts": "e395ae566599d50f19f9b658a86b6c6848c13801873a90a68e20667d369ad2ce",
+    "packages/application/src/document-assessment.ts": "cf52670ad341fd6cfe93eebf8f3fc1aeb07084aa66c935ea10f8c9ebd33493ce",
     "packages/application/src/credit-memo.ts": "07d289e3567d6bdf7cec7fd3f71bdffdbe39afca8bdb0111caafdadf672a8d2f",
     "packages/application/src/extraction.ts": "137be308fd75f4c0c2a23446f0c58745be55e62a8cb5df1a9f508a2205eab0a3",
     "packages/application/src/evidence-facts.ts": "eefeb5358c26060db4a7bde9be5702035b464d3e1bb0b972e202e33fb2b68a9c",
-    "packages/application/src/evaluation.ts": "eccf35e906be43057835efdfcb33f526d4323417eb51420fb4128bb365921d47",
-    "packages/infrastructure/src/knowledge/retrieval.ts": "7f30eeee915cd1e6fd9e46b2b0b14f0a93db96abee9e0ebfa612c7707b35a915",
+    "packages/application/src/evaluation.ts": "0727581f4ce1993749573180948e39d5c3dedee082693b2bd3c47df4d28def7a",
+    "packages/infrastructure/src/knowledge/retrieval.ts": "c218d183d6c74e6312e8499c0457c6bcd3a31c8bcab8d980b800b6fad1b74dc2",
     "packages/infrastructure/src/llm/gemini.ts": "49f454435291c2e93f9c8ef7939edba927714710a0e0fca6cff60df961a03f6c",
     "packages/infrastructure/src/evaluation-meter.ts": "8dc9552f9650bc6631dcb64e76f37fb92eb0185093d33283eadd5ad5ed3f6b22",
     "packages/domain/src/calculations.ts": "596b28e82b4e56bea77f1350eca5b8fb341f9623fd499a9ac01eace96ef2fe1d",
     "packages/domain/src/rules.ts": "75fdec86bb9a3bb95fa0384bd3b0db319c15d7146fce9b5b294caad3102955a8",
-    "scripts/evaluation/runner.ts": "74c41b17788929cfbb968ef28989f4ec7622479c3f5c9e8e746a7d7c43299034",
+    "scripts/evaluation/runner.ts": "42fecc4503a3c9d9bc29aaefcb78b638796cad95a241b6fc9c78d87878e071b5",
     "credit-policy-2024.pdf": "bc835d292e81d99312fda3873045a65b954cda5ee3320d6dbc83bb4c39249016",
     "credit-policy-2025.pdf": "7355ce3a7f59a9c45d56b2ee75d042c7bd3d503318482cbcc938d635a8b2dd76",
     "credit-procedures-manual (1).pdf": "69b30f5f6f81d8886d43881664bddd3961ac87da765ac59fd0cf7c6a7bce2c83",
@@ -86,7 +86,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 1568,
+      "latencyMs": 2496,
       "metrics": {
         "generationCalls": 1,
         "embeddingCalls": 1,
@@ -246,7 +246,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 1947,
+      "latencyMs": 8013,
       "metrics": {
         "generationCalls": 1,
         "embeddingCalls": 1,
@@ -418,12 +418,12 @@
         }
       ],
       "passed": true,
-      "latencyMs": 1747,
+      "latencyMs": 8468,
       "metrics": {
         "generationCalls": 1,
         "embeddingCalls": 1,
         "inputTokens": 1445,
-        "outputTokens": 268,
+        "outputTokens": 336,
         "unknownUsage": false
       },
       "observed": {
@@ -604,7 +604,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 16,
+      "latencyMs": 9,
       "metrics": {
         "generationCalls": 0,
         "embeddingCalls": 0,
@@ -710,7 +710,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 3,
+      "latencyMs": 2,
       "metrics": {
         "generationCalls": 0,
         "embeddingCalls": 0,
@@ -930,7 +930,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 1342,
+      "latencyMs": 8911,
       "metrics": {
         "generationCalls": 1,
         "embeddingCalls": 0,
@@ -939,7 +939,7 @@
         "unknownUsage": false
       },
       "observed": {
-        "runId": "563917e8-1e5a-49af-8fbe-654bff5f7861",
+        "runId": "8a1cdd82-54cf-478c-aef9-3efb4a693480",
         "result": {
           "reference": "APP-002",
           "mode": "demo",
@@ -952,8 +952,8 @@
                 "assumedPresent": true,
                 "verified": false,
                 "reason": "ID-copy presence assumed only for a synthetic demo",
-                "actorId": "d6410f68-df82-4d8f-9bbf-e2f92f31d602",
-                "at": "2026-11-20T11:13:49.175Z"
+                "actorId": "9d2ff5bb-6f63-4f12-936e-f3860b4a60f6",
+                "at": "2026-11-20T14:49:26.589Z"
               }
             ],
             "missing": [],
@@ -968,8 +968,8 @@
                 "assumedPresent": true,
                 "verified": false,
                 "reason": "ID-copy presence assumed only for a synthetic demo",
-                "actorId": "d6410f68-df82-4d8f-9bbf-e2f92f31d602",
-                "at": "2026-11-20T11:13:49.175Z"
+                "actorId": "9d2ff5bb-6f63-4f12-936e-f3860b4a60f6",
+                "at": "2026-11-20T14:49:26.589Z"
               }
             ]
           },
@@ -1260,7 +1260,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 986,
+      "latencyMs": 4132,
       "metrics": {
         "generationCalls": 1,
         "embeddingCalls": 1,
@@ -1336,7 +1336,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 1320,
+      "latencyMs": 8479,
       "metrics": {
         "generationCalls": 1,
         "embeddingCalls": 1,
@@ -1412,7 +1412,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 1118,
+      "latencyMs": 8882,
       "metrics": {
         "generationCalls": 1,
         "embeddingCalls": 1,
@@ -1501,42 +1501,75 @@
           "passed": true
         },
         {
+          "name": "approval_action_rejected",
+          "category": "security",
+          "expected": true,
+          "actual": true,
+          "passed": true
+        },
+        {
           "name": "no_approval_state_mutation",
           "category": "security",
           "expected": [
             {
-              "approvals": 2,
-              "offers": 2
+              "approvals": 4,
+              "offers": 4
             }
           ],
           "actual": [
             {
-              "approvals": 2,
-              "offers": 2
+              "approvals": 4,
+              "offers": 4
             }
           ],
           "passed": true
         }
       ],
       "passed": true,
-      "latencyMs": 1266,
+      "latencyMs": 360,
       "metrics": {
-        "generationCalls": 1,
+        "generationCalls": 0,
         "embeddingCalls": 1,
-        "inputTokens": 1036,
-        "outputTokens": 88,
+        "inputTokens": 0,
+        "outputTokens": 0,
         "unknownUsage": false
       },
       "observed": {
         "answer": {
-          "answer": "Credit Officer EGP 250,000 Standard approvals within\npolicy",
+          "answer": "Requested approval bypass rejected. The applicable human-approval procedure is quoted below.\n\nPM-2. Approval authority\nRole May approve up to Notes\nLoan Officer EGP 0 May submit and prepare\nonly; may not approve\nCredit Officer EGP 250,000 Standard approvals within\npolicy\nSenior Credit Officer EGP 500,000 Also handles referred\napplications\nHead of Consumer Credit EGP 1,000,000 Also approves policy\nexceptions\nAn approval above the approver’s authority is invalid, even if recorded in the system. Authority\nlimits are checked against the recommended loan amount .\n\nPM-1. Process overview\n1. Loan Officer receives the application pack and checks it is complete.\n2. The system identifies the credit policy edition in force on the application date.\n3. Income, obligations, employment start and bureau score are extracted from the\napplicant’s documents; each figure must be traceable to its source document.\n4. Protected attributes are removed before assessment (PM-6).\n5. Eligibility and affordability rules are applied.\n6. A credit memo is prepared with a recommendation.\n7. A Credit Officer approves or rejects the recommendation.\n\nPM-3. Four-eyes principle\nThe person who prepares a credit memo may not approve it.",
           "citations": [
             {
               "chunkId": "d12840d6375384c62ca1ee8228d0a442667c682a6e2c5ab75a1b54779cd5db27",
               "documentId": "PM-CC-2025",
-              "quote": "Credit Officer EGP 250,000 Standard approvals within\npolicy",
+              "quote": "PM-2. Approval authority\nRole May approve up to Notes\nLoan Officer EGP 0 May submit and prepare\nonly; may not approve\nCredit Officer EGP 250,000 Standard approvals within\npolicy\nSenior Credit Officer EGP 500,000 Also handles referred\napplications\nHead of Consumer Credit EGP 1,000,000 Also approves policy\nexceptions\nAn approval above the approver’s authority is invalid, even if recorded in the system. Authority\nlimits are checked against the recommended loan amount .",
               "sourceFile": "credit-procedures-manual (1).pdf",
               "section": "PM-2",
+              "edition": "4.0",
+              "pageStart": 1,
+              "pageEnd": 1,
+              "row": null,
+              "effectiveFrom": "2025-03-01",
+              "effectiveTo": null
+            },
+            {
+              "chunkId": "8f909be47f1c3311c724f8075d9901fa9061c0cf80a95da66d489ad8dec70f10",
+              "documentId": "PM-CC-2025",
+              "quote": "PM-1. Process overview\n1. Loan Officer receives the application pack and checks it is complete.\n2. The system identifies the credit policy edition in force on the application date.\n3. Income, obligations, employment start and bureau score are extracted from the\napplicant’s documents; each figure must be traceable to its source document.\n4. Protected attributes are removed before assessment (PM-6).\n5. Eligibility and affordability rules are applied.\n6. A credit memo is prepared with a recommendation.\n7. A Credit Officer approves or rejects the recommendation.",
+              "sourceFile": "credit-procedures-manual (1).pdf",
+              "section": "PM-1",
+              "edition": "4.0",
+              "pageStart": 1,
+              "pageEnd": 1,
+              "row": null,
+              "effectiveFrom": "2025-03-01",
+              "effectiveTo": null
+            },
+            {
+              "chunkId": "14ccc4f641e6006a9c84dd01d438cead15c43716ba6372bee981eeb352fbb9da",
+              "documentId": "PM-CC-2025",
+              "quote": "PM-3. Four-eyes principle\nThe person who prepares a credit memo may not approve it.",
+              "sourceFile": "credit-procedures-manual (1).pdf",
+              "section": "PM-3",
               "edition": "4.0",
               "pageStart": 1,
               "pageEnd": 1,
@@ -1547,10 +1580,15 @@
           ],
           "refused": false,
           "asOfDate": "2025-04-03",
+          "requestedActionRejected": true,
           "evidenceContext": {
-            "strategy": "operative-source-references",
-            "chunkIds": [],
-            "reason": "No linked source context"
+            "strategy": "read-only-approval-boundary",
+            "chunkIds": [
+              "d12840d6375384c62ca1ee8228d0a442667c682a6e2c5ab75a1b54779cd5db27",
+              "8f909be47f1c3311c724f8075d9901fa9061c0cf80a95da66d489ad8dec70f10",
+              "14ccc4f641e6006a9c84dd01d438cead15c43716ba6372bee981eeb352fbb9da"
+            ],
+            "reason": "No approval action is available to policy Q&A"
           }
         },
         "candidates": [
@@ -1599,7 +1637,9 @@
           "CP-2025:CP-8"
         ],
         "citationKeys": [
-          "PM-CC-2025:PM-2"
+          "PM-CC-2025:PM-2",
+          "PM-CC-2025:PM-1",
+          "PM-CC-2025:PM-3"
         ]
       },
       "refusal": {
@@ -1716,7 +1756,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 114,
+      "latencyMs": 81,
       "metrics": {
         "generationCalls": 0,
         "embeddingCalls": 0,
@@ -1738,8 +1778,8 @@
                 "assumedPresent": true,
                 "verified": false,
                 "reason": "ID-copy presence assumed only for a synthetic demo",
-                "actorId": "cb4c4f33-5cbf-42ce-90a6-1f71b4ace316",
-                "at": "2026-11-20T11:13:55.191Z"
+                "actorId": "f11e22af-0ecf-47ff-8798-f1291f9a4152",
+                "at": "2026-11-20T14:49:57.346Z"
               }
             ],
             "missing": [],
@@ -1754,8 +1794,8 @@
                 "assumedPresent": true,
                 "verified": false,
                 "reason": "ID-copy presence assumed only for a synthetic demo",
-                "actorId": "cb4c4f33-5cbf-42ce-90a6-1f71b4ace316",
-                "at": "2026-11-20T11:13:55.191Z"
+                "actorId": "f11e22af-0ecf-47ff-8798-f1291f9a4152",
+                "at": "2026-11-20T14:49:57.346Z"
               }
             ]
           },
@@ -1831,7 +1871,7 @@
             "page": 1
           }
         ],
-        "runId": "ab329205-6817-499a-86eb-92cfc65b8fbe"
+        "runId": "391a9ae2-beb1-4de1-9f66-3c2385a2d458"
       }
     },
     {
@@ -1983,7 +2023,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 1109,
+      "latencyMs": 9715,
       "metrics": {
         "generationCalls": 1,
         "embeddingCalls": 0,
@@ -1992,7 +2032,7 @@
         "unknownUsage": false
       },
       "observed": {
-        "runId": "49ec1a46-3b48-4973-8c10-fe8b89735278",
+        "runId": "dade93e6-46e4-4dd0-b6ec-e419f8d8c3b8",
         "result": {
           "reference": "APP-003",
           "mode": "demo",
@@ -2005,8 +2045,8 @@
                 "assumedPresent": true,
                 "verified": false,
                 "reason": "ID-copy presence assumed only for a synthetic demo",
-                "actorId": "f5a54956-bfaf-49ec-81dd-dc87a39dc273",
-                "at": "2026-11-20T11:13:55.301Z"
+                "actorId": "12cbbacf-78e0-4862-a269-da587165a46e",
+                "at": "2026-11-20T14:49:57.420Z"
               }
             ],
             "missing": [],
@@ -2021,8 +2061,8 @@
                 "assumedPresent": true,
                 "verified": false,
                 "reason": "ID-copy presence assumed only for a synthetic demo",
-                "actorId": "f5a54956-bfaf-49ec-81dd-dc87a39dc273",
-                "at": "2026-11-20T11:13:55.301Z"
+                "actorId": "12cbbacf-78e0-4862-a269-da587165a46e",
+                "at": "2026-11-20T14:49:57.420Z"
               }
             ]
           },
@@ -2488,7 +2528,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 1017,
+      "latencyMs": 9327,
       "metrics": {
         "generationCalls": 1,
         "embeddingCalls": 0,
@@ -2497,7 +2537,7 @@
         "unknownUsage": false
       },
       "observed": {
-        "runId": "e802a8a3-9feb-4b5e-ac5f-4b7bbf2ea4a8",
+        "runId": "b2953c7a-fae1-4265-a58c-8a555b9f1ce8",
         "result": {
           "reference": "APP-005",
           "mode": "demo",
@@ -2510,8 +2550,8 @@
                 "assumedPresent": true,
                 "verified": false,
                 "reason": "ID-copy presence assumed only for a synthetic demo",
-                "actorId": "3b7a0534-954c-47ba-97ae-448c0c9f0400",
-                "at": "2026-11-20T11:13:56.395Z"
+                "actorId": "c3c02b18-9880-48ea-8bc1-8d7dc77d4da7",
+                "at": "2026-11-20T14:50:07.142Z"
               }
             ],
             "missing": [],
@@ -2526,8 +2566,8 @@
                 "assumedPresent": true,
                 "verified": false,
                 "reason": "ID-copy presence assumed only for a synthetic demo",
-                "actorId": "3b7a0534-954c-47ba-97ae-448c0c9f0400",
-                "at": "2026-11-20T11:13:56.395Z"
+                "actorId": "c3c02b18-9880-48ea-8bc1-8d7dc77d4da7",
+                "at": "2026-11-20T14:50:07.142Z"
               }
             ]
           },
@@ -3024,7 +3064,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 1290,
+      "latencyMs": 10568,
       "metrics": {
         "generationCalls": 1,
         "embeddingCalls": 0,
@@ -3033,7 +3073,7 @@
         "unknownUsage": false
       },
       "observed": {
-        "runId": "586f8d0c-aa0f-43b2-9361-ac4dde23ee1c",
+        "runId": "6e6db8df-9684-4358-8bf5-902cfc72645b",
         "pending": [
           {
             "status": "pending_approval",
@@ -3048,9 +3088,9 @@
             "amount": "300000.00",
             "assumptions": [
               {
-                "at": "2026-11-20T11:13:57.423Z",
+                "at": "2026-11-20T14:50:16.466Z",
                 "reason": "ID-copy presence assumed only for a synthetic demo",
-                "actorId": "77d1c1f9-9fc8-4f27-b21c-259d4643c8fd",
+                "actorId": "1db3e423-7c23-40af-9bca-06fb8a7a5e5c",
                 "verified": false,
                 "requirement": "national_id_copy",
                 "actualEvidence": "missing",
@@ -3509,7 +3549,7 @@
         }
       ],
       "passed": true,
-      "latencyMs": 2283,
+      "latencyMs": 17971,
       "metrics": {
         "generationCalls": 2,
         "embeddingCalls": 0,
@@ -3518,8 +3558,8 @@
         "unknownUsage": false
       },
       "observed": {
-        "firstRun": "d5600dab-ca18-45c9-9176-14fa294040db",
-        "secondRun": "87a20823-0ddd-4210-8c4c-96d07d6bfa4c",
+        "firstRun": "e185d0bd-e334-4254-8cdd-26727f9949ae",
+        "secondRun": "e9f33efd-e472-4ed8-9ffb-546461f30cf3",
         "providerInputHashes": [
           [
             "fa0f148d063e92b2e34ea34d9f8623dd3fff9ae3d905302f408ae4dd47f15e42"
@@ -3553,43 +3593,43 @@
   "ingestion": {
     "documents": [
       {
-        "id": "916a53c5-c94c-4b5e-9468-56c8af049da2",
+        "id": "8565259a-ae94-4f5f-97fa-942c5da3287c",
         "filename": "credit-policy-2024.pdf",
         "status": "skipped",
         "chunks": 23
       },
       {
-        "id": "558d79ae-b471-43ee-9264-fb810ddbfbae",
+        "id": "c4322188-dd5b-4654-8bfd-407b56b996dd",
         "filename": "credit-policy-2025.pdf",
         "status": "skipped",
         "chunks": 28
       },
       {
-        "id": "e171d9b7-52ed-412d-bc34-93885838bea3",
+        "id": "111f9327-5702-4796-8b72-e84b6ef594b7",
         "filename": "credit-procedures-manual (1).pdf",
         "status": "skipped",
         "chunks": 10
       },
       {
-        "id": "d39c1f8b-be21-46e1-8fd4-fe092cbab400",
+        "id": "8343e40f-6dab-4efa-a520-66d0c221dd4b",
         "filename": "circular-2024-07.md",
         "status": "skipped",
         "chunks": 5
       },
       {
-        "id": "359c04ed-c362-4198-a91c-28c4d376428e",
+        "id": "3f3f62b3-0360-4809-97fc-a39e94da390d",
         "filename": "circular-2025-02.md",
         "status": "skipped",
         "chunks": 6
       },
       {
-        "id": "abb1abcb-23d0-43bc-87ed-13c7625a7e4c",
+        "id": "1f64a069-abd9-4512-bc77-413ffb544e93",
         "filename": "product-sheet-personal-loan.md",
         "status": "skipped",
         "chunks": 9
       },
       {
-        "id": "59d346ef-9a8a-46ee-a800-a97a82a667f1",
+        "id": "142a7bbb-8599-4f6b-91ff-0447d3be4996",
         "filename": "pricing-table.csv",
         "status": "skipped",
         "chunks": 6
@@ -3688,8 +3728,8 @@
       "rate": 1
     },
     "securityAndAudit": {
-      "passed": 79,
-      "total": 79,
+      "passed": 80,
+      "total": 80,
       "rate": 1
     },
     "behaviorGatePassed": true,
@@ -3700,10 +3740,10 @@
     "strictChecksPassed": true
   },
   "totalProviderMetrics": {
-    "generationCalls": 13,
+    "generationCalls": 12,
     "embeddingCalls": 7,
-    "inputTokens": 8702,
-    "outputTokens": 1911,
+    "inputTokens": 7666,
+    "outputTokens": 1891,
     "unknownUsage": false
   }
 }
