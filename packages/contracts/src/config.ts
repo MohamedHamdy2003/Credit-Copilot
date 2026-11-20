@@ -16,6 +16,7 @@ export const configSchema = z
     GENERATION_MODEL: z.string().default('gemini-3.5-flash-lite'),
     EMBEDDING_MODEL: z.string().default('gemini-embedding-001'),
     EMBEDDING_DIMENSIONS: z.coerce.number().int().min(1).max(2000).default(768),
+    RETRIEVAL_STRATEGY: z.enum(['hybrid', 'vector']).default('hybrid'),
     RETRIEVAL_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.65),
     UPLOAD_MAX_BYTES: z.coerce.number().int().positive().default(10485760),
     DEMO_PASSWORD: z.string().default(''),

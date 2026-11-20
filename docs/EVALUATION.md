@@ -22,7 +22,7 @@ CI runs that mode without keys, alongside unit/HTTP/browser tests. The older fiv
 question smoke remains `pnpm evaluate:smoke`; small offline unit subset remains
 `pnpm evaluate:offline`.
 
-## Observed live results —20 November2026
+## Vector core benchmark — 20 November 2026
 
 Model gemini-3.5-flash-lite, embeddings
 gemini-embedding-001,768 dimensions, primary top5 cosine ranking,
@@ -121,6 +121,41 @@ embedding token counts or retry token counts.
   fixed it without relaxing source-text validation. The first result remains
   documented here; that smoke is not substituted for the current fifteen cases.
 
+## Live hybrid comparison — 20 November 2026
+
+The hybrid run at `7e9832f` used the same frozen cases, effective dates, policy
+and evidence bytes, prompts, models, 768 dimensions, cosine floor of 0.65 and
+linked-source logic as vector commit `f04a6dc`. Both ran from clean commits.
+The hybrid report records BM25 and vector ranks, BM25 score, RRF score and actual
+cosine similarity for each candidate. Reproduce either mode with
+`pnpm evaluate --vector` or `pnpm evaluate --hybrid`.
+
+| Metric | Vector | Hybrid |
+|---|---|---|
+| Cases passed | 15/15 | 15/15 |
+| Retrieval hit@5 | 4/4 | 4/4 |
+| Citation coverage | 8/8 | 8/8 |
+| Refusal correctness | 7/7 | 7/7 |
+| Out-of-corpus refusal | 3/3 | 3/3 |
+| Exact numerics | 17/17 | 17/17 |
+| Security and audit | 80/80 | 80/80 |
+| First candidate matches a gold source | 4/4 | 4/4 |
+| Strict original-pack checks | 5/5 | 5/5 |
+| Case latency total | 97.414 s | 146.580 s |
+| Reported generation tokens (input / output) | 7666 / 1891 | 7160 / 1781 |
+
+Case latencies include external provider requests and exclude setup, ingestion
+and any prior failed case attempts. They vary across runs and do not isolate
+database query speed. The four answerable questions saturate hit@5 in both modes.
+
+Full evidence is in [hybrid-core-evaluation.json](../data/evaluation/results/hybrid-core-evaluation.json).
+Two earlier hybrid runs returned 14/15: [Q03](../data/evaluation/results/hybrid-initial-failure.json)
+and [Q02](../data/evaluation/results/hybrid-repeat-failure.json) each encountered
+`ProviderUnavailable` during generation. The evaluator now records primary
+ranks before generation and retries only `ProviderUnavailable`, at most once
+per case and twice per live run. The failed attempts and their latency and usage
+records remain in each report. The final run used no case-level retries.
+
 ## Core gate and remaining submission work
 
 The measured functional gate passes: all15 cases, all critical safety/audit/numeric
@@ -135,10 +170,8 @@ This does not certify final submission: the3–5 minute unlisted video is still 
 produced; an interactive clean-clone walkthrough remains pending (CI does install/
 check against a fresh checkout/DB). Git history had25 non-merge commits before this
 feature but only three actual Cairo dates:17,19,20 November. The brief's four-date
-requirement is not met; no commits or dates were fabricated. Small-sample quality,
-other browser engines and unavailable provider billing remain limitations. All
-nine stretches remain unimplemented until this core checkpoint; Hybrid BM25/vector
-RRF is next, with a measured comparison against this frozen baseline.
+requirement is not met. The retrieval sample is small, browser checks cover
+Chromium, and provider billing data is unavailable. Hybrid search is complete. Query Rewriting is next.
 
 Appendix E conflict remains resolved by the actual policy: CP-2024 DBR50% gives
 382000 and CP-2025 DBR45% gives330000 with the same Decimal function. Strict missing

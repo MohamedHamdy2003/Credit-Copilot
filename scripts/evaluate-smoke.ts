@@ -42,7 +42,7 @@ const cases = [
 ];
 const { db, provider, config } = await runtime();
 try {
-  const search = new RetrievalService(db, provider);
+  const search = new RetrievalService(db, provider, 'vector');
   const prompt = await readFile('prompts/questions.txt', 'utf8');
   const results = [];
   for (const test of cases) {
