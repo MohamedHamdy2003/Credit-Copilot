@@ -22,6 +22,7 @@ export interface ApplicationStore {
     document: NormalizedDocument;
     synthetic: boolean;
     latestAssessmentId: string | null;
+    preparerId: string;
   }>;
   start(
     actor: Actor,
@@ -132,6 +133,7 @@ export class OperationsService {
       id: record.id,
       synthetic: record.synthetic,
       latestAssessmentId: record.latestAssessmentId,
+      canAssess: record.preparerId === actor.id,
       form: parseApplicationForm(record.document),
     };
   }

@@ -74,6 +74,9 @@ importers:
       '@eslint/js':
         specifier: 10.0.1
         version: 10.0.1(eslint@10.15.0(supports-color@8.1.1))
+      '@playwright/test':
+        specifier: 1.65.1
+        version: 1.65.1
       '@types/cookie-parser':
         specifier: 1.4.10
         version: 1.4.10(@types/express@5.0.6)
@@ -1486,6 +1489,14 @@ packages:
         integrity: sha512-SEeaJLb3qBNF/OaXnaR1NmmBbFYk1zC0ZH/52fATcRPLFg/p791YrcyFFy44Bo9sLaGuSuLp5Q6axbb/O+v/RA==,
       }
     engines: { node: ^14.18.0 || >=16.0.0 }
+
+  '@playwright/test@1.65.1':
+    resolution:
+      {
+        integrity: sha512-y+NCIRm2LvY4slUVWvGh1nujJ8RF/hEisIsq2mtUPgdQC4L701bq5hZGMhrpeXjACvwvO9tj5dJqhvM6TP9lbw==,
+      }
+    engines: { node: '>=20' }
+    hasBin: true
 
   '@posthog/core@1.68.0':
     resolution:
@@ -4924,6 +4935,22 @@ packages:
       }
     engines: { node: '>=8' }
 
+  playwright-core@1.65.1:
+    resolution:
+      {
+        integrity: sha512-hqPpz7blSMPxWVdoeE1yiBSzXsKiVOd2k+kjCvmUywD2GPO2Dd9HfcWnq9NN0GHbNZDFgZ9JfBFr+X5/BLo0qw==,
+      }
+    engines: { node: '>=20' }
+    hasBin: true
+
+  playwright@1.65.1:
+    resolution:
+      {
+        integrity: sha512-vJ1FuoOrNwOKHUIVEvSt3jT1L+wjjDpwhwIstKtfvTh8XIG4FG4bIFuvNdMxi81LGfAhUgUZleVFaOLY4RIUUw==,
+      }
+    engines: { node: '>=20' }
+    hasBin: true
+
   postcss@8.5.33:
     resolution:
       {
@@ -6896,6 +6923,10 @@ snapshots:
     optional: true
 
   '@pkgr/core@0.3.6': {}
+
+  '@playwright/test@1.65.1':
+    dependencies:
+      playwright: 1.65.1
 
   '@posthog/core@1.68.0':
     dependencies:
@@ -9151,6 +9182,12 @@ snapshots:
   pkg-dir@4.2.0:
     dependencies:
       find-up: 4.1.0
+
+  playwright-core@1.65.1: {}
+
+  playwright@1.65.1:
+    dependencies:
+      playwright-core: 1.65.1
 
   postcss@8.5.33:
     dependencies:
