@@ -156,6 +156,41 @@ ranks before generation and retries only `ProviderUnavailable`, at most once
 per case and twice per live run. The failed attempts and their latency and usage
 records remain in each report. The final run used no case-level retries.
 
+## Live query rewriting comparison — 20 November 2026
+
+The clean rewrite run at `a1b855b` used the same frozen cases, corpus, model,
+dimensions, cutoff and grounding prompt as the plain hybrid run at `7e9832f`.
+Use `pnpm evaluate --hybrid` for the baseline and `pnpm evaluate --rewrite`
+for hybrid with the configured glossary budget.
+
+| Metric | Plain hybrid | Hybrid with rewriting |
+|---|---|---|
+| Cases passed | 15/15 | 15/15 |
+| Retrieval hit@5 | 4/4 | 4/4 |
+| Citation coverage | 8/8 | 8/8 |
+| Refusal correctness | 7/7 | 7/7 |
+| Out-of-corpus refusals | 3/3 | 3/3 |
+| Exact numeric assertions | 17/17 | 17/17 |
+| Security and audit assertions | 80/80 | 80/80 |
+| Strict original-pack checks | 5/5 | 5/5 |
+| Query embedding calls | 7 | 7 |
+| Logical generation calls | 12 | 12 |
+| Reported generation tokens (input / output) | 7160 / 1781 | 7160 / 1777 |
+| Sum of final case latencies | 146.580 s | 105.274 s |
+
+The glossary applied to 3 questions (Q01, Q02, Q03). The alternate top five
+changed in 2 of those searches and promoted 0 qualifying candidates into
+the results passed to the answer pipeline. Each original ranked list in the
+rewrite trace matched its plain hybrid list. A controlled PostgreSQL test also
+demonstrates promotion into a weak original slot. The four answerable cases
+already reached the hit@5 ceiling with plain hybrid.
+
+Case latencies include live provider time. They exclude setup, ingestion and
+any prior failed case attempts, so they cannot isolate the cost of the second
+lexical query. The rewrite run used 0 case-level provider retries.
+Candidate IDs, glossary expansions and final promotions are recorded in
+[query-rewrite-core-evaluation.json](../data/evaluation/results/query-rewrite-core-evaluation.json).
+
 ## Core gate and remaining submission work
 
 The measured functional gate passes: all15 cases, all critical safety/audit/numeric
@@ -171,7 +206,8 @@ produced; an interactive clean-clone walkthrough remains pending (CI does instal
 check against a fresh checkout/DB). Git history had25 non-merge commits before this
 feature but only three actual Cairo dates:17,19,20 November. The brief's four-date
 requirement is not met. The retrieval sample is small, browser checks cover
-Chromium, and provider billing data is unavailable. Hybrid search is complete. Query Rewriting is next.
+Chromium, and provider billing data is unavailable. Hybrid search and query
+rewriting are complete.
 
 Appendix E conflict remains resolved by the actual policy: CP-2024 DBR50% gives
 382000 and CP-2025 DBR45% gives330000 with the same Decimal function. Strict missing

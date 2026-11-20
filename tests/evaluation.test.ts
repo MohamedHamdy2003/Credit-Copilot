@@ -29,19 +29,21 @@ it('recomputes the committed live evidence instead of trusting summary/pass flag
   expect(baseline.strictChecks).toHaveLength(5);
   expect(baseline.strictChecks.every((c) => c.passed)).toBe(true);
 });
+
+type LiveReport = {
+  workingTreeDirty: boolean;
+  completed: boolean;
+  configuration: Record<string, unknown>;
+  hashes: Record<string, string>;
+  strictChecks: { passed: boolean }[];
+  results: EvaluationResult[];
+};
+const readLiveReport = (name: string) =>
+  JSON.parse(readFileSync(`data/evaluation/results/${name}.json`, 'utf8')) as LiveReport;
+
 it('verifies the clean live hybrid comparison and keeps both provider failures in the evidence', () => {
-  type LiveReport = {
-    workingTreeDirty: boolean;
-    completed: boolean;
-    configuration: Record<string, unknown>;
-    hashes: Record<string, string>;
-    strictChecks: { passed: boolean }[];
-    results: EvaluationResult[];
-  };
-  const read = (name: string) =>
-    JSON.parse(readFileSync(`data/evaluation/results/${name}.json`, 'utf8')) as LiveReport;
-  const vector = read('vector-core-baseline');
-  const hybrid = read('hybrid-core-evaluation');
+  const vector = readLiveReport('vector-core-baseline');
+  const hybrid = readLiveReport('hybrid-core-evaluation');
   expect(vector).toMatchObject({ completed: true, workingTreeDirty: false });
   expect(hybrid).toMatchObject({ completed: true, workingTreeDirty: false });
   expect(hybrid.configuration).toMatchObject({
@@ -70,7 +72,7 @@ it('verifies the clean live hybrid comparison and keeps both provider failures i
     ['hybrid-initial-failure', 'Q03'],
     ['hybrid-repeat-failure', 'Q02'],
   ] as const) {
-    const failed = read(name);
+    const failed = readLiveReport(name);
     expect(failed.results.filter((result) => !result.passed)).toMatchObject([
       { id, error: 'ProviderUnavailable' },
     ]);
@@ -79,6 +81,48 @@ it('verifies the clean live hybrid comparison and keeps both provider failures i
       total: 15,
     });
   }
+});
+it('rechecks the live rewrite comparison and its original rankings against the hybrid evidence', () => {
+  const baseline = readLiveReport('hybrid-core-evaluation');
+  const rewritten = readLiveReport('query-rewrite-core-evaluation');
+  expect(rewritten).toMatchObject({ completed: true, workingTreeDirty: false });
+  expect(rewritten.configuration).toMatchObject({
+    ...baseline.configuration,
+    queryRewrite: { method: 'glossary', maxExpansions: 2 },
+  });
+  const rankingFiles = new Set([
+    'packages/infrastructure/src/knowledge/retrieval.ts',
+    'packages/infrastructure/src/knowledge/hybrid-search.ts',
+    'scripts/evaluation/runner.ts',
+  ]);
+  for (const [path, hash] of Object.entries(baseline.hashes)) {
+    if (!rankingFiles.has(path)) expect(rewritten.hashes[path]).toBe(hash);
+  }
+  expect(rewritten.strictChecks).toHaveLength(5);
+  expect(rewritten.strictChecks.every((check) => check.passed)).toBe(true);
+  expect(summarizeEvaluation(rewritten.results, 'live')).toMatchObject({
+    cases: { passed: 15, total: 15 },
+    retrievalHitAt5: { passed: 4, total: 4 },
+    criticalEvidenceCoverage: { passed: 8, total: 8 },
+    outOfCorpusRefusal: { passed: 3, total: 3 },
+    liveQualityGate: 'passed',
+  });
+
+  const applied: string[] = [];
+  for (const result of rewritten.results) {
+    const trace = (
+      result.observed as {
+        rewrite?: { originalChunkIds: string[]; expansions: string[] };
+      } | null
+    )?.rewrite;
+    if (!trace) continue;
+    applied.push(result.id);
+    const original = baseline.results.find((caseResult) => caseResult.id === result.id)
+      ?.observed as { candidates: { id: string }[] };
+    expect(trace.originalChunkIds).toEqual(original.candidates.map((candidate) => candidate.id));
+    expect(trace.expansions).toHaveLength(1);
+  }
+  expect(applied).toEqual(['Q01', 'Q02', 'Q03']);
 });
 function results(): EvaluationResult[] {
   return set.cases.map((c) => ({

@@ -60,7 +60,7 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 
 `pnpm evaluate` يشغّل15 حالة فعلية عبر Gemini في قاعدة منفصلة تنتهي بـ_eval، وينشئها إن كانت صلاحية المستخدم تسمح. لا يغيّر بيانات الطلبات في قاعدة التطبيق. يقرأ cache موثوقًا لمتجهات السياسات المطابقة للنص/model/dimensions، بينما embeddings الأسئلة والاستدعاءات التوليدية live. يحفظ كل تشغيل، حتى الفاشل، في `artifacts/evaluation/`، ويخرج بكود فشل إذا لم تمر البوابة. يلزم مفتاح وquota؛ هذا الأمر يستهلكها.
 
-الحالات الذهبية في `data/evaluation/cases.json` والتقارير الفعلية في `data/evaluation/results/`. الـvector والـhybrid عدّوا 15/15 وhit@5 كان 4/4 في الوضعين على الأسئلة القابلة للإجابة. شغّل `pnpm evaluate --vector` و`pnpm evaluate --hybrid` للمقارنة. البحث الافتراضي يدمج BM25 وpgvector بـRRF، وQ&A يطبّق عتبة الـcosine على الأدلة. التفاصيل وتقارير الفشل في `docs/EVALUATION.md`. `pnpm evaluate:smoke` يحتفظ بفحص الـvector القديم لخمس حالات، و`pnpm evaluate:offline` يشغّل regression tests بسيطة من غير DB.
+الحالات الذهبية في `data/evaluation/cases.json` والتقارير الفعلية في `data/evaluation/results/`. الـvector والـhybrid عدّوا 15/15 وhit@5 كان 4/4 في الوضعين على الأسئلة القابلة للإجابة. شغّل `pnpm evaluate --vector` و`pnpm evaluate --hybrid` و`pnpm evaluate --rewrite` للمقارنة. البحث الافتراضي يدمج BM25 وpgvector بـRRF ويضيف مصطلحات بحث من قاموس ثابت. التقييم مع إعادة الصياغة حقق 15/15 وhit@5 ‏4/4. التفاصيل وتقارير الفشل في `docs/EVALUATION.md`. `pnpm evaluate:smoke` يحتفظ بفحص الـvector القديم لخمس حالات، و`pnpm evaluate:offline` يشغّل regression tests بسيطة من غير DB.
 
 ## Configuration
 
@@ -99,6 +99,6 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 
 **ما يُرسل إلى Gemini:** للسياسات: السؤال بعد إخفاء ID ذي14 رقمًا والتليفونات المصرية، ونصوص السياسات المسترجعة ومراجعها. للاستخراج: اسم pack، الصفحة/القسم، وأربعة أنواع سطور فقط: صافي الدخل، الالتزامات، بدء العمل والـbureau score. لا تُرسل الاستمارة الخام أو الأسماء أو قيم gender/religion/marital status/nationality أو صورة البطاقة. لا تدخل بيانات أشخاص في الأسئلة؛ masking ليس redaction عامًا لكل شكل PII. تحفظ النسخ الأصلية في cases الخاصة مع صلاحية owner/reviewer، ولا تُعرض مخرجات النموذج كـHTML.
 
-البوابة الوظيفية اجتازت العينة المحددة؛ هذا ليس تعميمًا لجودة RAG. تكلفة الفاتورة وتوكنات embedding/retries غير متاحة من الـports وتُسجل unknown. كل الـstretch goals لاحقًا حسب FEATURES.md. التسليم النهائي ما زال يحتاج فيديو3–5 دقائق ومراجعة clean-clone؛ تاريخ Git الفعلي يغطي3 أيام Cairo فقط، وليس4، ولن نصطنع تاريخ commits. لا توجد رسالة تقديم أو نشر تلقائي.
+البوابة الوظيفية اجتازت العينة المحددة؛ هذا ليس تعميمًا لجودة RAG. تكلفة الفاتورة وتوكنات embedding/retries غير متاحة من الـports وتُسجل unknown. Hybrid Search وQuery Rewriting اكتملوا. باقي المراحل في FEATURES.md. التسليم النهائي ما زال يحتاج فيديو3–5 دقائق ومراجعة clean-clone؛ تاريخ Git الفعلي يغطي3 أيام Cairo فقط، وليس4، ولن نصطنع تاريخ commits. لا توجد رسالة تقديم أو نشر تلقائي.
 
 اقرأ `docs/DESIGN.md` للقرارات، `docs/EVALUATION.md` للأرقام، `docs/AI-USAGE-LOG.md` لاستخدام AI، و`FEATURES.md` للحالة.
