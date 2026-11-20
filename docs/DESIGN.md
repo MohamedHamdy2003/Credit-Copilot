@@ -26,8 +26,9 @@ the DB on shutdown. It is a local launcher, not production hosting/deployment.
 ParserRegistry dispatches PDF/CSV/MD only, checks extension/MIME/signature,10MiB
 and100 PDF-page limits, then normalizes into a Zod-validated document schema.
 Blank/encrypted/corrupt PDFs fail by name; no OCR is provided. Source text/page/
-CSV-row provenance is retained. Seven policy files are SHA256-manifest trusted;
-five synthetic application PDFs are hash-recognized but never indexed as policy.
+CSV-row provenance is retained. The original seven policy files and four added
+auto-loan sources use a SHA-256 manifest. Five original application PDFs and
+three auto packs have a separate manifest and stay in the private case store.
 
 Clause/page/row-aware chunks use cl100k_base, maximum800 tokens and60 overlap for
 oversized spans. This is a stable budget tokenizer, not Gemini's exact tokenizer.
@@ -75,7 +76,17 @@ refuse. The read-only approval response also requires qualifying procedure
 evidence. The interface deliberately
 returns evidence excerpts rather than unrestricted model prose. Date/edition
 selectors and explicit question references must agree; default is today's Cairo
-calendar date. Numeric calculations use the structured calculator, never an LLM.
+calendar date. The standalone calculator covers PL-100. Both product assessment
+paths use exact code calculations.
+
+An adapter for a different full provider goes in
+`packages/infrastructure/src/llm/<provider>.ts` and implements `EmbeddingPort`
+and `GenerationPort` from `packages/application/src/ports.ts`. Register it in
+`createProvider` in `packages/infrastructure/src/llm/provider.ts` and add its
+`LLM_PROVIDER` value and settings to `packages/contracts/src/config.ts` and
+`.env.example`. A changed embedding model or dimensions requires reindexing
+the trusted sources. The current Ollama adapter implements generation and uses
+the primary provider's embeddings through the fallback wrapper.
 
 ## Source authority and arithmetic
 
@@ -173,6 +184,23 @@ applicant request within30 inclusive calendar days of the recorded Cairo rejecti
 date (documented interpretation: no separate notification timestamp supplied).
 Locked concurrent retries return one stored deterministic written reply/audit pair,
 without changing credit status/version; replies remain readable after expiry.
+
+## Synthetic auto-loan extension
+
+AL-200 uses the authored synthetic AUTO-2025 edition effective 1 March 2025,
+a separate product sheet, rate table and procedures. The reviewed PDF form
+selects the product; every assessment and policy query scopes its sources to
+that product and date. The original personal-loan files retain their bytes and
+their policy IDs.
+
+The auto product requires a documented vehicle quote and down payment of at
+least 25%. Decimal arithmetic subtracts the down payment from the documented
+price, verifies the requested amount and caps eligible finance at the lower of
+affordability, the product ceiling and 75% of vehicle price. Below-minimum down
+payment is a verified failed PS-9 rule. Missing vehicle evidence refers.
+An auto affordability failure requires reassessment with revised financing
+evidence before a lower amount can be considered. The standard human decision
+flow stores the auto policy and product source used for issuance or rejection.
 
 ## Live assessment progress and verified answers
 

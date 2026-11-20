@@ -103,7 +103,12 @@ export async function extractSanitized(
     );
   const response = await provider.completeStructured(
     prompt,
-    JSON.stringify({ source: sanitized.sourceFile, evidence: sanitized.lines }),
+    JSON.stringify({
+      source: /^(?:APP|AUTO)-\d{3}\.pdf$/.test(sanitized.sourceFile)
+        ? sanitized.sourceFile
+        : 'application-pack',
+      evidence: sanitized.lines,
+    }),
     generationSchema,
   );
   const parsed = extractionSchema.safeParse(response.value);

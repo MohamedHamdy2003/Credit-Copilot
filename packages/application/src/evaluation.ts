@@ -10,6 +10,7 @@ export const evaluationCaseSchema = z
     gold: z.array(z.string()).optional(),
     criticalGold: z.array(z.string()).optional(),
     expectedPatterns: z.array(z.string()).optional(),
+    expectedResolutionPattern: z.string().optional(),
     principal: z.string().optional(),
     income: z.string().optional(),
     obligations: z.string().optional(),

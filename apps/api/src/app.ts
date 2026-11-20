@@ -48,6 +48,7 @@ import type { Actor } from '../../../packages/domain/src/access.js';
 import { DomainError, invariant } from '../../../packages/domain/src/errors.js';
 import type { OperationsService } from '../../../packages/application/src/operations.js';
 import type { CaseReviewService } from '../../../packages/application/src/case-review.js';
+import { productIds } from '../../../packages/contracts/src/products.js';
 import { sendEventStream } from './sse.js';
 
 const AUTH = Symbol('AUTH'),
@@ -61,8 +62,8 @@ const questionRequestBody: SchemaObject = {
   properties: {
     question: { type: 'string', maxLength: 2000 },
     asOfDate: { type: 'string', format: 'date' },
-    product: { type: 'string', enum: ['PL-100'] },
-    edition: { type: 'string', enum: ['CP-2024', 'CP-2025'] },
+    product: { type: 'string', enum: [...productIds] },
+    edition: { type: 'string', enum: ['CP-2024', 'CP-2025', 'AUTO-2025'] },
   },
 };
 const assessmentRequestBody: SchemaObject = {

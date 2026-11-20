@@ -1,6 +1,5 @@
 import 'reflect-metadata';
 import 'dotenv/config';
-import { readFile } from 'node:fs/promises';
 import { createApi } from './app.js';
 import { configSchema } from '../../../packages/contracts/src/config.js';
 import { createDataSource } from '../../../packages/infrastructure/src/db/data-source.js';
@@ -9,23 +8,29 @@ import { ScryptCredentials } from '../../../packages/infrastructure/src/auth/pas
 import { AuthService } from '../../../packages/application/src/auth.js';
 import { DecisionService } from '../../../packages/application/src/decisions.js';
 import { PostgresDecisionStore } from '../../../packages/infrastructure/src/db/decision-store.js';
-import type { Policy } from '../../../packages/domain/src/policy.js';
+import { loadProductCatalog } from '../../../packages/infrastructure/src/product-catalog.js';
+import { ParserRegistry } from '../../../packages/infrastructure/src/parsers/registry.js';
 import { createProvider } from '../../../packages/infrastructure/src/llm/provider.js';
 import { createOperations } from '../../../packages/infrastructure/src/operations.js';
 import { createCaseReviews } from '../../../packages/infrastructure/src/db/case-review-store.js';
 const config = configSchema.parse(process.env);
 const db = await createDataSource(config.DATABASE_URL).initialize();
-const policies = JSON.parse(await readFile('data/config/policies.json', 'utf8')) as Policy[];
+const catalog = await loadProductCatalog(new ParserRegistry(config.UPLOAD_MAX_BYTES));
 const app = await createApi({
   caseReviews: await createCaseReviews(db),
-  operations: await createOperations(db, createProvider(config), config),
+  operations: await createOperations(db, createProvider(config), config, catalog),
   maxUploadBytes: config.UPLOAD_MAX_BYTES,
   auth: new AuthService(
     new PostgresAuthStore(db),
     new ScryptCredentials(),
     config.SESSION_TTL_HOURS,
   ),
-  decisions: new DecisionService(new PostgresDecisionStore(db, policies)),
+  decisions: new DecisionService(
+    new PostgresDecisionStore(
+      db,
+      Object.values(catalog).flatMap((entry) => entry.policies),
+    ),
+  ),
   webOrigin: config.WEB_ORIGIN,
   secureCookies: config.COOKIE_SECURE,
   sessionHours: config.SESSION_TTL_HOURS,

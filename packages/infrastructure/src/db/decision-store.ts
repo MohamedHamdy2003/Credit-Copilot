@@ -63,7 +63,7 @@ export class PostgresDecisionStore implements DecisionStore {
       const run = rows[0];
       invariant(run, 'NotFound', 'Assessment not found', 404);
       const activeJobs = (await manager.query(
-        "SELECT run_id FROM cases.assessment_jobs WHERE application_id=$1 AND status='running'",
+        "SELECT run_id FROM cases.assessment_jobs WHERE application_id=$1 AND status='running' AND created_at>=clock_timestamp()-interval '15 minutes'",
         [run.application_id],
       )) as { run_id: string }[];
       invariant(
@@ -224,7 +224,7 @@ export class PostgresDecisionStore implements DecisionStore {
         );
         const approvalId = randomUUID();
         const sourceFile = command.clause.startsWith('PS-')
-          ? 'product-sheet-personal-loan.md'
+          ? (result.productSource ?? 'product-sheet-personal-loan.md')
           : policy.sourceFile;
         const criterion =
           result.results?.find(
@@ -272,9 +272,13 @@ export class PostgresDecisionStore implements DecisionStore {
           'InvalidDisbursementDate',
           'Disbursement must not predate the application',
         );
-        const policy = selectPolicy(this.policies, form.applicationDate);
+        const policy = selectPolicy(
+          this.policies.filter((entry) => (entry.productId ?? 'PL-100') === form.productId),
+          form.applicationDate,
+        );
         invariant(
-          policy.edition === result.policyEdition,
+          policy.edition === result.policyEdition &&
+            (result.productId ?? 'PL-100') === form.productId,
           'ReassessmentRequired',
           'Policy snapshot mismatch',
         );
@@ -298,6 +302,7 @@ export class PostgresDecisionStore implements DecisionStore {
               assumptions: result.evidence.assumptions,
               fullyEvidenceVerified: result.evidence.fullyEvidenceVerified,
               policyEdition: result.policyEdition,
+              productId: form.productId,
             },
           ],
         );

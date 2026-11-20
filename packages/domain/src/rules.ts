@@ -1,4 +1,10 @@
-import { addMonths, affordability, compareMoney, daysBetween } from './calculations.js';
+import {
+  addMonths,
+  affordability,
+  calculateVehicleFunding,
+  compareMoney,
+  daysBetween,
+} from './calculations.js';
 import type { Policy, Product, PricingRow } from './policy.js';
 
 export interface ApplicantFacts {
@@ -16,6 +22,8 @@ export interface ApplicantFacts {
   amount: string;
   months: number;
   plannedDisbursement: string;
+  vehiclePrice?: string;
+  downPayment?: string;
 }
 export interface RuleResult {
   rule: string;
@@ -23,11 +31,19 @@ export interface RuleResult {
   citation: string;
   reason: string;
 }
+
+export interface AutoFinance {
+  vehiclePrice: string;
+  downPayment: string;
+  financedAmount: string;
+  minimumDownPaymentPercent: string;
+}
+
 export function assessRules(
   facts: ApplicantFacts,
   policy: Policy,
   product: Product,
-  pricing: PricingRow,
+  price: PricingRow | (() => PricingRow),
 ) {
   const results: RuleResult[] = [];
   const check = (rule: string, passes: boolean, reason: string, referral = false) =>
@@ -76,12 +92,51 @@ export function assessRules(
     true,
   );
   check('CP-11', facts.purposeAllowed, 'Prohibited purposes are not eligible');
+  let autoFinance: AutoFinance | undefined;
+  let financingAmount = facts.amount;
+  let financingMaximum = product.maximumAmount;
+  if (product.auto) {
+    const { minimumDownPaymentPercent } = product.auto;
+    const autoCheck = (result: RuleResult['result'], reason: string) =>
+      results.push({ rule: 'PS-9', citation: `${product.sourceFile} PS-9`, result, reason });
+    if (facts.vehiclePrice === undefined || facts.downPayment === undefined) {
+      autoCheck('refer', 'Vehicle price and down payment require evidence');
+    } else {
+      const funding = calculateVehicleFunding(
+        facts.vehiclePrice,
+        facts.downPayment,
+        minimumDownPaymentPercent,
+        product.maximumAmount,
+      );
+      if (!funding) {
+        autoCheck('fail', 'Vehicle price and resulting finance amount must be positive');
+      } else {
+        financingAmount = funding.financedAmount;
+        financingMaximum = funding.maximumPrincipal;
+        autoFinance = {
+          vehiclePrice: funding.vehiclePrice,
+          downPayment: funding.downPayment,
+          financedAmount: financingAmount,
+          minimumDownPaymentPercent,
+        };
+        if (compareMoney(financingAmount, facts.amount) !== 0) {
+          autoCheck('refer', 'Requested amount disagrees with the vehicle price less down payment');
+        } else {
+          autoCheck(
+            funding.meetsMinimum ? 'pass' : 'fail',
+            `Evidence must show a down payment of at least ${minimumDownPaymentPercent}% of vehicle price`,
+          );
+        }
+      }
+    }
+  }
+  const finance = autoFinance ? { autoFinance } : {};
   results.push({
     rule: 'PS-3',
     citation: `${product.sourceFile} PS-3`,
     result:
-      compareMoney(facts.amount, product.minimumAmount) >= 0 &&
-      compareMoney(facts.amount, product.maximumAmount) <= 0 &&
+      compareMoney(financingAmount, product.minimumAmount) >= 0 &&
+      compareMoney(financingAmount, product.maximumAmount) <= 0 &&
       facts.months >= product.minimumMonths &&
       facts.months <= product.maximumMonths
         ? 'pass'
@@ -89,32 +144,40 @@ export function assessRules(
     reason: 'Product amount and tenor limits',
   });
   if (results.some((r) => r.result !== 'pass')) {
+    const mandatoryDecline =
+      facts.hasDefault || results.some((r) => r.rule === 'PS-9' && r.result === 'fail');
     return {
-      recommendation: results.some((r) => r.result === 'refer')
-        ? ('REFER_TO_HUMAN' as const)
-        : ('DECLINE' as const),
+      recommendation:
+        !mandatoryDecline && results.some((r) => r.result === 'refer')
+          ? ('REFER_TO_HUMAN' as const)
+          : ('DECLINE' as const),
       results,
       calculation: null,
       recommendedAmount: null,
+      ...finance,
     };
   }
+  const pricing = typeof price === 'function' ? price() : price;
   const calculation = affordability({
-    principal: facts.amount,
+    principal: financingAmount,
     annualRatePercent: pricing.annualRatePercent,
     months: facts.months,
     income: facts.income,
     obligations: facts.obligations,
     maxDbr: policy.maxDbr,
-    productMaximum: product.maximumAmount,
+    productMaximum: financingMaximum,
   });
   results.push({
     rule: 'CP-4.1',
     citation: `${policy.edition} CP-4.1`,
     result: calculation.passes ? 'pass' : 'fail',
-    reason: 'Exact debt burden compared against applicable policy limit',
+    reason:
+      product.auto && !calculation.passes
+        ? 'Debt burden exceeds the policy limit. Review a revised down payment with verified evidence'
+        : 'Exact debt burden compared against applicable policy limit',
   });
   const validAlternative =
-    compareMoney(calculation.maximumEligibleAmount, product.minimumAmount) >= 0;
+    !product.auto && compareMoney(calculation.maximumEligibleAmount, product.minimumAmount) >= 0;
   return {
     recommendation: calculation.passes
       ? ('APPROVE' as const)
@@ -124,9 +187,11 @@ export function assessRules(
     results,
     calculation,
     recommendedAmount: calculation.passes
-      ? facts.amount
+      ? financingAmount
       : validAlternative
         ? calculation.maximumEligibleAmount
         : null,
+    pricing,
+    ...finance,
   };
 }

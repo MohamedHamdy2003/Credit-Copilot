@@ -11,7 +11,7 @@ import { createDataSource } from '../packages/infrastructure/src/db/data-source.
 import { PostgresDecisionStore } from '../packages/infrastructure/src/db/decision-store.js';
 import { createOperations } from '../packages/infrastructure/src/operations.js';
 import { createCaseReviews } from '../packages/infrastructure/src/db/case-review-store.js';
-import type { Policy } from '../packages/domain/src/policy.js';
+import { loadProductCatalog } from '../packages/infrastructure/src/product-catalog.js';
 import { WorkflowTestProvider } from '../tests/helpers/workflow-provider.js';
 import { seedRejection } from '../tests/e2e/seed-rejection.js';
 import {
@@ -33,6 +33,7 @@ const hash = await credentials.hash('e2e-only-password');
 for (const username of [
   'basic',
   'stream',
+  'auto',
   'strict',
   'demo',
   'question',
@@ -59,8 +60,9 @@ const manifest = JSON.parse(
 const ingestion = new IngestionService(db, provider, manifest);
 for (const entry of manifest)
   await ingestion.ingest(entry.filename, await readFile(`data/corpus/policy/${entry.filename}`));
-const policies = JSON.parse(await readFile('data/config/policies.json', 'utf8')) as Policy[];
-await seedRejection(db, policies);
+const catalog = await loadProductCatalog();
+const policies = Object.values(catalog).flatMap((entry) => entry.policies);
+await seedRejection(db, catalog['PL-100'].policies);
 const config = configSchema.parse({
   DATABASE_URL: url,
   ALLOW_DEMO_MODE: 'true',
@@ -71,7 +73,7 @@ const app = await createApi({
   caseReviews: await createCaseReviews(db),
   auth: new AuthService(new PostgresAuthStore(db), credentials, 8),
   decisions: new DecisionService(new PostgresDecisionStore(db, policies)),
-  operations: await createOperations(db, provider, config),
+  operations: await createOperations(db, provider, config, catalog),
   maxUploadBytes: 10 * 1024 * 1024,
   webOrigin: 'http://127.0.0.1:5174',
   secureCookies: false,

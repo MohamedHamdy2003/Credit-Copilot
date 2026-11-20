@@ -321,6 +321,17 @@ export class CoreEvaluation {
               new RegExp(pattern, 'i').test(answer.answer),
             ),
           );
+        if (c.expectedResolutionPattern)
+          r.assertions.push(
+            assertion(
+              'explains_which_source_governs',
+              'behavior',
+              true,
+              'resolution' in answer &&
+                typeof answer.resolution === 'string' &&
+                new RegExp(c.expectedResolutionPattern, 'i').test(answer.resolution),
+            ),
+          );
         for (const gold of c.criticalGold!)
           r.assertions.push(
             assertion(`critical_evidence_${gold}`, 'coverage', true, citations.includes(gold)),

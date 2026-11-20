@@ -2,6 +2,7 @@ import { validDate } from './calculations.js';
 import { invariant } from './errors.js';
 
 export interface Policy {
+  productId?: string;
   edition: string;
   effectiveFrom: string;
   effectiveTo: string | null;
@@ -20,6 +21,7 @@ export interface Product {
   minimumMonths: number;
   maximumMonths: number;
   sourceFile: string;
+  auto?: { minimumDownPaymentPercent: string };
 }
 export interface PricingRow {
   documentId: string;

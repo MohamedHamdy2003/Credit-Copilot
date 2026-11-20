@@ -1,0 +1,104 @@
+{
+  "suite": "synthetic-auto-loan-v1",
+  "assessments": [
+    {
+      "id": "A01",
+      "fixture": "AUTO-001",
+      "mode": "demo",
+      "form": {
+        "amount": "250000.00",
+        "vehiclePrice": "350000.00",
+        "downPayment": "100000.00"
+      },
+      "expected": {
+        "productId": "AL-200",
+        "policyEdition": "AUTO-2025",
+        "recommendation": "APPROVE",
+        "status": "pending_approval",
+        "recommendedAmount": "250000.00",
+        "calculation": {
+          "monthlyInstallment": "6623.47",
+          "dbrPercent": "35.41",
+          "maximumEligibleAmount": "262000.00"
+        },
+        "pricing": {
+          "annualRatePercent": "20.00",
+          "sourceFile": "synthetic-auto-pricing.csv",
+          "row": 3
+        },
+        "autoFinance": {
+          "vehiclePrice": "350000.00",
+          "downPayment": "100000.00",
+          "financedAmount": "250000.00",
+          "minimumDownPaymentPercent": "25"
+        }
+      },
+      "downPaymentRule": {
+        "rule": "PS-9",
+        "result": "pass",
+        "citation": "synthetic-auto-product.md PS-9"
+      }
+    },
+    {
+      "id": "A02",
+      "fixture": "AUTO-002",
+      "mode": "demo",
+      "form": {
+        "amount": "300000.00",
+        "vehiclePrice": "350000.00",
+        "downPayment": "50000.00"
+      },
+      "expected": {
+        "productId": "AL-200",
+        "policyEdition": "AUTO-2025",
+        "recommendation": "DECLINE",
+        "status": "pending_approval",
+        "recommendedAmount": null,
+        "calculation": null,
+        "autoFinance": {
+          "vehiclePrice": "350000.00",
+          "downPayment": "50000.00",
+          "financedAmount": "300000.00",
+          "minimumDownPaymentPercent": "25"
+        }
+      },
+      "downPaymentRule": {
+        "rule": "PS-9",
+        "result": "fail",
+        "citation": "synthetic-auto-product.md PS-9"
+      }
+    },
+    {
+      "id": "A03",
+      "fixture": "AUTO-003",
+      "mode": "demo",
+      "form": {
+        "amount": "250000.00",
+        "vehiclePrice": null,
+        "downPayment": "100000.00"
+      },
+      "expected": {
+        "productId": "AL-200",
+        "policyEdition": "AUTO-2025",
+        "recommendation": "REFER_TO_HUMAN",
+        "status": "pending_review",
+        "reason": "MISSING_REQUIRED_EVIDENCE",
+        "calculation": null,
+        "evidence": { "missing": ["vehicle_quotation"] }
+      }
+    }
+  ],
+  "retrieval": {
+    "question": "What is the minimum down payment for the vehicle loan?",
+    "asOfDate": "2025-04-03",
+    "auto": {
+      "productId": "AL-200",
+      "documentId": "PS-AL-200",
+      "section": "PS-9"
+    },
+    "personal": {
+      "productId": "PL-100",
+      "excludedDocumentId": "PS-AL-200"
+    }
+  }
+}

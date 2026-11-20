@@ -108,12 +108,6 @@ export async function assessApplication(
       dependencies.provider,
       dependencies.prompt,
     );
-    const pricing = selectPricing(
-      dependencies.pricing,
-      form.applicationDate,
-      form.months,
-      form.payrollTransfer,
-    );
     steps.push('load_applicable_rules');
     const result = assessRules(
       {
@@ -126,10 +120,18 @@ export async function assessApplication(
         obligations: extraction.fields.obligations.value,
         employmentStart: extraction.fields.employmentStart.value,
         bureauScore: extraction.fields.bureauScore.value,
+        vehiclePrice: form.vehiclePrice,
+        downPayment: form.downPayment,
       },
       policy,
       dependencies.product,
-      pricing,
+      () =>
+        selectPricing(
+          dependencies.pricing,
+          form.applicationDate,
+          form.months,
+          form.payrollTransfer,
+        ),
     );
     steps.push('calculate_and_check_rules');
     // Canonical summary is code-filled: no model-generated numbers.

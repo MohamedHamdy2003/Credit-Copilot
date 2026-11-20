@@ -1,0 +1,5 @@
+document_id,version,effective_from,tenor_from_months,tenor_to_months,segment,annual_rate_percent
+PT-AL-200,1.0,2025-03-01,12,36,standard,18.00
+PT-AL-200,1.0,2025-03-01,37,60,standard,20.00
+PT-AL-200,1.0,2025-03-01,12,36,payroll_transfer,16.00
+PT-AL-200,1.0,2025-03-01,37,60,payroll_transfer,18.00

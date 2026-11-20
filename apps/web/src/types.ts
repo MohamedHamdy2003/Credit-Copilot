@@ -1,5 +1,6 @@
 import type { Actor } from '../../../packages/domain/src/access.js';
 import type { AssessmentResult } from '../../../packages/application/src/assessment-record.js';
+import type { ProductId } from '../../../packages/contracts/src/products.js';
 export type { Actor, AssessmentResult };
 export interface Session {
   user: Actor;
@@ -16,7 +17,15 @@ export interface ApplicationDetail {
   id: string;
   synthetic: boolean;
   latestAssessmentId: string | null;
-  form: { reference: string; amount: string; months: number; applicationDate: string };
+  form: {
+    reference: string;
+    amount: string;
+    months: number;
+    applicationDate: string;
+    productId: ProductId;
+    vehiclePrice?: string;
+    downPayment?: string;
+  };
 }
 export interface Run {
   id: string;
@@ -50,6 +59,7 @@ export interface Answer {
   refused: boolean;
   asOfDate: string;
   citations: Citation[];
+  resolution?: string;
 }
 export interface KnowledgeDocument {
   id: string;

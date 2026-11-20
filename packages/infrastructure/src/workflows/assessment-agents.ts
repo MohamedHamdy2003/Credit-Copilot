@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { Agent } from '@mastra/core/agent';
 import type { MastraModelConfig } from '@mastra/core/llm';
 import { createTool } from '@mastra/core/tools';
@@ -7,15 +8,14 @@ import type { Config } from '../../../contracts/src/config.js';
 import {
   ASSESSMENT_AGENT_TOOLS,
   type AgentToolCall,
-  type AssessmentAgent,
   type AssessmentAgentPort,
 } from '../../../application/src/assessment-agents.js';
 
-const tasks: Record<AssessmentAgent, string> = {
-  evidence: 'Extract and verify the allowlisted evidence prepared for this assessment.',
-  policy: 'Read the trusted policy clauses for the server-selected edition, date and product.',
-  memo: 'Render the credit memo from the verified assessment and code-calculated results.',
-};
+const agentPromptSchema = z.strictObject({
+  instructions: z.string().trim().min(1),
+  tasks: z.record(z.enum(['evidence', 'policy', 'memo']), z.string().trim().min(1)),
+});
+let agentPrompts: z.infer<typeof agentPromptSchema> | undefined;
 
 const toolInput = z.strictObject({});
 const toolReceipt = z.strictObject({ completed: z.boolean() });
@@ -26,6 +26,15 @@ type StreamV2 = Awaited<
 const mastraAssessmentAgents: AssessmentAgentPort = {
   async run(agent, operation, planner, record) {
     const toolName = ASSESSMENT_AGENT_TOOLS[agent];
+    try {
+      agentPrompts ??= agentPromptSchema.parse(
+        JSON.parse(await readFile('prompts/assessment-agents.json', 'utf8')),
+      );
+    } catch {
+      record({ agent, tool: toolName, status: 'fallback', reason: 'planning_failed' });
+      return operation();
+    }
+    const { instructions, tasks } = agentPrompts;
     type Result = Awaited<ReturnType<typeof operation>>;
     let execution: Promise<{ value: Result } | { error: unknown }> | undefined;
     let toolsOpen = true;
@@ -49,9 +58,6 @@ const mastraAssessmentAgents: AssessmentAgentPort = {
       },
     });
     const callSchema = z.strictObject({ tool: z.literal(toolName), arguments: toolInput });
-    const instructions =
-      'Request exactly one tool by returning a JSON object with only tool and arguments. ' +
-      'Use the tool name provided and an empty arguments object {}. The server supplies all data.';
     const task = JSON.stringify({ assessmentAgent: agent, tool: toolName, task: tasks[agent] });
     let planned = false;
     let reason: AgentToolCall['reason'] = 'tool_not_executed';

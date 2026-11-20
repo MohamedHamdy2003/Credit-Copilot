@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import {
   ASSESSMENT_AGENT_TOOLS,
   type AgentToolCall,
@@ -6,6 +7,10 @@ import { assessmentAgents } from '../packages/infrastructure/src/workflows/asses
 import { FakeGeneration } from './helpers/fake-provider.js';
 
 const runner = assessmentAgents('agents')!;
+const prompts = JSON.parse(readFileSync('prompts/assessment-agents.json', 'utf8')) as {
+  instructions: string;
+  tasks: Record<keyof typeof ASSESSMENT_AGENT_TOOLS, string>;
+};
 
 it.each(Object.entries(ASSESSMENT_AGENT_TOOLS))(
   'executes the %s agent through the registered Mastra tool',
@@ -24,6 +29,10 @@ it.each(Object.entries(ASSESSMENT_AGENT_TOOLS))(
     ).resolves.toBe(result);
     expect(audit).toEqual([{ agent, tool, status: 'executed' }]);
     expect(planner.calls).toHaveLength(1);
+    expect(planner.calls[0]).toMatchObject({
+      system: prompts.instructions,
+      data: JSON.stringify({ assessmentAgent: agent, tool, task: prompts.tasks[name] }),
+    });
     expect(planner.calls[0]?.data).not.toContain(result.privateResult);
   },
 );
