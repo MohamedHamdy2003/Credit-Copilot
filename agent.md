@@ -6,6 +6,8 @@ Read `status.md` first. Read specific source files only for the next task; do no
 
 User authorized implementation of the reviewed plan. Stack: React/Vite, NestJS, Mastra, PostgreSQL FTS + pgvector, true BM25 + RRF, REST/OpenAPI, TypeORM, Jest. All nine stretches follow a passing core gate. Four-day window November17–20,2026 Cairo. Explain progress simply in Arabic. Do not delegate to subagents unless explicitly requested by user or applicable instructions.
 
+Reported local hardware:16GB RAM and4GB graphics. Gemini is the approved live provider; local fallback remains a later stretch. Never replace the user's local key or print it.
+
 ## Nonnegotiable decisions
 
 - CP-2024 DBR50%, CP-2025 DBR45%; example capacity382,000/330,000. Same decimal formula; no example hardcodes. Explain Appendix E discrepancy in DESIGN/EVALUATION.
@@ -19,6 +21,8 @@ User authorized implementation of the reviewed plan. Stack: React/Vite, NestJS, 
 Workspace G:/Credit Copilot, PowerShell, Node24, pnpm11.25.0. Main/dev/feature branches already exist. Test before feature merge into dev. Keep main promotions through >=3 actual PRs when GitHub authentication exists. Never fake four days of commits or results. No automatic deployment. GitHub repo https://github.com/MohamedHamdy2003/Credit-Copilot; Gemini approved. Never print/read API keys into logs; user configures local.env.
 
 Commands: pnpm test; pnpm typecheck; pnpm lint; pnpm format:check; pnpm build; pnpm test:integration. Docker DB port54329. Dedicated integration DB name must end _test; tests truncate only that database. DB migrations explicit via pnpm db:migrate; synchronize=false. Unit tests require no keys. Fake embeddings are lexical test vectors, never claim semantic/live evaluation.
+
+pnpm dev starts local DB/migrations/API/web. pnpm evaluate runs full live15-case evaluation in a separate *_eval DB; pnpm evaluate:core:offline runs its fake-provider regression in *_test, sequentially with integration/e2e. Timestamped reports preserve failures; committed JSON freezes the source-aware vector baseline. No cost/billing estimate is available from provider ports. Read status.md before spending quota on a repeat run.
 
 ## References on demand
 

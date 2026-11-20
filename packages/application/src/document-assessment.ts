@@ -10,6 +10,7 @@ import { DomainError, invariant } from '../../domain/src/errors.js';
 import type { AssessmentDependencies } from './assessment.js';
 import type { AssessmentRepository, AssessmentResult } from './assessment-record.js';
 import type { Chunk } from '../../contracts/src/documents.js';
+import { creditMemo } from './credit-memo.js';
 
 export const documentAssessmentInputSchema = z
   .object({
@@ -43,6 +44,7 @@ export interface AssessmentState {
   policy?: Policy;
   extraction?: Awaited<ReturnType<typeof extractVerified>>;
   rules?: ReturnType<typeof assessRules>;
+  pricing?: import('../../domain/src/policy.js').PricingRow;
   clauses: Chunk[];
   failure?: string;
   result?: AssessmentResult;
@@ -87,7 +89,12 @@ export async function executeAssessmentStage(
     status: 'executed',
   };
   state.stageEvents.push(event);
-  if (state.failure && stage !== 'prepare_memo' && stage !== 'record_pending_review') {
+  if (
+    state.failure &&
+    stage !== 'prepare_memo' &&
+    stage !== 'record_pending_review' &&
+    !(stage === 'select_policy' && state.form)
+  ) {
     event.status = 'skipped';
     return state;
   }
@@ -111,7 +118,8 @@ export async function executeAssessmentStage(
       }
       case 'select_policy': {
         state.policy = selectPolicy(deps.policies, state.form!.applicationDate);
-        if (state.evidence!.referral) state.failure = state.evidence!.referral.reason;
+        if (state.evidence?.referral && !state.failure)
+          state.failure = state.evidence.referral.reason;
         break;
       }
       case 'extract_data':
@@ -119,9 +127,21 @@ export async function executeAssessmentStage(
           state.input.document,
           {
             completeStructured: async (system, data) => {
-              const response = await deps.provider.completeStructured(system, data);
-              state.usageRecords.push({ model: response.model, ...response.usage });
-              return response;
+              try {
+                const response = await deps.provider.completeStructured(system, data);
+                state.usageRecords.push({ model: response.model, ...response.usage });
+                return response;
+              } catch (error) {
+                const details = error instanceof DomainError ? error.details : {};
+                state.usageRecords.push({
+                  model:
+                    typeof details.model === 'string' ? details.model : 'provider-not-reported',
+                  inputTokens: typeof details.inputTokens === 'number' ? details.inputTokens : null,
+                  outputTokens:
+                    typeof details.outputTokens === 'number' ? details.outputTokens : null,
+                });
+                throw error;
+              }
             },
           },
           deps.prompt,
@@ -160,10 +180,9 @@ export async function executeAssessmentStage(
           );
         }
         // Guard executable configuration against drift from the indexed source.
-        const dbr = state.clauses
-          .filter((c) => c.section === 'CP-4.1')
-          .map((c) => c.text)
-          .join('\n');
+        // Ordered operative clause first: an annex's old50% value must not
+        // validate an incorrect2025 executable configuration.
+        const dbr = state.clauses.find((c) => c.section === 'CP-4.1')!.text;
         const expected = Number(state.policy!.maxDbr) * 100;
         invariant(
           dbr.includes(`${expected}%`),
@@ -176,6 +195,7 @@ export async function executeAssessmentStage(
         const f = state.form!,
           x = state.extraction!.fields;
         const price = selectPricing(deps.pricing, f.applicationDate, f.months, f.payrollTransfer);
+        state.pricing = price;
         state.rules = assessRules(
           {
             ...state.derived!.facts,
@@ -220,6 +240,10 @@ export async function executeAssessmentStage(
             fraudReferral: state.failure === 'SuspectedTampering',
             calculation: null,
             status: 'pending_review',
+            citations:
+              state.failure === 'SuspectedTampering'
+                ? ['PM-7', 'CP-8']
+                : (evidence.referral?.citations ?? ['CP-8']),
           };
         else {
           const r = state.rules!;
@@ -234,9 +258,10 @@ export async function executeAssessmentStage(
                 : r.recommendation === 'OFFER_ALTERNATIVE'
                   ? 'pending_customer_acceptance'
                   : 'pending_approval',
-            memo: `${r.recommendation}; ${state.policy!.edition}; ${r.results.map((x) => `${x.rule}: ${x.result}`).join('; ')}${r.calculation ? `; EMI EGP ${r.calculation.monthlyInstallment}; DBR ${r.calculation.dbrPercent}%` : ''}`,
+            pricing: state.pricing,
           };
         }
+        state.result.memo = creditMemo(state.result, state.form);
         break;
       }
       case 'record_pending_review': {

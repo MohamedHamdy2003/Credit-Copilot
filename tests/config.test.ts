@@ -7,6 +7,9 @@ describe('safe configuration', () => {
     expect(config.ASSESSMENT_MODE).toBe('strict');
     expect(config.ALLOW_DEMO_MODE).toBe(false);
   });
+  it('does not silently select the real provider when a fake runtime provider was requested', () => {
+    expect(() => configSchema.parse({ ...base, LLM_PROVIDER: 'fake' })).toThrow();
+  });
   it('does not interpret the string false as truthy', () => {
     expect(configSchema.parse({ ...base, ALLOW_DEMO_MODE: 'false' }).ALLOW_DEMO_MODE).toBe(false);
   });

@@ -10,6 +10,7 @@ import {
 } from '../packages/application/src/document-assessment.js';
 import { sanitizeEvidence } from '../packages/application/src/extraction.js';
 import { deriveEvidenceFacts } from '../packages/application/src/evidence-facts.js';
+import { DomainError } from '../packages/domain/src/errors.js';
 import type { AssessmentRecord } from '../packages/application/src/assessment-record.js';
 import { FakeGeneration } from './helpers/fake-provider.js';
 import type { Completion, GenerationPort } from '../packages/application/src/ports.js';
@@ -142,6 +143,24 @@ it('records a fraud referral without calling the model for APP-004', async () =>
   expect(state.result?.fraudReferral).toBe(true);
   expect(fake.calls).toHaveLength(0);
   expect(records[0]?.result.reason).toBe('SuspectedTampering');
+  expect(records[0]?.result.policyEdition).toBe('CP-2025');
+  expect(records[0]?.result.memo).toContain('Human decision required');
+});
+it('records reported failed-generation usage and builds a code-only referral memo', async () => {
+  const state = await run('APP-001', {
+    provider: {
+      completeStructured: async () => {
+        throw new DomainError('InvalidLLMOutput', 'Invalid JSON', 422, {
+          model: 'fake',
+          inputTokens: 23,
+          outputTokens: 5,
+        });
+      },
+    },
+  });
+  expect(state.result?.usageRecords).toEqual([{ model: 'fake', inputTokens: 23, outputTokens: 5 }]);
+  expect(state.result?.memo).toContain('InvalidLLMOutput');
+  expect(state.result?.calculation).toBeNull();
 });
 it('records invalid JSON and consumed tokens before validation failed', async () => {
   const result = (
@@ -164,6 +183,10 @@ it('refers missing clauses or inconsistent source/configuration', async () => {
   );
   expect(
     (await run('APP-001', { policies: deps.policies.map((p) => ({ ...p, maxDbr: '0.99' })) }))
+      .result?.reason,
+  ).toBe('PolicyConfigurationMismatch');
+  expect(
+    (await run('APP-001', { policies: deps.policies.map((p) => ({ ...p, maxDbr: '0.50' })) }))
       .result?.reason,
   ).toBe('PolicyConfigurationMismatch');
 });

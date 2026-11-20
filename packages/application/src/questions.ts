@@ -11,6 +11,12 @@ export interface PolicySearch {
     product?: string,
     limit?: number,
   ): Promise<{ chunk: Chunk; similarity: number }[]>;
+  related?(
+    question: string,
+    date: string,
+    product: string,
+    hits: { chunk: Chunk; similarity: number }[],
+  ): Promise<{ chunks: Chunk[]; reason: string }>;
 }
 const selectionSchema = z
   .object({
@@ -58,19 +64,61 @@ export async function answerPolicyQuestion(
     asOfDate: input.asOfDate,
   });
   if (!hits.length) return refuse();
+  // Source-reference context is separate from the vector top5. It never creates
+  // an answer when the primary search is below threshold or the model refuses.
+  const related = await dependencies.search.related?.(
+    question,
+    input.asOfDate,
+    input.product ?? 'PL-100',
+    hits,
+  );
+  const candidates = [
+    ...new Map(
+      [...hits.map((h) => h.chunk), ...(related?.chunks ?? [])].map((c) => [c.id, c]),
+    ).values(),
+  ];
   const response = await dependencies.provider.completeStructured(
     dependencies.prompt,
     JSON.stringify({
       question,
       asOfDate: input.asOfDate,
-      evidence: hits.map((hit) => ({ chunkId: hit.chunk.id, text: hit.chunk.text })),
+      evidence: candidates.map((chunk) => ({
+        chunkId: chunk.id,
+        text: chunk.text,
+        documentId: chunk.documentId,
+        edition: chunk.edition,
+        section: chunk.section,
+        page: chunk.pageStart,
+        sourceFile: chunk.sourceFile,
+        effectiveFrom: chunk.effectiveFrom,
+        effectiveTo: chunk.effectiveTo,
+      })),
     }),
   );
   const parsed = selectionSchema.safeParse(response.value);
   if (!parsed.success || !parsed.data.citations.length) return refuse();
   const citations = [];
+  const requiredKeys = new Set(related?.chunks.map((c) => `${c.documentId}:${c.section}`) ?? []);
+  const selectedCitations = [
+    ...(related?.chunks.map((c) => ({ chunkId: c.id, quote: c.text })) ?? []),
+    ...parsed.data.citations.filter((c) => {
+      const source = candidates.find((s) => s.id === c.chunkId);
+      return !source || !requiredKeys.has(`${source.documentId}:${source.section}`);
+    }),
+  ].slice(0, 5);
+  // Validate every model-selected span even if a canonical operative clause
+  // replaces a comparison-table selection in the final evidence bundle.
   for (const selected of parsed.data.citations) {
-    const hit = hits.find((item) => item.chunk.id === selected.chunkId);
+    const source = candidates.find((c) => c.id === selected.chunkId);
+    if (
+      !source ||
+      !selected.quote.trim() ||
+      !source.text.replace(/\s+/g, ' ').includes(selected.quote.trim().replace(/\s+/g, ' '))
+    )
+      return refuse();
+  }
+  for (const selected of selectedCitations) {
+    const chunk = candidates.find((item) => item.id === selected.chunkId);
     // Models may fold PDF line breaks into spaces. Match whitespace only, then
     // emit the original source span; never relax word/number/punctuation checks.
     const pattern = selected.quote
@@ -78,19 +126,20 @@ export async function answerPolicyQuestion(
       .split(/\s+/)
       .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       .join('\\s+');
-    const sourceQuote = hit?.chunk.text.match(new RegExp(pattern))?.[0];
-    if (!hit || !sourceQuote) return refuse();
+    const sourceQuote = chunk?.text.match(new RegExp(pattern))?.[0];
+    if (!chunk || !sourceQuote) return refuse();
     citations.push({
-      chunkId: hit.chunk.id,
+      chunkId: chunk.id,
+      documentId: chunk.documentId,
       quote: sourceQuote,
-      sourceFile: hit.chunk.sourceFile,
-      section: hit.chunk.section,
-      edition: hit.chunk.edition,
-      pageStart: hit.chunk.pageStart,
-      pageEnd: hit.chunk.pageEnd,
-      row: hit.chunk.row,
-      effectiveFrom: hit.chunk.effectiveFrom,
-      effectiveTo: hit.chunk.effectiveTo,
+      sourceFile: chunk.sourceFile,
+      section: chunk.section,
+      edition: chunk.edition,
+      pageStart: chunk.pageStart,
+      pageEnd: chunk.pageEnd,
+      row: chunk.row,
+      effectiveFrom: chunk.effectiveFrom,
+      effectiveTo: chunk.effectiveTo,
     });
   }
   // Evidence-first baseline: only verified verbatim spans become answer text.
@@ -99,5 +148,10 @@ export async function answerPolicyQuestion(
     citations,
     refused: false,
     asOfDate: input.asOfDate,
+    evidenceContext: {
+      strategy: 'operative-source-references',
+      chunkIds: related?.chunks.map((c) => c.id) ?? [],
+      reason: related?.reason ?? null,
+    },
   };
 }

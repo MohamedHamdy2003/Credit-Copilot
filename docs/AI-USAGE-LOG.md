@@ -1,5 +1,23 @@
 # AI usage log
 
+## 2026-11-20 full evaluation/core checkpoint
+
+Codex implemented the fifteen-case evaluator, independent golden expectations,
+exact numeric/security/fairness/audit assertions, live/offline separation, immutable
+sanitized reports and CI regressions. It re-read the original DOCX and preserved
+the distinction between instructions in the brief and the user's authorized work;
+no submission email/video upload was performed.
+
+The first real run failed4/15 despite raw hit@5=4/4: Q01/02/03 lacked necessary
+operative/conflicting citations; Q11 omitted policy edition after early tampering
+referral. Metadata and separately linked source context repaired completeness
+without changing vector ranking/threshold, and safe policy selection repaired audit.
+Initial failure and final15/15 report are committed, not replaced by a success-only
+summary. Three real live executions were observed; fake CI never claims semantic
+quality. Code-filled referral memos, failed-JSON usage preservation and a tested
+one-command local launcher close concrete core gaps; dead placeholder config was
+removed. No probation/ID evidence, provider cost or commit date was fabricated.
+
 ## 2026-11-20 referrals and written reasons
 
 Codex re-read PM-4/5/7/9 from the supplied manual and CP-8. PM-9 requests a written

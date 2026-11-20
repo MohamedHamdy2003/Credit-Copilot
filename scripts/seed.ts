@@ -19,7 +19,7 @@ try {
     }
   }
   console.log(
-    'Policy files only indexed. Customer packs remain in isolated data/corpus/evidence; application registration belongs to day2.',
+    'Policy files only indexed. Customer packs stay isolated; select or upload a reviewed pack through Applications.',
   );
 } finally {
   await db.destroy();
