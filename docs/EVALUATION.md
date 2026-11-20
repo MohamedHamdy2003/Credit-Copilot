@@ -218,6 +218,41 @@ timeout default became 120 seconds and the citation schema constrained each
 allowed ID to exact source spans. The application verifier still checks the
 selected quote. [Initial failure report](../data/evaluation/results/ollama-fallback-initial-failure.json)
 
+## Live typed agent evaluation — 20 November 2026
+
+Clean commit `2cf9a5d` evaluated the three Mastra agents through Gemini with
+the same corpus, model settings and frozen cases as the query-rewrite workflow
+report. The assessor still uses the same code for source checks, calculations
+and the memo. The agents target assessment stages. Policy Q&A uses its existing
+retrieval and quotation path.
+
+| Metric | Workflow baseline | Agent mode |
+|---|---|---|
+| Cases passed | 15/15 | 15/15 |
+| Retrieval hit@5 | 4/4 | 4/4 |
+| Citation coverage | 8/8 | 8/8 |
+| Out-of-corpus refusal | 3/3 | 3/3 |
+| Exact numeric assertions | 17/17 | 17/17 |
+| Security and audit assertions | 80/80 | 94/94 |
+| Strict original pack checks | 5/5 | 5/5 |
+| Verified and persisted agent tool executions | 0 | 18 |
+| Logical generation calls | 12 | 30 |
+| Live query embeddings | 7 | 7 |
+| Reported generation tokens (input / output) | 7160 / 1777 | 8348 / 2074 |
+
+The eight-stage workflow matched across all five original packs in both Strict
+and Demo using a deterministic fixture provider. That paired test compares the
+recommendation, rules, calculations, evidence and memo. Live agent execution
+adds one planning call per eligible role and extra audit checks. The five
+Strict packs and the tampered APP-004 took the code-only preflight path.
+
+The first Gemini run scored 12/15 after the provider stopped responding
+successfully. The evaluator reran with a 6500 ms interval between logical
+generation calls. Timings in the passing report include this interval.
+Production uses the existing provider timing.
+[Passing live report](../data/evaluation/results/agent-orchestration-core.json)
+[Initial failed report](../data/evaluation/results/agent-orchestration-initial-failure.json)
+
 ## Core gate and remaining submission work
 
 The measured functional gate passes: all15 cases, all critical safety/audit/numeric

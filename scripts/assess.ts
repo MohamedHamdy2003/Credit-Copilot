@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { runtime } from './runtime.js';
+import { assessmentAgents } from '../packages/infrastructure/src/workflows/assessment-agents.js';
 import { ParserRegistry } from '../packages/infrastructure/src/parsers/registry.js';
 import { extractPricing } from '../packages/infrastructure/src/parsers/pricing.js';
 import { loadExtractionPrompt } from '../packages/infrastructure/src/llm/prompts.js';
@@ -54,6 +55,7 @@ try {
   });
   const workflow = createDocumentAssessmentWorkflow({
     provider,
+    agents: assessmentAgents(config.ASSESSMENT_ORCHESTRATION),
     prompt: await loadExtractionPrompt(process.cwd()),
     policies: JSON.parse(await readFile('data/config/policies.json', 'utf8')) as Policy[],
     product: JSON.parse(await readFile('data/config/personal-loan.json', 'utf8')) as Product,

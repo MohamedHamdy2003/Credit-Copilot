@@ -35,6 +35,7 @@ export const configSchema = z
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
     WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
     ASSESSMENT_MODE: z.enum(['strict', 'demo']).default('strict'),
+    ASSESSMENT_ORCHESTRATION: z.enum(['workflow', 'agents']).default('workflow'),
     ALLOW_DEMO_MODE: z
       .enum(['true', 'false'])
       .default('false')

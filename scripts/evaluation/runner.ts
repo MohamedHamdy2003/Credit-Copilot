@@ -37,6 +37,8 @@ import { ScryptCredentials } from '../../packages/infrastructure/src/auth/passwo
 import { createDocumentAssessmentWorkflow } from '../../packages/infrastructure/src/workflows/document-assessment.js';
 import type { PolicySearch } from '../../packages/application/src/questions.js';
 import { EvaluationMeter } from '../../packages/infrastructure/src/evaluation-meter.js';
+import { assessmentAgents } from '../../packages/infrastructure/src/workflows/assessment-agents.js';
+import { ASSESSMENT_AGENT_TOOLS } from '../../packages/application/src/assessment-agents.js';
 
 export class CoreEvaluation {
   private readonly parser = new ParserRegistry();
@@ -131,6 +133,7 @@ export class CoreEvaluation {
       requestId = randomUUID();
     const workflow = createDocumentAssessmentWorkflow({
       provider: this.meter,
+      agents: assessmentAgents(this.config.ASSESSMENT_ORCHESTRATION),
       prompt: this.extractionPrompt,
       policies: this.policies,
       product: this.product,
@@ -163,7 +166,38 @@ export class CoreEvaluation {
       'SELECT event,details FROM cases.audit_events WHERE run_id=$1',
       [runId],
     )) as { event: string; details: Record<string, unknown> }[];
+    const toolEvents = events.filter((event) => event.event === 'ASSESSMENT_AGENT_TOOL');
+    const expectedToolCalls = result.extraction
+      ? Object.entries(ASSESSMENT_AGENT_TOOLS).map(([agent, tool]) => ({
+          agent,
+          tool,
+          status: 'executed',
+        }))
+      : [];
     return [
+      ...(this.config.ASSESSMENT_ORCHESTRATION === 'agents'
+        ? [
+            assertion(
+              'bounded_agent_tools_executed',
+              'audit',
+              expectedToolCalls,
+              result.agentToolCalls ?? [],
+            ),
+            assertion(
+              'agent_tools_persisted',
+              'audit',
+              [...(result.agentToolCalls ?? [])].sort((a, b) => a.agent.localeCompare(b.agent)),
+              toolEvents
+                .map(({ details }) => ({
+                  agent: details.agent,
+                  tool: details.tool,
+                  status: details.status,
+                  reason: details.reason,
+                }))
+                .sort((a, b) => String(a.agent).localeCompare(String(b.agent))),
+            ),
+          ]
+        : []),
       assertion(
         'eight_recorded_stages',
         'audit',
@@ -208,7 +242,9 @@ export class CoreEvaluation {
           r.result.recommendation === 'REFER_TO_HUMAN' &&
           r.result.mode === 'strict' &&
           !r.result.evidence.fullyEvidenceVerified &&
-          r.result.policyEdition === 'CP-2025',
+          r.result.policyEdition === 'CP-2025' &&
+          (r.result.agentToolCalls?.length ?? 0) === 0 &&
+          (r.result.usageRecords?.length ?? 0) === 0,
       });
     }
     return results;

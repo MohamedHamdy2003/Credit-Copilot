@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import { execFileSync } from 'node:child_process';
 import { configSchema } from '../packages/contracts/src/config.js';
 import {
@@ -23,15 +24,17 @@ import {
 } from '../tests/helpers/evaluation-provider.js';
 import { invariant } from '../packages/domain/src/errors.js';
 const args = process.argv.slice(2);
-const mode = args.includes('--offline') ? 'offline' : 'live';
+const flags = ['--offline', '--offline-agents', '--vector', '--hybrid', '--rewrite', '--agents'];
+const mode = args[0]?.startsWith('--offline') ? 'offline' : 'live';
 invariant(
-  args.length <= 1 &&
-    args.every((arg) => ['--offline', '--vector', '--hybrid', '--rewrite'].includes(arg)),
+  args.length <= 1 && args.every((arg) => flags.includes(arg)),
   'InvalidEvaluationArguments',
-  'Use at most one of --offline, --vector, --hybrid or --rewrite',
+  `Use at most one of ${flags.join(', ')}`,
 );
 const config = configSchema.parse({
   ...process.env,
+  ASSESSMENT_ORCHESTRATION:
+    args[0] === '--agents' || args[0] === '--offline-agents' ? 'agents' : 'workflow',
   RETRIEVAL_STRATEGY:
     args[0] === '--vector'
       ? 'vector'
@@ -46,6 +49,16 @@ invariant(
   'InvalidEvaluationArguments',
   '--rewrite requires a positive QUERY_REWRITE_MAX_EXPANSIONS',
 );
+const generationIntervalMs =
+  mode === 'live'
+    ? z.coerce
+        .number()
+        .int()
+        .min(0)
+        .max(60000)
+        .default(0)
+        .parse(process.env.EVALUATION_GENERATION_INTERVAL_MS)
+    : 0;
 const hybrid = mode === 'live' && config.RETRIEVAL_STRATEGY === 'hybrid';
 const rewriteBudget = hybrid ? config.QUERY_REWRITE_MAX_EXPANSIONS : 0;
 const id = new Date().toISOString().replace(/[:.]/g, '-') + '-' + randomUUID().slice(0, 8);
@@ -98,6 +111,8 @@ const files = [
   'packages/application/src/questions.ts',
   'packages/application/src/query-rewrite.ts',
   'packages/application/src/document-assessment.ts',
+  'packages/application/src/assessment-agents.ts',
+  'packages/infrastructure/src/workflows/assessment-agents.ts',
   'packages/application/src/credit-memo.ts',
   'packages/application/src/extraction.ts',
   'packages/application/src/evidence-facts.ts',
@@ -136,6 +151,8 @@ const report: { [key: string]: unknown } = {
   scope:
     'Full15-case functional evaluation; standalone financial/rule checks never replace missing-evidence workflow outcomes.',
   configuration: {
+    assessmentOrchestration: config.ASSESSMENT_ORCHESTRATION,
+    generationIntervalMs,
     generationModel: mode === 'live' ? config.GENERATION_MODEL : 'test-only-evaluation',
     embeddingModel: mode === 'live' ? config.EMBEDDING_MODEL : 'test-only-hash-v1',
     dimensions: mode === 'live' ? config.EMBEDDING_DIMENSIONS : 64,
@@ -180,7 +197,7 @@ try {
           config.EMBEDDING_DIMENSIONS,
         )
       : new OfflineEvaluationProvider();
-  const meter = new EvaluationMeter(provider, source),
+  const meter = new EvaluationMeter(provider, source, generationIntervalMs),
     ingestion = new IngestionService(db, meter, manifest);
   const ingested = [];
   for (const d of manifest)

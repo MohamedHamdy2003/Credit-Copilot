@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { DataSource } from 'typeorm';
 import type {
   EmbeddingPort,
@@ -17,9 +18,11 @@ export class EvaluationMeter implements GenerationPort, EmbeddingPort {
     failed: boolean;
   }[] = [];
   cacheHits = 0;
+  private nextGenerationAt = 0;
   constructor(
     private readonly provider: GenerationPort & EmbeddingPort,
     private readonly cache?: DataSource,
+    private readonly generationIntervalMs = 0,
   ) {
     this.model = provider.model;
     this.dimensions = provider.dimensions;
@@ -29,6 +32,12 @@ export class EvaluationMeter implements GenerationPort, EmbeddingPort {
     data: string,
     schema?: GenerationSchema,
   ): Promise<Completion> {
+    if (this.generationIntervalMs > 0) {
+      const now = performance.now();
+      const scheduled = Math.max(now, this.nextGenerationAt);
+      this.nextGenerationAt = scheduled + this.generationIntervalMs;
+      if (scheduled > now) await sleep(Math.ceil(scheduled - now));
+    }
     const event = {
       kind: 'generation' as const,
       inputHash: createHash('sha256')
