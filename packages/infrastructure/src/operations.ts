@@ -48,7 +48,7 @@ export async function createOperations(
     });
   }
   const ingestion = new IngestionService(db, provider, manifest, parser),
-    search = new RetrievalService(db, provider, config.RETRIEVAL_STRATEGY);
+    search = new RetrievalService(db, provider, config.RETRIEVAL_STRATEGY, config);
   return new OperationsService({
     policies,
     store: new PostgresApplicationStore(db),

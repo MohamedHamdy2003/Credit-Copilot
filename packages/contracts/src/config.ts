@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export const MAX_QUERY_REWRITE_EXPANSIONS = 4;
+
 export const configSchema = z
   .object({
     DATABASE_URL: z.string().url(),
@@ -18,6 +20,12 @@ export const configSchema = z
     EMBEDDING_DIMENSIONS: z.coerce.number().int().min(1).max(2000).default(768),
     RETRIEVAL_STRATEGY: z.enum(['hybrid', 'vector']).default('hybrid'),
     RETRIEVAL_MIN_SIMILARITY: z.coerce.number().min(0).max(1).default(0.65),
+    QUERY_REWRITE_MAX_EXPANSIONS: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(MAX_QUERY_REWRITE_EXPANSIONS)
+      .default(2),
     UPLOAD_MAX_BYTES: z.coerce.number().int().positive().default(10485760),
     DEMO_PASSWORD: z.string().default(''),
     SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(24).default(8),
