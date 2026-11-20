@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { api } from './api';
 import type { Actor, Offer, Run } from './types';
 import { Empty, ErrorNotice, Money, Status } from './components';
+import { WrittenReasonPanel, ReferralReviewPanel } from './CaseReview';
 function DecisionForm({
   run,
   actor,
@@ -14,12 +15,15 @@ function DecisionForm({
   const owner = actor.id === run.preparer_id;
   const customer = owner && run.status === 'pending_customer_acceptance';
   const reviewer = actor.role === 'credit_officer' && !owner;
+  const blockedReferral = run.result.fraudReferral || run.result.evidence.missing.length > 0;
   const actions = customer
     ? ['customer_response']
     : reviewer && run.status === 'approved'
       ? ['issue']
       : reviewer && ['pending_review', 'pending_approval'].includes(run.status)
-        ? ['approve', 'reject']
+        ? blockedReferral
+          ? []
+          : ['approve', 'reject']
         : [];
   const [action, setAction] = useState(actions[0] ?? 'approve'),
     [busy, setBusy] = useState(false),
@@ -299,6 +303,10 @@ export function Assessment({
         actor={actor}
         onChanged={onChanged}
       />
+      {run.result.recommendation === 'REFER_TO_HUMAN' && (
+        <ReferralReviewPanel run={run} actor={actor} />
+      )}
+      {run.status === 'rejected' && <WrittenReasonPanel run={run} />}
       {run.status === 'issued' && run.offer_id && (
         <section className="panel">
           <h2>Issued offer</h2>

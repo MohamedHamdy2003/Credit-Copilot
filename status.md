@@ -1,62 +1,69 @@
 # Current checkpoint —20 November2026
 
-Read agent.md and FEATURES.md first. Current feature: feature/react-workspace.
-Previous REST was promoted through PR11/12 to main dbe7261 with green CI44588723148.
-This increment implements the React core UI; check git log/GitHub for promotion state.
+Read agent.md and FEATURES.md first. Current increment: feature/referrals-written-reasons.
+Previous React delivery PR13/14 is on main c25a2a8; CI44713937697 green. Check git/GitHub
+for current promotion status. Next work is full15-case evaluation/core gate, not stretches.
 
 ## Implemented
 
-apps/web/src: App.tsx session shell/login/logout and navigation; Applications.tsx
-reviewed pack selection/multipart upload/list/download/Strict-default assessment;
-Assessment.tsx summary/rules/source references/saved workflow, Demo warnings,
-customer alternative response, human approval/rejection/issuance and offer read;
-Questions.tsx grounded citations/date+edition selectors and code calculations;
-Knowledge.tsx policy list/per-file ingestion/history with permission controls;
-Reviews.tsx queue and independent decision forms. Shared api.ts/components/types
-and responsive styles.css. API client keeps only CSRF in memory; cookies HttpOnly;
-401 clears protected views; navigation cancels reads. Retry preserves assessment
-idempotency on uncertain network errors. No fake application rows or UI arithmetic.
+PM-4/5/7/9 case reviews: pure review-policy.ts, Application CaseReviewService ports,
+PostgresCaseReviewStore and explicit CaseReviews migration1794916800005, registered
+in data-source.ts and applied locally. Production/E2E composition wires the service.
+Nest routes: GET referrals, GET referrals/:id, POST referrals/:id/reviews; GET
+assessments/:id/written-reason and POST assessments/:id/reason-requests. Existing
+session/CSRF/origin/schema/error guards apply. Mutations reread active actor in TX.
 
-Small API additions: safe canAssess derived from preparer; assessment read includes
-issued offer_id. Existing authority/CSRF/evidence checks remain server-authoritative.
-No new database migration. E2E uses shared WorkflowTestProvider extracted from the
-HTTP integration test, not production code; scripts/e2e-api.ts binds4304, Vite5174,
-only accepts *_test DB and resets test users/cases/login attempts. Run browser and
-integration suites sequentially. No live credentials/model calls in browser tests.
+Rejection now permits only a verified failed criterion or customer-declined alternative,
+not missing evidence/fraud/bureau-only referral. Notice snapshots store failed criterion
+and human justification, clause, original edition/source and decision time. Legacy
+backfill uses recorded clause/edition only; incomplete history returns ReasonUnavailable.
+PM-9 request is recorded by the preparer on applicant behalf, with a deterministic
+written reply from the stored human decision (no LLM/appeal/credit-state change).
+Inclusive30-calendar-day window from rejection date in Cairo; DB clock, no client date.
+Concurrent/repeated requests return one stored reply/audit pair; old replies remain
+readable after expiry. Demo assumptions and verified=false are retained.
+
+Referrals route to Senior/Head; ordinary Credit queue omits them. Independent Senior
+can record awaiting-evidence/reassessment/internal-fraud notes under version/latest
+and active-job checks. Notes never approve/reject/clear fraud or waive missing evidence.
+Fraud Unit routing is internal record only, no external message sent. PM-4 two-business-
+day estimate uses data/config/review-calendar.json: Fri/Sat default, no public holidays
+invented; configure trustworthy holidays and restart. Estimate never changes outcome.
+
+UI CaseReview.tsx adds written requests/replies and referral queue/history/forms, using
+existing components/styles. Assessment hides decision form for missing/fraud referrals.
+README/FEATURES/DESIGN/EVALUATION/AI-USAGE updated; no extra docs created.
 
 ## Verified
 
-80 unit +23 PostgreSQL/HTTP integration +6 Chromium e2e passed. Typecheck/lint/format
-and API/web builds passed. Browser paths: login/errors/session restore/logout,
-Strict missing-ID/source/workflow/original download, APP004 fraud, explicit Demo
-through different human reviewer approval/issuance with verified=false, policy
-Q&A/refusal/conflicts, edition capacity330000/382000, multipart duplicate uploads,
-knowledge mixed batch statuses/permission, expired session and network retry.
-Desktop1488x1058/mobile390x844 screenshots inspected with view_image against the
-built-in Image Gen concept; no horizontal mobile overflow. Browser plugin absent,
-so regular Playwright used. Screenshots/traces stay in OS temp outside git. Other
-engines and all responsive states are not certified. These fake-provider tests are
-not a fresh Gemini quality measurement or the complete FR-6 fifteen-case suite.
-
-README has run/review instructions; FEATURES/DESIGN/EVALUATION/AI-USAGE updated.
-The concept is preview-only under .codex/generated_images; no raster assets shipped.
+84 unit +27 real PostgreSQL/HTTP integration +8 Chromium e2e passed. Typecheck,
+lint, format and API/web builds passed. New cases: day0/30/31/future/leap calendar,
+configured weekends/holidays, permissions/CSRF/extra fields, concurrent idempotent
+reply and unchanged rejected/version2, Demo false, late replay, Senior queue/notes,
+unsafe rejection and unavailable legacy reasons. Browser PM-9 reply and independent
+Senior note paths pass; screenshots inspected at1488x1058 and390x844 with no mobile
+overflow, framework overlay or runtime error in the written-reply journey. Browser
+plugin absent, regular Playwright used. Test-only controlled age-failure fixture
+uses real pure rules/decision store with Demo ID presence only, no fabricated ID,
+and is never ingested in production or substituted for original packs. Fake providers
+remain confined to test wiring; no new live Gemini quality metric claimed. Screenshots
+and traces remain outside git in OS temp. Local E2E servers stop after tests.
 
 ## Next
 
-Complete Referral & Rejection Handling complaints workflow (30-day complaint window,
-source-backed handling, no policy/evidence override), then full15-case evaluation
-and core acceptance before all nine stretches. Preserve professional PR descriptions
-What/Why/How tested, green feature->dev->main, and update FEATURES.md per feature.
-Do not create extra docs. Read only relevant code/source clauses for the next task.
+Implement/run full15-case FR-6 evaluation against real vector baseline; document
+failures honestly, address core gaps and validate gate before nine stretches. Check
+remaining partial FEATURES rows (canonical memo/audit) against actual brief; never
+mark the entire core complete just because transport/UI tests pass. Keep feature->dev
+->main after green CI and professional What/Why/How tested descriptions.
 
 ## Fixed decisions
 
 Strict default missing ID=>REFER_TO_HUMAN CP-8/PS-7. Enabled synthetic Demo assumes
-only ID presence, recorded verified=false in result/audit/offer. Never fabricate ID
-or assume probation. CP2024/2025 DBR50%/45%, capacity382000/330000 via same Decimal
-formula; real source policy wins over Appendix E. Protected fields removed before
-model/rules; packs never policy KB. Authority0/250k/500k/1m and four-eyes enforced.
-No unresolved-referral, policy-exception or pricing-deviation bypass. Local DB54329;
-API3000 (alternate if occupied); normal web localhost5173 must match WEB_ORIGIN.
-Secrets only local.env. Synthetic seeds require local DEMO_PASSWORD; CLI accounts
-cannot log in. Nothing deployed automatically.
+only ID presence, retaining actual missing reality/verified=false in result/audit/
+offer/written reply. Never assume probation or fabricate evidence. CP2024/2025 DBR
+50%/45%, capacity382000/330000 through unchanged Decimal formula; policy source wins
+over Appendix E. Strip protected fields before model/rules; packs never KB. Authority
+0/250k/500k/1m plus four-eyes. No unresolved-referral/pricing/policy exception bypass.
+DB54329; web localhost5173 must match WEB_ORIGIN. Secrets local.env only; CLI fixture
+accounts cannot log in. Integration and e2e share *_test DB: run sequentially only.

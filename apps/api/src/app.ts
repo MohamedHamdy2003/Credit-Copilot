@@ -42,10 +42,12 @@ import type { DecisionService } from '../../../packages/application/src/decision
 import type { Actor } from '../../../packages/domain/src/access.js';
 import { DomainError, invariant } from '../../../packages/domain/src/errors.js';
 import type { OperationsService } from '../../../packages/application/src/operations.js';
+import type { CaseReviewService } from '../../../packages/application/src/case-review.js';
 
 const AUTH = Symbol('AUTH'),
   DECISIONS = Symbol('DECISIONS');
 const OPERATIONS = Symbol('OPERATIONS');
+const CASE_REVIEWS = Symbol('CASE_REVIEWS');
 interface MemoryUpload {
   originalname: string;
   buffer: Buffer;
@@ -147,6 +149,7 @@ export async function createApi(deps: {
   sessionHours: number;
   operations?: OperationsService;
   maxUploadBytes?: number;
+  caseReviews?: CaseReviewService;
 }) {
   const cookie = {
     httpOnly: true,
@@ -231,6 +234,60 @@ export async function createApi(deps: {
     })
     decide(@Param('id') id: string, @Body() body: unknown, @Req() req: AuthRequest) {
       return this.decisions.execute(req.actor, id, body, req.requestId);
+    }
+  }
+  @Controller()
+  @UseGuards(SessionGuard)
+  @ApiCookieAuth()
+  class CaseReviewController {
+    constructor(@Inject(CASE_REVIEWS) private readonly reviews: CaseReviewService | null) {}
+    private service() {
+      invariant(this.reviews, 'ServiceUnavailable', 'Case review service unavailable', 503);
+      return this.reviews;
+    }
+    @Get('assessments/:id/written-reason') reason(
+      @Param('id') id: string,
+      @Req() req: AuthRequest,
+    ) {
+      return this.service().reason(req.actor, id);
+    }
+    @Post('assessments/:id/reason-requests')
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    @ApiBody({
+      schema: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { message: { type: 'string', maxLength: 2000 } },
+      },
+    })
+    requestReason(@Param('id') id: string, @Body() body: unknown, @Req() req: AuthRequest) {
+      return this.service().requestReason(req.actor, id, body ?? {}, req.requestId);
+    }
+    @Get('referrals') referrals(@Req() req: AuthRequest) {
+      return this.service().referrals(req.actor);
+    }
+    @Get('referrals/:id') referral(@Param('id') id: string, @Req() req: AuthRequest) {
+      return this.service().referral(req.actor, id);
+    }
+    @Post('referrals/:id/reviews')
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    @ApiBody({
+      schema: {
+        type: 'object',
+        required: ['expectedVersion', 'action', 'comment'],
+        additionalProperties: false,
+        properties: {
+          expectedVersion: { type: 'integer', minimum: 1 },
+          action: {
+            type: 'string',
+            enum: ['awaiting_evidence', 'requires_reassessment', 'fraud_recorded'],
+          },
+          comment: { type: 'string', minLength: 1, maxLength: 2000 },
+        },
+      },
+    })
+    note(@Param('id') id: string, @Body() body: unknown, @Req() req: AuthRequest) {
+      return this.service().note(req.actor, id, body, req.requestId);
     }
   }
   @Controller()
@@ -392,13 +449,20 @@ export async function createApi(deps: {
     }
   }
   @Module({
-    controllers: [AuthController, ReviewController, OperationsController, HealthController],
+    controllers: [
+      AuthController,
+      ReviewController,
+      CaseReviewController,
+      OperationsController,
+      HealthController,
+    ],
     providers: [
       SessionGuard,
       IngestionGuard,
       { provide: AUTH, useValue: deps.auth },
       { provide: DECISIONS, useValue: deps.decisions },
       { provide: OPERATIONS, useValue: deps.operations ?? null },
+      { provide: CASE_REVIEWS, useValue: deps.caseReviews ?? null },
     ],
   })
   class AppModule {}

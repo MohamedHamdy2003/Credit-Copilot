@@ -1,5 +1,26 @@
 # Evaluation
 
+## Referrals/written reasons verification on20 November2026
+
+84 unit,27 PostgreSQL/HTTP integration and8 Chromium e2e pass, plus types/lint/
+format/API-web builds. New pure tests cover inclusive day0/day30, day31/future
+requests, leap boundaries, configured business-day estimates, Senior authority,
+verified rejection clauses and missing-evidence/fraud/bureau-only rejection denial.
+HTTP cases cover owner/CSRF/schema checks, concurrent requests returning one reply
+and two audit events, preserved rejected/version2 state, Demo verified=false,
+late replay, Cairo deadline boundary, Senior queue/notes/fraud records and unsafe
+or incomplete legacy rejection denial. Explicit CaseReviews migration applied locally.
+
+Two browser journeys exercise PM-9 request-to-written-reply and independent
+Senior referral handling without approval/rejection bypass. Browser plugin absent;
+Playwright Chromium at1488x1058 and390x844. Written reply has meaningful page content,
+no framework overlay/runtime error and no mobile overflow. Screenshots inspected
+outside git. A controlled test-only age-failure fixture uses real pure rules and
+human-decision store, retains Demo ID assumption/verified=false and is never added
+to production ingestion or the original corpus. It does not relax probation/ID
+requirements to make an original pack pass. Providers remain fake in browser tests;
+this is not a fresh Gemini quality result or the full fifteen-case FR-6 evaluation.
+
 ## React workspace verification on20 November2026
 
 80 unit,23 PostgreSQL/HTTP integration and6 Chromium end-to-end tests pass locally;
