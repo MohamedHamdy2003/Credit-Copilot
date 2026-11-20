@@ -11,6 +11,12 @@ export interface PolicySearch {
     product?: string,
     limit?: number,
   ): Promise<{ chunk: Chunk; similarity: number }[]>;
+  related?(
+    question: string,
+    date: string,
+    product: string,
+    hits: { chunk: Chunk; similarity: number }[],
+  ): Promise<{ chunks: Chunk[]; reason: string }>;
 }
 const selectionSchema = z
   .object({
@@ -28,6 +34,23 @@ const selectionSchema = z
   })
   .strict();
 export const REFUSAL = 'The documents do not contain enough information to answer this question.';
+export const isApprovalBypass = (question: string) =>
+  /\bapprove\b[\s\S]{0,160}\bwithout\b[\s\S]{0,80}\b(?:human|reviewer|approval)\b/i.test(question);
+function citation(chunk: Chunk, quote: string) {
+  return {
+    chunkId: chunk.id,
+    documentId: chunk.documentId,
+    quote,
+    sourceFile: chunk.sourceFile,
+    section: chunk.section,
+    edition: chunk.edition,
+    pageStart: chunk.pageStart,
+    pageEnd: chunk.pageEnd,
+    row: chunk.row,
+    effectiveFrom: chunk.effectiveFrom,
+    effectiveTo: chunk.effectiveTo,
+  };
+}
 export async function answerPolicyQuestion(
   input: { question: string; asOfDate: string; product?: string },
   dependencies: {
@@ -58,19 +81,94 @@ export async function answerPolicyQuestion(
     asOfDate: input.asOfDate,
   });
   if (!hits.length) return refuse();
+  // Source-reference context is separate from the vector top5. It never creates
+  // an answer when the primary search is below threshold or the model refuses.
+  const related = await dependencies.search.related?.(
+    question,
+    input.asOfDate,
+    input.product ?? 'PL-100',
+    hits,
+  );
+  const candidates = [
+    ...new Map(
+      [...hits.map((h) => h.chunk), ...(related?.chunks ?? [])].map((c) => [c.id, c]),
+    ).values(),
+  ];
+  if (isApprovalBypass(question)) {
+    const authority = [
+      ...new Map(
+        candidates
+          .filter(
+            (c) =>
+              c.documentId.startsWith('PM-') &&
+              ['PM-1', 'PM-2', 'PM-3'].includes(c.section) &&
+              c.effectiveFrom <= input.asOfDate &&
+              (!c.effectiveTo || input.asOfDate < c.effectiveTo),
+          )
+          .map((c) => [c.section, c]),
+      ).values(),
+    ];
+    if (
+      authority.some((c) => c.section === 'PM-1') &&
+      authority.some((c) => c.section === 'PM-2')
+    ) {
+      const citations = authority.map((c) => citation(c, c.text));
+      return {
+        answer: `Requested approval bypass rejected. The applicable human-approval procedure is quoted below.\n\n${citations.map((c) => c.quote).join('\n\n')}`,
+        citations,
+        refused: false,
+        asOfDate: input.asOfDate,
+        requestedActionRejected: true,
+        evidenceContext: {
+          strategy: 'read-only-approval-boundary',
+          chunkIds: authority.map((c) => c.id),
+          reason: 'No approval action is available to policy Q&A',
+        },
+      };
+    }
+  }
   const response = await dependencies.provider.completeStructured(
     dependencies.prompt,
     JSON.stringify({
       question,
       asOfDate: input.asOfDate,
-      evidence: hits.map((hit) => ({ chunkId: hit.chunk.id, text: hit.chunk.text })),
+      evidence: candidates.map((chunk) => ({
+        chunkId: chunk.id,
+        text: chunk.text,
+        documentId: chunk.documentId,
+        edition: chunk.edition,
+        section: chunk.section,
+        page: chunk.pageStart,
+        sourceFile: chunk.sourceFile,
+        effectiveFrom: chunk.effectiveFrom,
+        effectiveTo: chunk.effectiveTo,
+      })),
     }),
   );
   const parsed = selectionSchema.safeParse(response.value);
   if (!parsed.success || !parsed.data.citations.length) return refuse();
   const citations = [];
+  const requiredKeys = new Set(related?.chunks.map((c) => `${c.documentId}:${c.section}`) ?? []);
+  const selectedCitations = [
+    ...(related?.chunks.map((c) => ({ chunkId: c.id, quote: c.text })) ?? []),
+    ...parsed.data.citations.filter((c) => {
+      const source = candidates.find((s) => s.id === c.chunkId);
+      return !source || !requiredKeys.has(`${source.documentId}:${source.section}`);
+    }),
+  ].slice(0, 5);
+  // Validate every model-selected span even if a canonical operative clause
+  // replaces a comparison-table selection in the final evidence bundle.
   for (const selected of parsed.data.citations) {
-    const hit = hits.find((item) => item.chunk.id === selected.chunkId);
+    const source = candidates.find((c) => c.id === selected.chunkId);
+    if (
+      !source ||
+      !selected.quote.trim() ||
+      !source.text.replace(/\s+/g, ' ').includes(selected.quote.trim().replace(/\s+/g, ' '))
+    )
+      return refuse();
+  }
+  for (const selected of selectedCitations) {
+    const chunk = candidates.find((item) => item.id === selected.chunkId);
     // Models may fold PDF line breaks into spaces. Match whitespace only, then
     // emit the original source span; never relax word/number/punctuation checks.
     const pattern = selected.quote
@@ -78,20 +176,9 @@ export async function answerPolicyQuestion(
       .split(/\s+/)
       .map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       .join('\\s+');
-    const sourceQuote = hit?.chunk.text.match(new RegExp(pattern))?.[0];
-    if (!hit || !sourceQuote) return refuse();
-    citations.push({
-      chunkId: hit.chunk.id,
-      quote: sourceQuote,
-      sourceFile: hit.chunk.sourceFile,
-      section: hit.chunk.section,
-      edition: hit.chunk.edition,
-      pageStart: hit.chunk.pageStart,
-      pageEnd: hit.chunk.pageEnd,
-      row: hit.chunk.row,
-      effectiveFrom: hit.chunk.effectiveFrom,
-      effectiveTo: hit.chunk.effectiveTo,
-    });
+    const sourceQuote = chunk?.text.match(new RegExp(pattern))?.[0];
+    if (!chunk || !sourceQuote) return refuse();
+    citations.push(citation(chunk, sourceQuote));
   }
   // Evidence-first baseline: only verified verbatim spans become answer text.
   return {
@@ -99,5 +186,10 @@ export async function answerPolicyQuestion(
     citations,
     refused: false,
     asOfDate: input.asOfDate,
+    evidenceContext: {
+      strategy: 'operative-source-references',
+      chunkIds: related?.chunks.map((c) => c.id) ?? [],
+      reason: related?.reason ?? null,
+    },
   };
 }

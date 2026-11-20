@@ -1,196 +1,100 @@
 # Credit Copilot
 
-## الإحالات وطلب سبب الرفض المكتوب
+Synthetic personal-loan underwriting workspace: React/Vite → NestJS REST/OpenAPI → Application → pure Domain, with PostgreSQL/pgvector, TypeORM and Mastra adapters. كل البيانات تدريبية؛ التوصية الآلية تحتاج قرارًا بشريًا قبل الإصدار.
 
-شغّل `pnpm db:migrate` قبل تشغيل النسخة الجديدة. مصدر المسار هو PM-4/PM-5/PM-7/PM-9 في `credit-procedures-manual (1).pdf`. PM-9 يطلب سبب الرفض في كتابة خلال30 يوم؛ لا يصف نظام استئناف يغيّر القرار.
+## Quick start
 
-- من Review queue بحساب Senior أو Head، راجع Senior referral queue وسجّل إجراءً مسببًا: انتظار أدلة، إعادة تقييم، أو الإقرار بسجل إحالة احتيال موجود. الملاحظة لا تعتمد الطلب ولا تغلق نقص الأدلة. سجل Fraud Unit داخلي، بدون ادعاء إرسال خارجي.
-- بعد رفض بشري صحيح، معدّ الطلب يفتح الطلب ويختار Request written reason. الرد يحتفظ بالبند وإصدار السياسة والمصدر وسبب المعيار الفاشل وتبرير المراجع وعلامات Demo. لا يتغير قرار التقييم أو إصداره. التكرار يعيد نفس الرد، والرد المسجل يظل متاحًا بعد انتهاء المهلة.
-- التنفيذ يحتسب30 يومًا تقويميًا من تاريخ تسجيل الرفض في توقيت القاهرة، مع قبول اليوم30 ورفض أول طلب في اليوم31. هذا تحديد تنفيذي لنص PM-9؛ الملفات لا تحدد تاريخ إخطار منفصلًا. التاريخ والمستخدم يحددهما السيرفر.
-- نقص البطاقة/الأدلة أو التلاعب لا يصلح سبب رفض نهائي، وانخفاض الـbureau وحده إحالة. لا تغيّر المستندات أو تفترض probation لفرض مثال رفض؛ حالة الرفض المنشأة لاختبار المتصفح معزولة في قاعدة *_test، وليست من الـpacks الأصلية أو بيانات الإنتاج.
-- تقدير اليومين عمل من PM-4 يستخدم `data/config/review-calendar.json`: الجمعة/السبت افتراضيًا وholidays فارغة. عدّل التقويم محليًا وأعد تشغيل API عند توفر إجازات موثوقة. العرض تقديري ولا يقرر نتيجة أو يغيّر صلاحية.
-
-المسارات المحمية تحت `/api/v1`: `GET /referrals`، `GET /referrals/:id`، `POST /referrals/:id/reviews`، `GET /assessments/:id/written-reason`، `POST /assessments/:id/reason-requests`. POST يحتاج cookie وCSRF؛ توثيق الأجسام في OpenAPI. Legacy رفض بلا بند/إصدار مسجلين يرجع ReasonUnavailable بدل اختراع رد. الرجوع عن migration يحذف جداول الإضافة، فلا تستخدمه لحذف سجلات شكاوى فعلية.
-
-آخر تحقق:84 unit و27 PostgreSQL/HTTP integration و8 Chromium e2e، مع types/lint/format/build. اختبارات المتصفح تستخدم provider وهميًا ولا تغيّر corpus الإنتاج.
-
-## تجربة واجهة React
-
-شغّل PostgreSQL والـmigrations، ثم API والويب في terminal منفصل لكل واحد:
-
-```powershell
-docker compose up -d db
-pnpm db:migrate
-pnpm dev:api
-```
-
-```powershell
-pnpm dev:web
-```
-
-افتح `http://localhost:5173` ليطابق `WEB_ORIGIN` الافتراضي؛ لو غيّرت العنوان غيّر الإعداد أيضًا. استخدم حسابات `seed:users` الموضحة أدناه، ولا تدخل بيانات عملاء حقيقية.
-
-من Applications اختار Add application ثم APP-001. Strict هو الافتراضي ويُحيل نقص البطاقة. لو فعلت `ALLOW_DEMO_MODE=true` محليًا وأعدت تشغيل API، اختار Demo صراحة؛ النتيجة تعرض الافتراض وverified=false. جرّب Policy questions للمصادر والحسابات، وKnowledge لرفع السياسات حسب صلاحية الحساب. سجل خروج ثم دخول بـsenior-credit-officer لمراجعة توصية Demo بمبلغ300,000؛ الموافقة والإصدار خطوتان منفصلتان، والإصدار يحتاج تاريخ صرف. العرض يظل Demo ولا يتحول إلى دليل متحقق. APP-004 يعرض إحالة احتيال. Rules & sources وWorkflow تعرض أدلة ومراحل محفوظة؛ لا يوجد بث SSE بعد.
-
-تحقق الواجهة الحالي:80 unit و23 PostgreSQL/HTTP integration و6 Chromium e2e ناجحين، مع types/lint/format/build.
-
-اختبارات المتصفح: `pnpm exec playwright install chromium` ثم `pnpm test:e2e`. تبدأ API اختبارية4304 وVite5174 وتستخدم **قاعدة *_test فقط** وprovider وهميًا. تُفرغ حسابات وطلبات تلك القاعدة؛ لا تشغّل integration وe2e بالتوازي عليها. النتائج والصور المؤقتة خارج الريبو. الاختبار لا يستخدم مفتاح Gemini ولا يقيس جودته. Chromium desktop1488×1058 وmobile390×844؛ بقية المتصفحات غير مختبرة.
-
-## REST API — آخر تسليم
-
-الـREST وواجهة React الأساسية جاهزين. شغّل migrations قبل الـAPI. كل المسارات التالية تحت `/api/v1` وتحتاج جلسة دخول، ومع POST أرسل cookie و`x-csrf-token`:
-
-| المسار | الاستخدام |
-|---|---|
-| `GET /knowledge/documents` | عرض السياسات المفهرسة |
-| `POST /knowledge/ingestions` | multipart بحقل `files`؛ من1 إلى20 ملفًا؛ صلاحية ingestion مطلوبة |
-| `GET /knowledge/ingestions` | نتائج المحاولات لمن يملك صلاحية ingestion |
-| `POST /questions` | JSON مثل `{"question":"Maximum DBR in CP-2024?"}`؛ يقبل `asOfDate` و`edition` و`product: "PL-100"` |
-| `POST /calculations` | نفس JSON الخاص بـcalculate: principal/income/obligations/months/date |
-| `GET /applications/fixtures` | قائمة APP-001 إلى APP-005 |
-| `POST /applications/fixtures/APP-001` | اختيار pack معروف بجسم `{}` |
-| `POST /applications` | رفع pack أصلي multipart بحقل `file` |
-| `GET /applications` أو `/applications/:id` | قائمة الطلبات أو بيانات الطلب المسموحة |
-| `GET /applications/:id/evidence` | تنزيل الملف الأصلي لصاحب الطلب أو المراجع |
-| `POST /applications/:id/assessments` | `{}` لـStrict أو `{"mode":"demo"}` عند تفعيل ALLOW_DEMO_MODE محليًا |
-| `GET /offers/:id` | قراءة سجل العرض الصادر مع علامة Demo والتحقق الفعلي |
-
-الرفع يقبل الأنواع PDF/CSV/MD وحد10MiB، لكن Knowledge Base تقبل السياسات السبع المطابقة للـmanifest فقط، وتقييم العملاء يقبل الـPDF packs الخمسة المعروفة بالـhash فقط. لا يوجد رفع عام لبيانات عملاء حقيقية. نتائج دفعة ingestion لكل ملف على حدة؛ راجع `results` لأن فشل ملف لا يلغي نجاح الباقي. المستخدم وكون الطلب synthetic يُحددان على السيرفر، وأي flags إضافية تُرفض.
-
-عند التقييم أرسل `Idempotency-Key` ثابتًا لنفس المحاولة: إعادة الطلب بعد النجاح ترجع نفس run؛ المفتاح نفسه مع mode مختلف يرفض409، والمحاولة الفاشلة تحتاج مفتاحًا جديدًا. يمنع تشغيل تقييمين لنفس الطلب، وأي قرار على نتيجة سابقة أثناء إعادة التقييم. المحاولات العالقة أكثر من15 دقيقة تُغلق عند بدء محاولة جديدة؛ نتيجتها المتأخرة لا تستبدل النتيجة الجديدة. الطلب الصادر عرضه لا يعاد تقييمه. السؤال يستنتج تاريخ ISO أو إصدار CP المذكور صراحة، ويستخدم تاريخ القاهرة الحالي إن لم تحدده؛ تعارض التاريخ والإصدار يرفض بدل اختيار سياسة بصمت.
-
-تحقق تسليم REST السابق:77 unit و23 PostgreSQL/HTTP integration، مع types/lint/format/build. اختبارات HTTP تستخدم provider وهميًا؛ لا تعتبر قياسًا جديدًا لجودة Gemini. نتائج Gemini الحقيقية السابقة محفوظة في `docs/EVALUATION.md`.
-
-## تسجيل الدخول والاعتماد
-
-ضع `DEMO_PASSWORD` محليًا في `.env` بطول12–256 حرفًا، ثم:
-
-```powershell
-pnpm db:migrate
-pnpm seed:users
-pnpm dev:api
-```
-
-الحسابات: `loan-officer` للإعداد، `credit-officer` بحد250,000، `senior-credit-officer` بحد500,000، و`head-credit` بحد1,000,000. كلهم يستخدمون كلمة المرور المحلية المحددة للـdemo فقط. إعادة seed تحدث كلمة المرور وتلغي جلساتهم. الحسابات التي ينشئها CLI للتقييم معطّلة عن تسجيل الدخول.
-
-التوثيق: `http://localhost:3000/api/docs` (استخدم PORT بديلًا لو مشغول). Login يرجع cookie من نوع HttpOnly و`csrfToken`؛ أرسل الكوكي ومعه `x-csrf-token` في أي طلب تغيير حالة:
-
-- `POST /api/v1/auth/login` ببيانات username/password فقط؛ `GET /auth/me` و`POST /auth/logout` تحت نفس prefix.
-- `GET /api/v1/reviews` للمراجعين، و`GET /api/v1/assessments/:id` لصاحب الطلب أو Credit Officer.
-- `POST /api/v1/assessments/:id/decisions` ببيانات `action` و`expectedVersion` و`comment`. Actions: `approve`، `reject` (يحتاج clause)، `customer_response` (يحتاج accepted)، `issue` (يحتاج disbursementDate).
-
-الحد يُحسب على المبلغ المقترح، ولا يجوز اعتماد الطلب بواسطة معدّه. قبول البديل لازم يتسجل بواسطة معدّ الطلب قبل الاعتماد. الإصدار خطوة منفصلة بعد الموافقة وتعيد فحص سن الاستحقاق. Demo يصدر سجل عرض محاكاة بعلامة Demo وافتراضاته؛ ليس إثباتًا لاكتمال المستندات أو PDF جاهزًا. أي إحالة ناقصة/متلاعب بها تحتاج أدلة وإعادة تقييم؛ صلاحية Senior لا تتجاوز المتطلبات تلقائيًا. الـREST وواجهة React الأساسية جاهزين.
-
-Synthetic personal-loan underwriting assistant. Implementation is in progress;
-the detailed scope and delivery sequence live in `docs/PR-PLAN.md`.
-
-
-## التشغيل والمراجعة
-
-آخر تحديث:17 نوفمبر2026. نطاق اليوم الأول P01–P05. يوجد عمل مبكر جزئي للـassessment، لكنه ليس تسليم اليوم الثاني.
-
-## اللي هتراجعه
-
-- هيكل React + NestJS + TypeScript، dependencies ثابتة وCI.
-- PostgreSQL + pgvector، migrations، وفصل policy knowledge عن customer evidence.
-- PDF/CSV/MD parsers وnormalization وclause chunking: حد800token وoverlap60 باستخدام cl100k_base.
-- ingestion للسياسات السبع فقط، بدون تكرار، مع index revisions تحتفظ بالـchunks القديمة.
-- محرك حسابات Decimal واختيار السياسة والتسعير من المصادر.
-- vector search + citations متحققة + refusal، وأمر حساب structured بدون LLM arithmetic.
-
-## اختبر بنفسك
-
-من Terminal داخل G:\Credit Copilot:
+المتطلبات: Node24، pnpm11.25.0، Docker Desktop/Compose v2 وGit. من جذر المشروع:
 
 ```powershell
 pnpm install --frozen-lockfile
-docker compose up -d db
-pnpm db:migrate
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+```
+
+ضع `GEMINI_API_KEY` و`DEMO_PASSWORD` محليًا في `.env`؛ لا ترسلهما في الشات أو Git. أنشئ المفتاح من [Google AI Studio](https://aistudio.google.com/apikey)، وفق [تعليمات المزود الرسمية](https://aistudio.google.com/docs/api-key). استخدم نموذجًا متاحًا ضمن quota حسابك؛ لا يلزم شراء اشتراك، ولا نفترض تكلفة صفرية أو quota مضمونة.
+
+```powershell
+pnpm dev
+```
+
+الأمر يشغّل Docker DB وينتظر health، ثم migration CLI الصريح، ثم API والويب. الافتراضي: `http://localhost:5173` وOpenAPI على `http://127.0.0.1:3000/api/docs`. Ctrl+C يوقف API/الويب ويحتفظ بقاعدة البيانات. افحص Docker Desktop لو البداية فشلت؛ لو المنفذ مشغول غيّر PORT/WEB_ORIGIN قبل التشغيل. لا يوجد deployment تلقائي.
+
+في terminal آخر:
+
+```powershell
+pnpm seed
+pnpm seed:users
+```
+
+seed يفهرس السياسات السبع فقط؛ تكراره يرجع skipped. حسابات Demo تستخدم كلمة المرور المحلية المحددة بطول12–256 حرفًا: `loan-officer`، `credit-officer` بحد250,000، `senior-credit-officer` بحد500,000 و`head-credit` بحد1,000,000. إعادة seed:users تحدث كلمات المرور وتلغي الجلسات. حسابات fixture CLI لا تصلح للدخول.
+
+## 5-Minute Demo Path
+
+1. سجّل دخول loan-officer. من Knowledge راجع المصادر؛ الرفع يحتاج canIngest وهو متاح لحساب head-credit.
+2. اسأل: `What is the maximum debt burden ratio in CP-2024?` ثم CP-2025. راجع50%/45% والمصدر والتاريخ.
+3. اسأل عن crypto-backed loans: يجب رفض السؤال لغياب المصدر. أسئلة التعارض تعرض اقتباسات السياسة والمنتج/التعميم، بمراجع زمنية صريحة.
+4. جرّب Calculate: مبلغ300000، دخل30000، التزامات4000،60 شهرًا؛2025-04-03 يعطي EMI8630.39 وmaximum330000. غيّر التاريخ إلى2024-12-01 فيصبح maximum382000. الحساب وحده ليس موافقة.
+5. Add application → APP-001 → Run assessment. Strict افتراضي ونقص البطاقة يؤدي لإحالة CP-8/PS-7. نزّل الأصل وراجع Summary/Rules & sources/Workflow؛ المعروض مراحل محفوظة وليس SSE.
+6. لتجربة مسار الاعتماد، فعّل ALLOW_DEMO_MODE=true محليًا وأعد تشغيل API ثم اختار Demo صراحة. APP-001 يعطي توصية pending_approval؛ افتراض وجود البطاقة وverified=false واضحان. APP-004 يُحال للاحتيال بدون استدعاء نموذج. APP-002/003/005 تظل إحالات لنقص إثبات probation؛ لا نفترض اكتماله.
+7. سجّل دخول credit-officer وحاول اعتماد توصية300,000: السيرفر يرفض تجاوز250,000. مستخدم Senior مستقل يسجل التبرير والاعتماد ثم يصدر العرض بتاريخ صرف مناسب. العرض يظل Demo، وليس إثبات مستندات مكتملة أو خطاب PDF.
+8. في Senior referral queue سجّل انتظار الأدلة/إعادة تقييم أو الإقرار بسجل Fraud Unit الداخلي. الملاحظة لا تلغي نقص الأدلة ولا تغيّر القرار. PM-9 يتيح طلب السبب المكتوب بعد رفض بشري صحيح خلال30 يومًا، بلا استئناف آلي أو تعديل قرار. توجد رحلة اختبار مستقلة لهذا المسار؛ لا ترفض pack ناقص الأدلة لفرض مثال.
+
+## Evaluation and checks
+
+```powershell
 pnpm test
 pnpm typecheck
 pnpm lint
 pnpm format:check
+pnpm test:integration
+pnpm evaluate:core:offline
+pnpm exec playwright install chromium
+pnpm test:e2e
 pnpm build
-pnpm calculate
-pnpm evaluate:offline
-```
-
-الإعدادات موجودة في .env؛ لا تنشره. Strict افتراضي. calculate يقرأ data/config/calculation-example.json؛ غيّر التاريخ من2025-04-03 إلى2024-12-01 لمقارنة الإصدارين.
-
-المتوقع: EMI8630.39، maximum330000 لسياسة2025 أو382000 لسياسة2024. الناتج affordability فقط، وليس موافقة أو عرض قرض.
-
-## جرّب البحث الحقيقي
-
-```powershell
-pnpm seed
-pnpm seed
-pnpm ask "What is the maximum debt burden ratio?" "2025-04-03"
-pnpm ask "What is the maximum debt burden ratio?" "2024-12-01"
-pnpm ask "Can PL-100 be offered for 72 months?" "2025-04-03"
-pnpm ask "What is the policy for crypto-backed loans?" "2025-04-03"
 pnpm evaluate
 ```
 
-seed الثاني يرجع skipped. DBR45% في2025 و50% في2024، والمنتج يظل60 شهرًا، وcrypto refusal. evaluate الحالي خمس حالات live فقط، وليس تقييم FR-6 الكامل المطلوب في اليوم الثاني. الطلبات تستهلك quota من حساب Gemini.
+integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ شغّلها بالتتابع. لو غير موجودة، أنشئها مرة عبر `docker compose exec -T db psql -U copilot -d postgres -c "CREATE DATABASE credit_copilot_test"`. e2e تفرغ حسابات/طلبات قاعدة الاختبار، وتشغّل API4304 وVite5174. الصور/traces خارج Git. offline لا يقيس جودة semantic/LLM.
 
-نتائج اليوم الأول التاريخية:62 unit tests و5 PostgreSQL integration tests ناجحين؛ العدد الحالي أعلى كما هو موضح في آخر تسليم أعلاه. القياس الحقيقي بعد الإصلاح: hit@5 =3/3 للأسئلة القابلة للإجابة؛ refusal correctness =5/5؛ out-of-corpus refusal =2/2. الحالة الأولى لسؤال المدة فشلت وتم الاحتفاظ بها في docs/EVALUATION.md، ثم أصلحنا اختلاف اسم حقل JSON وأعدنا القياس بنجاح.
+`pnpm evaluate` يشغّل15 حالة فعلية عبر Gemini في قاعدة منفصلة تنتهي بـ_eval، وينشئها إن كانت صلاحية المستخدم تسمح. لا يغيّر بيانات الطلبات في قاعدة التطبيق. يقرأ cache موثوقًا لمتجهات السياسات المطابقة للنص/model/dimensions، بينما embeddings الأسئلة والاستدعاءات التوليدية live. يحفظ كل تشغيل، حتى الفاشل، في `artifacts/evaluation/`، ويخرج بكود فشل إذا لم تمر البوابة. يلزم مفتاح وquota؛ هذا الأمر يستهلكها.
 
-## اختبارات قاعدة البيانات
+الحالات الذهبية في `data/evaluation/cases.json`، والنتيجة الأولية والفعلية الأخيرة محفوظتان في `data/evaluation/results/`. النتيجة:15/15، hit@5=4/4 على الأسئلة القابلة للإجابة فقط، refusals=7/7 وOOC3/3، calculation assertions17/17. مصدر التعارض المساند منفصل عن ترتيب vector top5؛ لا يوجد BM25/RRF بعد. التفاصيل والفشل الأول في `docs/EVALUATION.md`. `pnpm evaluate:smoke` يحتفظ بفحص الخمس حالات القديم؛ `pnpm evaluate:offline` يحافظ على regression tests البسيطة بلا DB.
 
-قاعدة الاختبار منفصلة وتنتهي بـ_test. إن لم تكن موجودة أنشئها مرة واحدة:
+## Configuration
 
-```powershell
-docker compose exec -T db psql -U copilot -d postgres -c "CREATE DATABASE credit_copilot_test"
-pnpm test:integration
-```
+كل المتغيرات الحالية في `.env.example`. أعد تشغيل API عند تغييرها؛ الأسرار تبقى على السيرفر.
 
-الاختبارات تفرغ قاعدة الاختبار فقط. تثبت idempotency وfailure rollback وhistorical citation retention وpolicy/evidence isolation.
+| Variable | Default / use |
+|---|---|
+| DATABASE_URL | PostgreSQL local54329/credit_copilot؛ migrations عبر CLI، synchronize=false |
+| EVALUATION_DATABASE_URL | اختياري؛ إن غاب يُشتق اسم _eval من DATABASE_URL |
+| PORT / WEB_ORIGIN | 3000 / http://localhost:5173؛ origin لازم يطابق عنوان المتصفح |
+| GEMINI_API_KEY | سر محلي؛ غير مطلوب لاختبارات fake/offline |
+| LLM_PROVIDER | gemini فقط حاليًا؛ fake يُحقن في الاختبارات، وليس اختيار production |
+| GENERATION_MODEL | gemini-3.5-flash-lite؛ اسم النموذج المسجل في القياس |
+| EMBEDDING_MODEL / EMBEDDING_DIMENSIONS | gemini-embedding-001 /768؛ تغييرهما يحتاج إعادة فهرسة وbaseline جديد |
+| RETRIEVAL_MIN_SIMILARITY | 0.65؛ لم يُخفض لاجتياز الحالات |
+| ASSESSMENT_MODE / ALLOW_DEMO_MODE | strict /false؛ Demo يحتاج تمكينًا واختيارًا صريحًا لبيانات synthetic |
+| UPLOAD_MAX_BYTES | 10485760؛ PDF/CSV/MD، وحد100 صفحة PDF، بلا OCR |
+| DEMO_PASSWORD | محلي12–256 حرفًا لإنشاء حسابات التدريب |
+| SESSION_TTL_HOURS / COOKIE_SECURE | 8 /false للتطوير؛ Secure يحتاج HTTPS |
+| TEST_DATABASE_URL | اختياري للاختبارات؛ الاسم يجب أن ينتهي _test |
+| API_PROXY_TARGET | اختياري عند تشغيل Vite منفردًا؛ pnpm dev يضبطه حسب PORT |
+| POSTGRES_PASSWORD | إعداد Compose اختياري؛ الافتراضي copilot_local المحلي، ويجب أن يطابق DATABASE_URL |
 
-## افهم الـarchitecture
+`data/config/review-calendar.json` يضبط عطلة الأسبوع والإجازات لتقدير PM-4 فقط: الجمعة/السبت افتراضيًا، بلا إجازات رسمية مختلقة. مهلة PM-9 هي30 يومًا تقويميًا من الرفض المسجل بتوقيت القاهرة، شاملة اليوم30؛ مصدر الملفات لا يوفر تاريخ إخطار منفصلًا.
 
-```mermaid
-flowchart TD
-  P[Presentation: React / Nest Controllers] --> A[Application: use cases and ports]
-  A --> D[Domain: pure rules and calculations]
-  I[Infrastructure: TypeORM / pgvector / Gemini / Mastra / parsers] --> A
-  I --> D
-```
+## API, privacy and limits
 
-الأسهم اعتماد كود: الـDomain لا يستورد DB أو LLM. Application يحدد واجهات الخدمات، Infrastructure ينفذها. scripts وNest composition root يربطوا المكونات.
+المسارات تحت `/api/v1` وموثقة في OpenAPI. Login يرجع HttpOnly/SameSite cookie وcsrfToken؛ أرسل cookie و`x-csrf-token` مع POST. عند التقييم أرسل Idempotency-Key ثابتًا للمحاولة نفسها؛ الرد الناجح يتكرر بنفس run، وتغيير mode يحتاج مفتاحًا مختلفًا. job واحد لكل طلب، منع القرار أثناء reassessment، وإغلاق المحاولة العالقة بعد15 دقيقة عند محاولة جديدة. النتائج المتأخرة لا تستبدل الأحدث، والطلب الصادر عرضه لا يعاد تقييمه.
 
-اقرأ بالترتيب:
-1. packages/domain/src/calculations.ts
-2. packages/domain/src/policy.ts
-3. packages/application/src/questions.ts
-4. packages/application/src/calculation-question.ts
-5. packages/infrastructure/src/parsers/registry.ts
-6. packages/infrastructure/src/knowledge/ingestion.ts
-7. packages/infrastructure/src/knowledge/retrieval.ts
+- Knowledge: عرض السياسات، multipart `files` لدفعات1–20 ونتيجة كل ملف. الـmanifest يقبل السياسات السبع المعروفة فقط.
+- Applications: multipart `file` أو اختيار fixture، list/read/download، assessments. يقبل الـPDF packs الخمسة المعروفة بالـhash فقط؛ بيانات العميل لا تدخل Knowledge Base.
+- Reviews/decisions/offers: الصلاحيات والمبلغ والنسخة وfour-eyes على السيرفر. لا endpoint لتجاوز نقص الأدلة أو استثناء التسعير/السياسة.
+- Referrals/written-reason/reason-requests: Senior notes داخلية فقط؛ طلب السبب يعيد snapshot بالبند والإصدار والمصدر وتبرير المراجع، ولا يغير حالة التقييم. رد محفوظ يظل مقروءًا بعد انتهاء المهلة؛ تاريخ/مستخدم الطلب لا يأتيان من العميل.
 
-## حدود واضحة
+**ما يُرسل إلى Gemini:** للسياسات: السؤال بعد إخفاء ID ذي14 رقمًا والتليفونات المصرية، ونصوص السياسات المسترجعة ومراجعها. للاستخراج: اسم pack، الصفحة/القسم، وأربعة أنواع سطور فقط: صافي الدخل، الالتزامات، بدء العمل والـbureau score. لا تُرسل الاستمارة الخام أو الأسماء أو قيم gender/religion/marital status/nationality أو صورة البطاقة. لا تدخل بيانات أشخاص في الأسئلة؛ masking ليس redaction عامًا لكل شكل PII. تحفظ النسخ الأصلية في cases الخاصة مع صلاحية owner/reviewer، ولا تُعرض مخرجات النموذج كـHTML.
 
-## تجربة تقييم الطلب
+البوابة الوظيفية اجتازت العينة المحددة؛ هذا ليس تعميمًا لجودة RAG. تكلفة الفاتورة وتوكنات embedding/retries غير متاحة من الـports وتُسجل unknown. كل الـstretch goals لاحقًا حسب FEATURES.md. التسليم النهائي ما زال يحتاج فيديو3–5 دقائق ومراجعة clean-clone؛ تاريخ Git الفعلي يغطي3 أيام Cairo فقط، وليس4، ولن نصطنع تاريخ commits. لا توجد رسالة تقديم أو نشر تلقائي.
 
-بعد تشغيل PostgreSQL و`pnpm db:migrate` و`pnpm seed`:
-
-```powershell
-pnpm assess APP-001
-```
-
-Strict افتراضي: كل الـpacks الأصلية ناقصها نسخة البطاقة، فبتتحول لمراجعة بشرية. لتجربة Demo صراحة في نفس الـterminal فقط:
-
-```powershell
-$env:ALLOW_DEMO_MODE='true'
-pnpm assess APP-001 --demo
-pnpm assess APP-004 --demo
-Remove-Item Env:ALLOW_DEMO_MODE
-```
-
-APP-001 يرجع توصية pending_approval؛ APP-004 إحالة احتيال بدون LLM. Demo يفترض وجود البطاقة فقط ويحتفظ بـverified=false. APP-002/003/005 عندها نقص إثبات probation فبتتحول لمراجعة بشرية حتى في Demo؛ لا نفترض اكتماله لعرض نتيجة مرغوبة. كل تشغيل يحفظ طلب synthetic منفصلًا و8 أحداث مراحل والنتيجة والافتراضات وبنود السياسة وتوكنات الاستدعاء المتاحة. الـCLI مخصص للـfixtures المحلية بحساب disabled لا يصلح لتسجيل الدخول؛ ليس endpoint عام أو نظام اعتماد. التقييم متاح عبر REST محمية بالمصادقة كما هو موضح أعلاه؛ واجهة React الأساسية متاحة كما هو موضح في بداية الملف.
-
-Q&A تعرض اقتباسات المصدر؛ لا توجد صياغة شرح حر مضمونة أو استخراج محادثي عام للأرقام. استخدم JSON مع calculate للحساب. threshold0.65 مبدئي؛ خمس حالات لا تثبت الجودة العامة. cl100k ليس tokenizer Gemini. نفس document/version ببايتات مختلفة يرفض؛ التحديث المسموح بإصدار pipeline يحفظ التاريخ. واجهة React الأساسية متاحة؛ full15-case evaluation/stretches لاحقًا. تمت إضافة fixtures لـPDF بلا نص وPDF محمي وكمان اختبار ملف تالف؛ كلها تُرفض بأخطاء واضحة.
-
-تابع PRs وActions على GitHub؛ status.md يسجل الحالة الفعلية وآخر خطوة، ولا تعتبر وجود CI YAML دليلًا أن كل run نجح.
-
-
-لو المنفذ3000 مشغول، شغّل الـAPI بـ`$env:PORT="4300"; pnpm dev:api`، وفي terminal آخر شغّل الويب بـ`$env:API_PROXY_TARGET="http://127.0.0.1:4300"; pnpm dev:web`. افتح localhost:5173 ليطابق WEB_ORIGIN.
+اقرأ `docs/DESIGN.md` للقرارات، `docs/EVALUATION.md` للأرقام، `docs/AI-USAGE-LOG.md` لاستخدام AI، و`FEATURES.md` للحالة.

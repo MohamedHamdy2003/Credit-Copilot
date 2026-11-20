@@ -88,7 +88,11 @@ export class GeminiAdapter implements GenerationPort, EmbeddingPort {
     try {
       value = JSON.parse(text);
     } catch {
-      throw new DomainError('InvalidLLMOutput', 'Model did not return JSON');
+      throw new DomainError('InvalidLLMOutput', 'Model did not return JSON', 422, {
+        model: this.generationModel,
+        inputTokens: result.data.usageMetadata?.promptTokenCount ?? null,
+        outputTokens: result.data.usageMetadata?.candidatesTokenCount ?? null,
+      });
     }
     return {
       value,

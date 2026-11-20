@@ -15,6 +15,7 @@ export interface AssessmentResult {
   results?: import('../../domain/src/rules.js').RuleResult[];
   recommendedAmount?: string | null;
   memo?: string;
+  pricing?: { annualRatePercent: string; sourceFile: string; row: number };
   reason?: string;
   citations?: string[];
   extraction?: Awaited<ReturnType<typeof import('./extraction.js').extractVerified>>;

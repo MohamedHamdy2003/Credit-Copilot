@@ -28,7 +28,10 @@
     "calculate": "tsx scripts/calculate.ts",
     "evaluate:offline": "node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand questions.test.ts calculation-question.test.ts",
     "assess": "tsx scripts/assess.ts",
-    "seed:users": "tsx scripts/seed-users.ts"
+    "seed:users": "tsx scripts/seed-users.ts",
+    "evaluate:smoke": "tsx scripts/evaluate-smoke.ts",
+    "evaluate:core:offline": "tsx scripts/evaluate.ts --offline",
+    "dev": "tsx scripts/dev.ts"
   },
   "dependencies": {
     "@mastra/core": "1.83.0",
