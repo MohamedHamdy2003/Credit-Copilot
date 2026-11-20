@@ -81,6 +81,8 @@ export function sanitizeEvidence(document: NormalizedDocument) {
   };
 }
 
+const generationSchema = z.toJSONSchema(z.union([extractionSchema, z.strictObject({})]));
+
 export async function extractVerified(
   document: NormalizedDocument,
   provider: GenerationPort,
@@ -95,6 +97,7 @@ export async function extractVerified(
   const response = await provider.completeStructured(
     prompt,
     JSON.stringify({ source: sanitized.sourceFile, evidence: sanitized.lines }),
+    generationSchema,
   );
   const parsed = extractionSchema.safeParse(response.value);
   if (!parsed.success)

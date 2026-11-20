@@ -62,6 +62,26 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 
 الحالات الذهبية في `data/evaluation/cases.json` والتقارير الفعلية في `data/evaluation/results/`. الـvector والـhybrid عدّوا 15/15 وhit@5 كان 4/4 في الوضعين على الأسئلة القابلة للإجابة. شغّل `pnpm evaluate --vector` و`pnpm evaluate --hybrid` و`pnpm evaluate --rewrite` للمقارنة. البحث الافتراضي يدمج BM25 وpgvector بـRRF ويضيف مصطلحات بحث من قاموس ثابت. التقييم مع إعادة الصياغة حقق 15/15 وhit@5 ‏4/4. التفاصيل وتقارير الفشل في `docs/EVALUATION.md`. `pnpm evaluate:smoke` يحتفظ بفحص الـvector القديم لخمس حالات، و`pnpm evaluate:offline` يشغّل regression tests بسيطة من غير DB.
 
+## تشغيل Ollama كبديل محلي
+
+التحويل اختياري. شغّل حاوية Ollama وحمّل النموذج مرة واحدة، وبعدها فعّل
+`OLLAMA_FALLBACK_ENABLED=true` في `.env` وأعد تشغيل الـAPI. خدمة Compose متاحة
+على جهازك فقط، وخصائص Ollama Cloud مقفولة. [دليل Ollama المحلي](https://docs.ollama.com/faq)
+
+```powershell
+docker compose --profile local-llm up -d ollama
+docker compose exec -T ollama ollama pull qwen3:4b-instruct-2507-q4_K_M
+pnpm evaluate:fallback
+```
+
+Gemini بيظل المزود الأساسي. لو التوليد فشل بسبب quota أو timeout أو عطل مؤقت
+بعد محاولات Gemini، التطبيق بيجرّب Ollama مرة على نفس المدخلات المنقّحة.
+استرجاع السياسات وفهرستها بيعتمدوا على Gemini embeddings. لو embedding السؤال
+تعذّر، الـAPI بيرجع خطأ خدمة 503. تقييم `pnpm evaluate` يقيس Gemini، وفحص
+`pnpm evaluate:fallback` بيحقن تعطل Gemini ويستخدم Ollama فعليًا لاختبار استخراج
+APP-001، المذكرة المحسوبة واقتباس سياسة محدد. تقرير الفحص المنقّح في
+`artifacts/evaluation/`.
+
 ## Configuration
 
 كل المتغيرات الحالية في `.env.example`. أعد تشغيل API عند تغييرها؛ الأسرار تبقى على السيرفر.
@@ -72,7 +92,11 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 | EVALUATION_DATABASE_URL | اختياري؛ إن غاب يُشتق اسم _eval من DATABASE_URL |
 | PORT / WEB_ORIGIN | 3000 / http://localhost:5173؛ origin لازم يطابق عنوان المتصفح |
 | GEMINI_API_KEY | سر محلي؛ غير مطلوب لاختبارات fake/offline |
-| LLM_PROVIDER | gemini فقط حاليًا؛ fake يُحقن في الاختبارات، وليس اختيار production |
+| LLM_PROVIDER | gemini هو المزود الأساسي |
+| OLLAMA_FALLBACK_ENABLED | false افتراضيًا. true يفعّل التحويل للتوليد المحلي |
+| OLLAMA_BASE_URL | http://127.0.0.1:11434 افتراضيًا. يقبل عنوان HTTP محلي فقط |
+| OLLAMA_MODEL | qwen3:4b-instruct-2507-q4_K_M افتراضيًا. لازم النموذج يكون محمّل في Ollama |
+| OLLAMA_TIMEOUT_MS | 60000 مهلة محاولة التوليد المحلية بالمللي ثانية |
 | GENERATION_MODEL | gemini-3.5-flash-lite؛ اسم النموذج المسجل في القياس |
 | EMBEDDING_MODEL / EMBEDDING_DIMENSIONS | gemini-embedding-001 /768؛ تغييرهما يحتاج إعادة فهرسة وbaseline جديد |
 | RETRIEVAL_STRATEGY | hybrid افتراضيًا؛ vector لتشغيل البحث الدلالي وحده |
@@ -97,7 +121,7 @@ integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ 
 - Reviews/decisions/offers: الصلاحيات والمبلغ والنسخة وfour-eyes على السيرفر. لا endpoint لتجاوز نقص الأدلة أو استثناء التسعير/السياسة.
 - Referrals/written-reason/reason-requests: Senior notes داخلية فقط؛ طلب السبب يعيد snapshot بالبند والإصدار والمصدر وتبرير المراجع، ولا يغير حالة التقييم. رد محفوظ يظل مقروءًا بعد انتهاء المهلة؛ تاريخ/مستخدم الطلب لا يأتيان من العميل.
 
-**ما يُرسل إلى Gemini:** للسياسات: السؤال بعد إخفاء ID ذي14 رقمًا والتليفونات المصرية، ونصوص السياسات المسترجعة ومراجعها. للاستخراج: اسم pack، الصفحة/القسم، وأربعة أنواع سطور فقط: صافي الدخل، الالتزامات، بدء العمل والـbureau score. لا تُرسل الاستمارة الخام أو الأسماء أو قيم gender/religion/marital status/nationality أو صورة البطاقة. لا تدخل بيانات أشخاص في الأسئلة؛ masking ليس redaction عامًا لكل شكل PII. تحفظ النسخ الأصلية في cases الخاصة مع صلاحية owner/reviewer، ولا تُعرض مخرجات النموذج كـHTML.
+**مدخلات التوليد في Gemini وOllama:** للسياسات: السؤال بعد إخفاء ID ذي14 رقمًا والتليفونات المصرية، ونصوص السياسات المسترجعة ومراجعها. للاستخراج: اسم pack، الصفحة/القسم، وأربعة أنواع سطور فقط: صافي الدخل، الالتزامات، بدء العمل والـbureau score. لا تُرسل الاستمارة الخام أو الأسماء أو قيم gender/religion/marital status/nationality أو صورة البطاقة. لا تدخل بيانات أشخاص في الأسئلة؛ masking ليس redaction عامًا لكل شكل PII. تحفظ النسخ الأصلية في cases الخاصة مع صلاحية owner/reviewer، ولا تُعرض مخرجات النموذج كـHTML.
 
 البوابة الوظيفية اجتازت العينة المحددة؛ هذا ليس تعميمًا لجودة RAG. تكلفة الفاتورة وتوكنات embedding/retries غير متاحة من الـports وتُسجل unknown. Hybrid Search وQuery Rewriting اكتملوا. باقي المراحل في FEATURES.md. التسليم النهائي ما زال يحتاج فيديو3–5 دقائق ومراجعة clean-clone؛ تاريخ Git الفعلي يغطي3 أيام Cairo فقط، وليس4، ولن نصطنع تاريخ commits. لا توجد رسالة تقديم أو نشر تلقائي.
 

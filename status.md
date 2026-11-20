@@ -1,8 +1,8 @@
 # Current checkpoint —20 November2026
 
-Read agent.md and FEATURES.md first. Current feature: feature/query-rewriting.
-Core evaluation went through PR17/18 and hybrid search through PR19/20 after CI.
-Hybrid is on main at 527886d. Query rewriting and evidence are in PR21.
+Read agent.md and FEATURES.md first. Current feature: feature/local-model-fallback.
+Core evaluation went through PR17/18, hybrid search through PR19/20 and query
+rewriting through PR21/22 after CI. Query rewriting is on main at f13150d.
 
 ## Implemented
 
@@ -33,9 +33,7 @@ supported by a qualifying procedure hit. The repeat failure report is retained.
 
 Code-filled credit-memo.ts supplies safe memo even for referrals and CSV provenance;
 no LLM arithmetic/prose. Failed JSON retains reported usage; unavailable usage is
-null, never invented zero. Production provider config accepts Gemini only; test
-fakes are explicit injection, not silently selected runtime adapters. Removed dead
-DATA_DIR/Ollama placeholders from active config. No new DB migration.
+null, never invented zero. Test fakes use explicit injection. No new DB migration.
 
 pnpm dev now waits for Compose health, runs explicit migrations and launches API/
 Vite using matching PORT/WEB_ORIGIN. Ctrl+C stops its API/web, DB retained. Smoke
@@ -95,6 +93,16 @@ OOC refusals 3/3, exact numerics 17/17, security/audit 80/80 and Strict packs 5/
 Glossary expansion ran for Q01, Q02, Q03 and promoted 0 candidates. The run used
 7 embedding calls, 12 generation calls and 0 case-level provider retries. See
 query-rewrite-core-evaluation.json for the trace and case results.
+
+## Local fallback implementation
+
+API and CLI wire generation fallback only when OLLAMA_FALLBACK_ENABLED=true.
+Gemini retries transient HTTP/transport failures before making one local Ollama
+request. Authentication, configuration and invalid generation responses return
+errors. All embeddings stay on Gemini. The source-verification gate and human
+approval flow apply to local output. Both model attempts get separate usage
+records and the assessment records a fallback audit event. Real local smoke is
+pending while Docker pulls the image and model.
 
 ## Next and honest readiness
 

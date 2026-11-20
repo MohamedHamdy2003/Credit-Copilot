@@ -2,6 +2,32 @@ import { z } from 'zod';
 
 export const MAX_QUERY_REWRITE_EXPANSIONS = 4;
 
+export const ollamaSettingsSchema = z.object({
+  OLLAMA_BASE_URL: z
+    .url()
+    .refine((value) => {
+      if (!URL.canParse(value)) return false;
+      const url = new URL(value);
+      return (
+        url.protocol === 'http:' &&
+        ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) &&
+        !url.username &&
+        !url.password &&
+        url.pathname === '/' &&
+        !url.search &&
+        !url.hash
+      );
+    }, 'Ollama must use a loopback HTTP origin')
+    .default('http://127.0.0.1:11434'),
+  OLLAMA_MODEL: z
+    .string()
+    .regex(/^[a-zA-Z0-9][a-zA-Z0-9_.:/-]{0,127}$/)
+    .refine((name) => !/[-:]cloud$/i.test(name), 'Ollama requires a local model')
+    .default('qwen3:4b-instruct-2507-q4_K_M'),
+  OLLAMA_TIMEOUT_MS: z.coerce.number().int().min(100).max(180000).default(60000),
+});
+export type OllamaSettings = z.infer<typeof ollamaSettingsSchema>;
+
 export const configSchema = z
   .object({
     DATABASE_URL: z.string().url(),
@@ -14,6 +40,11 @@ export const configSchema = z
       .default('false')
       .transform((s) => s === 'true'),
     LLM_PROVIDER: z.literal('gemini').default('gemini'),
+    OLLAMA_FALLBACK_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((value) => value === 'true'),
+    ...ollamaSettingsSchema.shape,
     GEMINI_API_KEY: z.string().default(''),
     GENERATION_MODEL: z.string().default('gemini-3.5-flash-lite'),
     EMBEDDING_MODEL: z.string().default('gemini-embedding-001'),

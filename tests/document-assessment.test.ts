@@ -285,3 +285,25 @@ it('changing only protected fields leaves the recommendation and canonical memo 
     expect(r.result.result?.calculation).toEqual(original?.calculation);
   }
 });
+
+it('refers invalid local extraction and keeps both generation attempts in the assessment audit data', async () => {
+  const state = await run('APP-001', {
+    provider: {
+      completeStructured: async () => ({
+        model: 'ollama:test-local',
+        fallbackFrom: 'gemini-test',
+        usage: { inputTokens: 21, outputTokens: 8 },
+        value: { income: 'unverified' },
+      }),
+    },
+  });
+  expect(state.result).toMatchObject({
+    recommendation: 'REFER_TO_HUMAN',
+    reason: 'InvalidLLMOutput',
+    calculation: null,
+    usageRecords: [
+      { model: 'gemini-test', inputTokens: null, outputTokens: null },
+      { model: 'ollama:test-local', fallbackFrom: 'gemini-test', inputTokens: 21, outputTokens: 8 },
+    ],
+  });
+});

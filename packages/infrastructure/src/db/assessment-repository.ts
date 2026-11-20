@@ -70,7 +70,7 @@ export class PostgresAssessmentRepository implements AssessmentRepository {
         reason: 'reason' in result ? result.reason : null,
       });
       await audit('POLICY_EVIDENCE_RETRIEVED', { chunkIds: result.retrievedChunkIds ?? [] });
-      for (const usage of result.usageRecords ?? [])
+      for (const usage of result.usageRecords ?? []) {
         await manager.query(
           'INSERT INTO cases.llm_usage(id,actor_id,run_id,model,operation,input_tokens,output_tokens,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8)',
           [
@@ -84,6 +84,9 @@ export class PostgresAssessmentRepository implements AssessmentRepository {
             record.at,
           ],
         );
+        if (usage.fallbackFrom)
+          await audit('LLM_GENERATION_FALLBACK', { from: usage.fallbackFrom, to: usage.model });
+      }
       if (result.fraudReferral)
         await audit('FRAUD_UNIT_REFERRAL', {
           reason: 'SuspectedTampering',
