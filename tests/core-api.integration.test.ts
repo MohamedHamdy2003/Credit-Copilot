@@ -12,8 +12,7 @@ import { AuthService } from '../packages/application/src/auth.js';
 import { DecisionService } from '../packages/application/src/decisions.js';
 import { createOperations } from '../packages/infrastructure/src/operations.js';
 import { configSchema } from '../packages/contracts/src/config.js';
-import { FakeEmbedding } from './helpers/fake-provider.js';
-import type { Completion } from '../packages/application/src/ports.js';
+import { WorkflowTestProvider } from './helpers/workflow-provider.js';
 import { PostgresAssessmentRepository } from '../packages/infrastructure/src/db/assessment-repository.js';
 import type { AssessmentResult } from '../packages/application/src/assessment-record.js';
 import type { Policy } from '../packages/domain/src/policy.js';
@@ -25,51 +24,8 @@ const url =
   process.env.TEST_DATABASE_URL ??
   'postgresql://copilot:copilot_local@localhost:54329/credit_copilot_test';
 if (!new URL(url).pathname.endsWith('_test')) throw new Error('Dedicated test DB required');
-class Provider extends FakeEmbedding {
-  gate?: Promise<void>;
-  onGeneration?: () => void;
-  texts: string[] = [];
-  override async embed(text: string) {
-    this.texts.push(text);
-    return super.embed(text);
-  }
-  async completeStructured(_system: string, data: string): Promise<Completion> {
-    this.onGeneration?.();
-    await this.gate;
-    this.texts.push(data);
-    const input = JSON.parse(data);
-    if (input.question)
-      return {
-        model: 'fake',
-        usage: { inputTokens: 1, outputTokens: 1 },
-        value: {
-          citations: input.question.includes('crypto')
-            ? []
-            : [{ chunkId: input.evidence[0].chunkId, quote: input.evidence[0].text }],
-        },
-      };
-    return {
-      model: 'fake',
-      usage: { inputTokens: 12, outputTokens: 8 },
-      value: {
-        income: { value: '30000.00', quote: 'Net monthly income 30,000.00', section: 'salary' },
-        obligations: {
-          value: '4000.00',
-          quote: 'Total monthly instalments 4,000.00',
-          section: 'bureau',
-        },
-        employmentStart: {
-          value: '2019-09-01',
-          quote: 'Employment start 1 September 2019',
-          section: 'salary',
-        },
-        bureauScore: { value: 712, quote: 'Bureau score 712', section: 'bureau' },
-      },
-    };
-  }
-}
 let db: DataSource, app: INestApplication, hash: string;
-const provider = new Provider(),
+const provider = new WorkflowTestProvider(),
   password = `test-${randomUUID()}`;
 beforeAll(async () => {
   db = await createDataSource(url).initialize();

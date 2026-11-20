@@ -19,7 +19,7 @@ and check expectedVersion plus latest assessment pointer. The original assessmen
 snapshot stays immutable; status/version, decisions and audit are separate records.
 Issuance requires stored approval, tier check and source-policy maturity recheck;
 unique constraints prevent double decisions/offers. Demo flags propagate to offers.
-Full authenticated ingestion/assessment transport and React remain subsequent work.
+Authenticated ingestion/assessment REST and React core screens are implemented.
 
 ## Document assessment workflow
 
@@ -86,6 +86,17 @@ Demo assessments are never presented as fully evidence-verified; changes of mode
 require a new assessment, not relabeling an earlier result.
 
 ## Domain isolation
+
+React presentation is split into session shell, application selection/assessment,
+policy questions/calculations, knowledge ingestion and human reviews. A shared
+HTTP client sends HttpOnly cookies and keeps CSRF in memory, never localStorage.
+Session restoration re-reads server identity;401 removes protected screens. Read
+requests cancel on navigation, network errors expose retry/request IDs, assessment
+retry keeps its idempotency key after an uncertain network result. Calculations,
+policy selection and authorization stay on the server. The API exposes canAssess
+and an issued offer ID for relevant controls; these do not replace authorization.
+Demo warnings appear on assessments and offers; saved workflow events are labeled
+as history, not live SSE. React renders source text directly, never raw HTML.
 
 Authenticated REST uses OperationsService application ports, composed by Nest's
 main entry point with existing parsers, knowledge services, calculation functions
@@ -156,7 +167,7 @@ pricing deviations Credit Committee authorization. Records retained7 years; writ
 rejection reasons cite clause/edition and complaint requests have30-day window.
 Historical pre-March2025 operational procedures are not supplied; do not invent them.
 
-Remaining scope: React UI, complaints completion, full
+Remaining scope: complaints completion, full
 15-case evaluation, then all nine stretches (hybrid BM25+pgvector/RRF, rewriting,
 new synthetic documents, typed agents, SSE, local fallback, second product, offer
 PDF/schedule, per-user usage/cost). PostgreSQL ts_rank is not BM25. Before hybrid,

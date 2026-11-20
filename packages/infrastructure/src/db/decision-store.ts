@@ -25,7 +25,7 @@ export class PostgresDecisionStore implements DecisionStore {
   ) {}
   async read(actor: Actor, runId: string) {
     const rows = (await this.db.query(
-      'SELECT r.id,r.application_id,r.status,r.version,r.result,a.preparer_id FROM cases.assessment_runs r JOIN cases.applications a ON a.id=r.application_id WHERE r.id=$1',
+      'SELECT r.id,r.application_id,r.status,r.version,r.result,a.preparer_id,o.id AS offer_id FROM cases.assessment_runs r JOIN cases.applications a ON a.id=r.application_id LEFT JOIN cases.offers o ON o.run_id=r.id WHERE r.id=$1',
       [runId],
     )) as RunRow[];
     const row = rows[0];

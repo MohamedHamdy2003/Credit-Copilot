@@ -1,8 +1,30 @@
 # Credit Copilot
 
+## تجربة واجهة React
+
+شغّل PostgreSQL والـmigrations، ثم API والويب في terminal منفصل لكل واحد:
+
+```powershell
+docker compose up -d db
+pnpm db:migrate
+pnpm dev:api
+```
+
+```powershell
+pnpm dev:web
+```
+
+افتح `http://localhost:5173` ليطابق `WEB_ORIGIN` الافتراضي؛ لو غيّرت العنوان غيّر الإعداد أيضًا. استخدم حسابات `seed:users` الموضحة أدناه، ولا تدخل بيانات عملاء حقيقية.
+
+من Applications اختار Add application ثم APP-001. Strict هو الافتراضي ويُحيل نقص البطاقة. لو فعلت `ALLOW_DEMO_MODE=true` محليًا وأعدت تشغيل API، اختار Demo صراحة؛ النتيجة تعرض الافتراض وverified=false. جرّب Policy questions للمصادر والحسابات، وKnowledge لرفع السياسات حسب صلاحية الحساب. سجل خروج ثم دخول بـsenior-credit-officer لمراجعة توصية Demo بمبلغ300,000؛ الموافقة والإصدار خطوتان منفصلتان، والإصدار يحتاج تاريخ صرف. العرض يظل Demo ولا يتحول إلى دليل متحقق. APP-004 يعرض إحالة احتيال. Rules & sources وWorkflow تعرض أدلة ومراحل محفوظة؛ لا يوجد بث SSE بعد.
+
+تحقق الواجهة الحالي:80 unit و23 PostgreSQL/HTTP integration و6 Chromium e2e ناجحين، مع types/lint/format/build.
+
+اختبارات المتصفح: `pnpm exec playwright install chromium` ثم `pnpm test:e2e`. تبدأ API اختبارية4304 وVite5174 وتستخدم **قاعدة *_test فقط** وprovider وهميًا. تُفرغ حسابات وطلبات تلك القاعدة؛ لا تشغّل integration وe2e بالتوازي عليها. النتائج والصور المؤقتة خارج الريبو. الاختبار لا يستخدم مفتاح Gemini ولا يقيس جودته. Chromium desktop1488×1058 وmobile390×844؛ بقية المتصفحات غير مختبرة.
+
 ## REST API — آخر تسليم
 
-الـREST الأساسي جاهز، وواجهة React الكاملة هي الخطوة التالية. شغّل migrations قبل الـAPI. كل المسارات التالية تحت `/api/v1` وتحتاج جلسة دخول، ومع POST أرسل cookie و`x-csrf-token`:
+الـREST وواجهة React الأساسية جاهزين. شغّل migrations قبل الـAPI. كل المسارات التالية تحت `/api/v1` وتحتاج جلسة دخول، ومع POST أرسل cookie و`x-csrf-token`:
 
 | المسار | الاستخدام |
 |---|---|
@@ -23,7 +45,7 @@
 
 عند التقييم أرسل `Idempotency-Key` ثابتًا لنفس المحاولة: إعادة الطلب بعد النجاح ترجع نفس run؛ المفتاح نفسه مع mode مختلف يرفض409، والمحاولة الفاشلة تحتاج مفتاحًا جديدًا. يمنع تشغيل تقييمين لنفس الطلب، وأي قرار على نتيجة سابقة أثناء إعادة التقييم. المحاولات العالقة أكثر من15 دقيقة تُغلق عند بدء محاولة جديدة؛ نتيجتها المتأخرة لا تستبدل النتيجة الجديدة. الطلب الصادر عرضه لا يعاد تقييمه. السؤال يستنتج تاريخ ISO أو إصدار CP المذكور صراحة، ويستخدم تاريخ القاهرة الحالي إن لم تحدده؛ تعارض التاريخ والإصدار يرفض بدل اختيار سياسة بصمت.
 
-آخر تحقق لهذا التسليم:77 unit و23 PostgreSQL/HTTP integration، مع types/lint/format/build. اختبارات HTTP تستخدم provider وهميًا؛ لا تعتبر قياسًا جديدًا لجودة Gemini. نتائج Gemini الحقيقية السابقة محفوظة في `docs/EVALUATION.md`.
+تحقق تسليم REST السابق:77 unit و23 PostgreSQL/HTTP integration، مع types/lint/format/build. اختبارات HTTP تستخدم provider وهميًا؛ لا تعتبر قياسًا جديدًا لجودة Gemini. نتائج Gemini الحقيقية السابقة محفوظة في `docs/EVALUATION.md`.
 
 ## تسجيل الدخول والاعتماد
 
@@ -43,7 +65,7 @@ pnpm dev:api
 - `GET /api/v1/reviews` للمراجعين، و`GET /api/v1/assessments/:id` لصاحب الطلب أو Credit Officer.
 - `POST /api/v1/assessments/:id/decisions` ببيانات `action` و`expectedVersion` و`comment`. Actions: `approve`، `reject` (يحتاج clause)، `customer_response` (يحتاج accepted)، `issue` (يحتاج disbursementDate).
 
-الحد يُحسب على المبلغ المقترح، ولا يجوز اعتماد الطلب بواسطة معدّه. قبول البديل لازم يتسجل بواسطة معدّ الطلب قبل الاعتماد. الإصدار خطوة منفصلة بعد الموافقة وتعيد فحص سن الاستحقاق. Demo يصدر سجل عرض محاكاة بعلامة Demo وافتراضاته؛ ليس إثباتًا لاكتمال المستندات أو PDF جاهزًا. أي إحالة ناقصة/متلاعب بها تحتاج أدلة وإعادة تقييم؛ صلاحية Senior لا تتجاوز المتطلبات تلقائيًا. الـREST الأساسي جاهز، وواجهة React الكاملة لاحقًا.
+الحد يُحسب على المبلغ المقترح، ولا يجوز اعتماد الطلب بواسطة معدّه. قبول البديل لازم يتسجل بواسطة معدّ الطلب قبل الاعتماد. الإصدار خطوة منفصلة بعد الموافقة وتعيد فحص سن الاستحقاق. Demo يصدر سجل عرض محاكاة بعلامة Demo وافتراضاته؛ ليس إثباتًا لاكتمال المستندات أو PDF جاهزًا. أي إحالة ناقصة/متلاعب بها تحتاج أدلة وإعادة تقييم؛ صلاحية Senior لا تتجاوز المتطلبات تلقائيًا. الـREST وواجهة React الأساسية جاهزين.
 
 Synthetic personal-loan underwriting assistant. Implementation is in progress;
 the detailed scope and delivery sequence live in `docs/PR-PLAN.md`.
@@ -150,11 +172,11 @@ pnpm assess APP-004 --demo
 Remove-Item Env:ALLOW_DEMO_MODE
 ```
 
-APP-001 يرجع توصية pending_approval؛ APP-004 إحالة احتيال بدون LLM. Demo يفترض وجود البطاقة فقط ويحتفظ بـverified=false. APP-002/003/005 عندها نقص إثبات probation فبتتحول لمراجعة بشرية حتى في Demo؛ لا نفترض اكتماله لعرض نتيجة مرغوبة. كل تشغيل يحفظ طلب synthetic منفصلًا و8 أحداث مراحل والنتيجة والافتراضات وبنود السياسة وتوكنات الاستدعاء المتاحة. الـCLI مخصص للـfixtures المحلية بحساب disabled لا يصلح لتسجيل الدخول؛ ليس endpoint عام أو نظام اعتماد. التقييم متاح عبر REST محمية بالمصادقة كما هو موضح أعلاه؛ واجهة React الكاملة هي العمل التالي.
+APP-001 يرجع توصية pending_approval؛ APP-004 إحالة احتيال بدون LLM. Demo يفترض وجود البطاقة فقط ويحتفظ بـverified=false. APP-002/003/005 عندها نقص إثبات probation فبتتحول لمراجعة بشرية حتى في Demo؛ لا نفترض اكتماله لعرض نتيجة مرغوبة. كل تشغيل يحفظ طلب synthetic منفصلًا و8 أحداث مراحل والنتيجة والافتراضات وبنود السياسة وتوكنات الاستدعاء المتاحة. الـCLI مخصص للـfixtures المحلية بحساب disabled لا يصلح لتسجيل الدخول؛ ليس endpoint عام أو نظام اعتماد. التقييم متاح عبر REST محمية بالمصادقة كما هو موضح أعلاه؛ واجهة React الأساسية متاحة كما هو موضح في بداية الملف.
 
-Q&A تعرض اقتباسات المصدر؛ لا توجد صياغة شرح حر مضمونة أو استخراج محادثي عام للأرقام. استخدم JSON مع calculate للحساب. threshold0.65 مبدئي؛ خمس حالات لا تثبت الجودة العامة. cl100k ليس tokenizer Gemini. نفس document/version ببايتات مختلفة يرفض؛ التحديث المسموح بإصدار pipeline يحفظ التاريخ. واجهة React حاليًا shell؛ full UI/full15-case evaluation/stretches لاحقًا. تمت إضافة fixtures لـPDF بلا نص وPDF محمي وكمان اختبار ملف تالف؛ كلها تُرفض بأخطاء واضحة.
+Q&A تعرض اقتباسات المصدر؛ لا توجد صياغة شرح حر مضمونة أو استخراج محادثي عام للأرقام. استخدم JSON مع calculate للحساب. threshold0.65 مبدئي؛ خمس حالات لا تثبت الجودة العامة. cl100k ليس tokenizer Gemini. نفس document/version ببايتات مختلفة يرفض؛ التحديث المسموح بإصدار pipeline يحفظ التاريخ. واجهة React الأساسية متاحة؛ full15-case evaluation/stretches لاحقًا. تمت إضافة fixtures لـPDF بلا نص وPDF محمي وكمان اختبار ملف تالف؛ كلها تُرفض بأخطاء واضحة.
 
 تابع PRs وActions على GitHub؛ status.md يسجل الحالة الفعلية وآخر خطوة، ولا تعتبر وجود CI YAML دليلًا أن كل run نجح.
 
 
-لو المنفذ3000 مشغول، شغّل الـAPI بـ`$env:PORT="4300"; pnpm dev:api`، وفي terminal آخر شغّل الويب بـ`$env:API_PROXY_TARGET="http://127.0.0.1:4300"; pnpm dev:web`. الـUI حاليًا connectivity shell فقط.
+لو المنفذ3000 مشغول، شغّل الـAPI بـ`$env:PORT="4300"; pnpm dev:api`، وفي terminal آخر شغّل الويب بـ`$env:API_PROXY_TARGET="http://127.0.0.1:4300"; pnpm dev:web`. افتح localhost:5173 ليطابق WEB_ORIGIN.

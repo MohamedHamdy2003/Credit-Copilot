@@ -1,5 +1,25 @@
 # Evaluation
 
+## React workspace verification on20 November2026
+
+80 unit,23 PostgreSQL/HTTP integration and6 Chromium end-to-end tests pass locally;
+typecheck, lint, formatting and API/web builds also pass. New client tests cover
+cookie/CSRF/multipart/idempotency transport, session expiry, cancellation, network
+failure and safe non-JSON errors. Browser tests run the actual React/Vite/Nest/
+PostgreSQL/Mastra stack with the existing deterministic test provider, on a
+dedicated *_test database. They do not measure live Gemini quality.
+
+Browser journeys cover login errors/session restoration/logout; Strict referral,
+original download, sources/workflow and APP-004 fraud; explicit Demo through
+independent human approval/issuance/read retaining verified=false; grounded
+questions/refusal/date conflicts and330000/382000 calculations; multipart upload/
+dedup and mixed ingestion results/permissions; expired sessions and network retry.
+Identity/meaningful rendering and the tested controls passed without framework
+overlays; the login/mobile journey recorded no browser runtime errors. Chromium
+desktop1488x1058 and mobile390x844 were checked. Browser plugin was unavailable,
+so Playwright was used. Other browser engines and every possible mobile state
+remain untested. Full FR-6 fifteen-case evaluation and complaints are still open.
+
 ## Core REST verification on19 November2026
 
 77 unit and23 real PostgreSQL/HTTP integration tests pass. Eight new HTTP cases

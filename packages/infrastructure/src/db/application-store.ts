@@ -66,6 +66,7 @@ export class PostgresApplicationStore implements ApplicationStore {
       document: row.normalized,
       synthetic: row.synthetic,
       latestAssessmentId: row.latest_assessment_id,
+      preparerId: row.preparer_id,
     };
   }
   async start(actor: Actor, id: string, key: string, mode: AssessmentMode) {
