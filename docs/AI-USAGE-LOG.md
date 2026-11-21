@@ -1,5 +1,13 @@
 # AI usage log
 
+## 2026-11-21 issued offer document
+
+Codex implemented the code-calculated schedule, recorded terms linked to the
+human approval and the downloadable letter. The first provenance check found
+a mistyped character in the pinned policy hash. The check was corrected
+against the original file and verified again through HTTP and PostgreSQL.
+Chromium and Poppler were used to verify the download and page layout.
+
 ## 2026-11-20 original-source review and synthetic auto loans
 
 The user asked Codex to compare the project against the uploaded brief and

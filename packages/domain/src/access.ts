@@ -7,13 +7,18 @@ export interface Actor {
   tier: 'none' | 'credit' | 'senior' | 'head';
   canIngest: boolean;
 }
-export function requireReviewer(actor: Actor) {
+export function requireReviewer(
+  actor: Actor,
+): asserts actor is Actor & { role: 'credit_officer'; tier: Exclude<Actor['tier'], 'none'> } {
   invariant(
     actor.role === 'credit_officer' && actor.tier !== 'none',
     'Forbidden',
     'Credit Officer access required',
     403,
   );
+}
+export function approvalAuthorityLimit(tier: Actor['tier']): string {
+  return { none: '0.00', credit: '250000.00', senior: '500000.00', head: '1000000.00' }[tier];
 }
 export function authorizeApproval(
   actor: Actor,
@@ -30,7 +35,7 @@ export function authorizeApproval(
     'The preparer cannot approve their own assessment',
     403,
   );
-  const limit = { none: '0', credit: '250000', senior: '500000', head: '1000000' }[actor.tier];
+  const limit = approvalAuthorityLimit(actor.tier);
   invariant(
     compareMoney(amount, limit) <= 0,
     'AuthorityLimitExceeded',

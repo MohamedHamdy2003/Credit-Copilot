@@ -82,6 +82,7 @@ export interface IngestionResult {
 export interface Offer {
   id: string;
   run_id: string;
+  documentAvailable: boolean;
   data: {
     amount: string;
     disbursementDate: string;
