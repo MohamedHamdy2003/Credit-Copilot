@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { normalizedDocumentSchema } from '../../contracts/src/documents.js';
 import type { AssessmentStage } from '../../contracts/src/streams.js';
+import type { UsageStep } from '../../contracts/src/usage.js';
 export { ASSESSMENT_STAGES, type AssessmentStage } from '../../contracts/src/streams.js';
 import { applicationFormSchema, parseApplicationForm } from './application-form.js';
 import { sanitizeEvidence, extractSanitized } from './extraction.js';
@@ -37,6 +38,7 @@ export interface AssessmentClausePort {
 export interface DocumentAssessmentDependencies extends AssessmentDependencies {
   clauses: AssessmentClausePort;
   agents?: AssessmentAgentPort;
+  withUsageStep?<T>(step: UsageStep, work: () => Promise<T>): Promise<T>;
   persistence: {
     repository: AssessmentRepository;
     runId: string;
@@ -104,13 +106,15 @@ function recordGenerationUsage(
 
 function meteredGeneration(
   state: AssessmentState,
-  provider: GenerationPort,
+  deps: DocumentAssessmentDependencies,
+  step: UsageStep,
   operation?: 'assessment_agent_planning',
 ): GenerationPort {
   return {
     completeStructured: async (system, data, schema) => {
       try {
-        const response = await provider.completeStructured(system, data, schema);
+        const request = () => deps.provider.completeStructured(system, data, schema);
+        const response = await (deps.withUsageStep?.(step, request) ?? request());
         recordGenerationUsage(
           state,
           response.model,
@@ -137,6 +141,12 @@ function meteredGeneration(
   };
 }
 
+const plannerStep: Record<AssessmentAgent, UsageStep> = {
+  evidence: 'plan_extract_data',
+  policy: 'plan_retrieve_policy_clauses',
+  memo: 'plan_prepare_memo',
+};
+
 async function runAssessmentOperation<T>(
   agent: AssessmentAgent,
   state: AssessmentState,
@@ -147,7 +157,7 @@ async function runAssessmentOperation<T>(
   return deps.agents.run(
     agent,
     operation,
-    meteredGeneration(state, deps.provider, 'assessment_agent_planning'),
+    meteredGeneration(state, deps, plannerStep[agent], 'assessment_agent_planning'),
     (call) => state.agentToolCalls.push(call),
   );
 }
@@ -205,7 +215,11 @@ export async function executeAssessmentStage(
       }
       case 'extract_data':
         state.extraction = await runAssessmentOperation('evidence', state, deps, () =>
-          extractSanitized(state.sanitized!, meteredGeneration(state, deps.provider), deps.prompt),
+          extractSanitized(
+            state.sanitized!,
+            meteredGeneration(state, deps, 'extract_data'),
+            deps.prompt,
+          ),
         );
         break;
       case 'retrieve_policy_clauses': {

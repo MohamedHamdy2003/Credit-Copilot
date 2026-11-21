@@ -198,7 +198,12 @@ try {
           config.EMBEDDING_DIMENSIONS,
         )
       : new OfflineEvaluationProvider();
-  const meter = new EvaluationMeter(provider, source, generationIntervalMs),
+  const meter = new EvaluationMeter(
+      provider,
+      source,
+      generationIntervalMs,
+      config.GEMINI_BILLING_TIER,
+    ),
     ingestion = new IngestionService(db, meter, manifest);
   const ingested = [];
   for (const d of manifest)

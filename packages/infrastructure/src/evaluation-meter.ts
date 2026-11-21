@@ -1,6 +1,15 @@
 import { createHash } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { DataSource } from 'typeorm';
+import { Decimal } from 'decimal.js';
+import type { Config } from '../../contracts/src/config.js';
+import {
+  instrumentProvider,
+  withProviderAttemptObserver,
+  type ProviderAttempt,
+} from './llm/attempt-meter.js';
+import { priceAttempt } from './llm/pricing.js';
+import { currentUsageStep } from './llm/usage-tracker.js';
 import type {
   EmbeddingPort,
   GenerationPort,
@@ -19,13 +28,29 @@ export class EvaluationMeter implements GenerationPort, EmbeddingPort {
   }[] = [];
   cacheHits = 0;
   private nextGenerationAt = 0;
+  private readonly provider: GenerationPort & EmbeddingPort;
+  private readonly attempts: {
+    logicalIndex: number;
+    row: ProviderAttempt &
+      ReturnType<typeof priceAttempt> & { step: ReturnType<typeof currentUsageStep> };
+  }[] = [];
   constructor(
-    private readonly provider: GenerationPort & EmbeddingPort,
+    provider: GenerationPort & EmbeddingPort,
     private readonly cache?: DataSource,
     private readonly generationIntervalMs = 0,
+    private readonly billingTier: Config['GEMINI_BILLING_TIER'] = 'unknown',
   ) {
+    this.provider = instrumentProvider(provider);
     this.model = provider.model;
     this.dimensions = provider.dimensions;
+  }
+  private account<T>(logicalIndex: number, work: () => Promise<T>): Promise<T> {
+    return withProviderAttemptObserver((attempt) => {
+      this.attempts.push({
+        logicalIndex,
+        row: { ...attempt, step: currentUsageStep(), ...priceAttempt(attempt, this.billingTier) },
+      });
+    }, work);
   }
   async completeStructured(
     system: string,
@@ -47,9 +72,11 @@ export class EvaluationMeter implements GenerationPort, EmbeddingPort {
       outputTokens: null as number | null,
       failed: false,
     };
-    this.events.push(event);
+    const logicalIndex = this.events.push(event) - 1;
     try {
-      const r = await this.provider.completeStructured(system, data, schema);
+      const r = await this.account(logicalIndex, () =>
+        this.provider.completeStructured(system, data, schema),
+      );
       Object.assign(event, r.usage);
       return r;
     } catch (e) {
@@ -75,9 +102,9 @@ export class EvaluationMeter implements GenerationPort, EmbeddingPort {
       outputTokens: null,
       failed: false,
     };
-    this.events.push(event);
+    const logicalIndex = this.events.push(event) - 1;
     try {
-      return await this.provider.embed(text, purpose);
+      return await this.account(logicalIndex, () => this.provider.embed(text, purpose));
     } catch (e) {
       event.failed = true;
       throw e;
@@ -86,12 +113,42 @@ export class EvaluationMeter implements GenerationPort, EmbeddingPort {
   metrics(from: number) {
     const gen = this.events.slice(from).filter((e) => e.kind === 'generation'),
       unknown = gen.some((e) => e.inputTokens === null || e.outputTokens === null);
+    const attempts = this.attempts
+      .filter(({ logicalIndex }) => logicalIndex >= from)
+      .map(({ row }) => row);
+    const totalUsd = (key: 'estimatedUsd' | 'actualUsd') => {
+      const known = attempts.flatMap((attempt) => (attempt[key] === null ? [] : [attempt[key]]));
+      return {
+        knownTotal: known.length
+          ? known.reduce((sum, value) => sum.plus(value), new Decimal(0)).toFixed(8)
+          : null,
+        missingCalls: attempts.length - known.length,
+      };
+    };
+    const totalTokens = (key: 'inputTokens' | 'outputTokens') => {
+      const known = attempts.flatMap((attempt) => (attempt[key] === null ? [] : [attempt[key]]));
+      return {
+        knownTotal: known.length ? known.reduce((sum, value) => sum + value, 0) : null,
+        missingCalls: attempts.length - known.length,
+      };
+    };
     return {
       generationCalls: gen.length,
       embeddingCalls: this.events.slice(from).filter((e) => e.kind === 'embedding').length,
       inputTokens: unknown ? null : gen.reduce((n, e) => n + e.inputTokens!, 0),
       outputTokens: unknown ? null : gen.reduce((n, e) => n + e.outputTokens!, 0),
       unknownUsage: unknown,
+      providerAccounting: {
+        calls: attempts.length,
+        failedCalls: attempts.filter((attempt) => attempt.outcome === 'failed').length,
+        retries: attempts.filter((attempt) => attempt.retry).length,
+        fallbacks: attempts.filter((attempt) => attempt.fallbackFrom).length,
+        inputTokens: totalTokens('inputTokens'),
+        outputTokens: totalTokens('outputTokens'),
+        attempts,
+        estimatedUsd: totalUsd('estimatedUsd'),
+        actualUsd: totalUsd('actualUsd'),
+      },
     };
   }
 }

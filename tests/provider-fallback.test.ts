@@ -1,5 +1,10 @@
 import { configSchema } from '../packages/contracts/src/config.js';
 import { createProvider } from '../packages/infrastructure/src/llm/provider.js';
+import {
+  instrumentProvider,
+  withProviderAttemptObserver,
+  type ProviderAttempt,
+} from '../packages/infrastructure/src/llm/attempt-meter.js';
 
 type RequestOptions = Parameters<typeof fetch>[1];
 const requestFetch = globalThis.fetch;
@@ -34,8 +39,17 @@ it('retries a Gemini quota error and sends the same prompt and schema to loopbac
     return url.hostname === '127.0.0.1' ? ollamaReply() : new Response(null, { status: 429 });
   };
   const schema = { type: 'object', properties: { citations: { type: 'array' } } };
+  const attempts: ProviderAttempt[] = [];
   await expect(
-    create().completeStructured('grounded system', 'sanitized data', schema),
+    withProviderAttemptObserver(
+      (attempt) => attempts.push(attempt),
+      () =>
+        instrumentProvider(create()).completeStructured(
+          'grounded system',
+          'sanitized data',
+          schema,
+        ),
+    ),
   ).resolves.toEqual({
     model: 'ollama:local-test',
     fallbackFrom: 'gemini-test',
@@ -47,6 +61,27 @@ it('retries a Gemini quota error and sends the same prompt and schema to loopbac
     'generativelanguage.googleapis.com',
     'generativelanguage.googleapis.com',
     '127.0.0.1',
+  ]);
+  expect(attempts).toEqual([
+    ...[false, true, true].map((retry) => ({
+      provider: 'gemini',
+      model: 'gemini-test',
+      kind: 'generation',
+      retry,
+      outcome: 'failed',
+      inputTokens: null,
+      outputTokens: null,
+    })),
+    {
+      provider: 'ollama',
+      model: 'ollama:local-test',
+      kind: 'generation',
+      fallbackFrom: 'gemini-test',
+      retry: false,
+      outcome: 'succeeded',
+      inputTokens: 40,
+      outputTokens: 6,
+    },
   ]);
   const local = calls.at(-1)!;
   expect(local.url.pathname).toBe('/api/chat');
@@ -127,7 +162,13 @@ it('records sanitized local validation failure and usage after a cloud outage', 
       eval_count: 4,
     });
   };
-  await expect(create().completeStructured('system', 'data')).rejects.toMatchObject({
+  const attempts: ProviderAttempt[] = [];
+  await expect(
+    withProviderAttemptObserver(
+      (attempt) => attempts.push(attempt),
+      () => create().completeStructured('system', 'data'),
+    ),
+  ).rejects.toMatchObject({
     code: 'InvalidLLMOutput',
     message: 'Local Ollama returned invalid generated JSON',
     details: {
@@ -136,6 +177,16 @@ it('records sanitized local validation failure and usage after a cloud outage', 
       inputTokens: 17,
       outputTokens: 4,
     },
+  });
+  expect(attempts.at(-1)).toEqual({
+    provider: 'ollama',
+    model: 'ollama:local-test',
+    kind: 'generation',
+    retry: false,
+    outcome: 'failed',
+    fallbackFrom: 'gemini-test',
+    inputTokens: 17,
+    outputTokens: 4,
   });
 });
 

@@ -6,7 +6,8 @@ import { Applications } from './Applications';
 import { Questions } from './Questions';
 import { Knowledge } from './Knowledge';
 import { Reviews } from './Reviews';
-const pages = ['Applications', 'Policy questions', 'Knowledge', 'Review queue'] as const;
+import { Usage } from './Usage';
+const pages = ['Applications', 'Policy questions', 'Knowledge', 'Usage', 'Review queue'] as const;
 type Page = (typeof pages)[number];
 function Login({ onLogin, expired }: { onLogin: (s: Session) => void; expired: boolean }) {
   const [busy, setBusy] = useState(false),
@@ -171,7 +172,7 @@ export function App() {
         <ErrorNotice error={error} />
         {page === 'Applications' && <Applications actor={session.user} />}{' '}
         {page === 'Policy questions' && <Questions />}
-        {page === 'Knowledge' && <Knowledge actor={session.user} />}{' '}
+        {page === 'Knowledge' && <Knowledge actor={session.user} />} {page === 'Usage' && <Usage />}
         {page === 'Review queue' && <Reviews actor={session.user} />}
       </main>
     </div>

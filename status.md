@@ -1,6 +1,6 @@
 # Current checkpoint — 21 November 2026
 
-Read agent.md and FEATURES.md first. Current feature: feature/offer-document.
+Read agent.md and FEATURES.md first. Current feature: feature/usage-accounting.
 Core evaluation went through PR17/18, hybrid search through PR19/20, query
 rewriting through PR21/22 and local fallback through PR23/24 after CI.
 Local fallback is on main at da37033.
@@ -181,9 +181,22 @@ Local checks passed 143 unit tests, 39 PostgreSQL/HTTP tests, 10 Chromium
 journeys, types, lint, formatting and production builds. Both core-15-v2
 offline modes passed 15/15 using deterministic provider fixtures.
 
+## Per-user usage and cost accounting
+
+The Usage page and actor-scoped API report native sends, retries, failures,
+fallbacks and historical assessment calls. Run and step labels connect activity
+to an assessment. The ledger uses stable event IDs to retry writes without
+adding duplicate totals. Rates are stored with each recognized-model event.
+Missing token or billing data stays unknown and partial subtotals are marked.
+The live probe matched 18 input and 9 output tokens with a USD 0.00002790 list
+estimate. The embedding input count and account charges were unreported.
+Local checks passed 152 unit tests, 42 PostgreSQL/HTTP tests, 11 Chromium
+journeys, type checks, lint, formatting and builds. Both core-15-v2 offline
+suites passed 15/15.
+
 ## Next and honest readiness
 
-P17 adds per-user token and cost accounting. The brief overview
+P18 adds final submission verification, documentation and a demo video. The brief overview
 says 12 calendar days, while its submission section specifies day 10 at
 23:59 Cairo. The invitation date is unverified.
 The core memo uses plain wording as allowed by the brief. The final video and

@@ -22,7 +22,7 @@ Workspace G:/Credit Copilot, PowerShell, Node24, pnpm11.25.0. Main/dev/feature b
 
 Commands: pnpm test; pnpm typecheck; pnpm lint; pnpm format:check; pnpm build; pnpm test:integration. Docker DB port54329. Dedicated integration DB name must end _test; tests truncate only that database. DB migrations explicit via pnpm db:migrate; synchronize=false. Unit tests require no keys. Fake embeddings are lexical test vectors, never claim semantic/live evaluation.
 
-pnpm dev starts local DB/migrations/API/web. pnpm evaluate runs full live15-case evaluation in a separate *_eval DB; pnpm evaluate:core:offline runs its fake-provider regression in *_test, sequentially with integration/e2e. Timestamped reports preserve failures; committed JSON freezes the source-aware vector baseline. No cost/billing estimate is available from provider ports. Read status.md before spending quota on a repeat run.
+pnpm dev starts local DB/migrations/API/web. pnpm evaluate runs full live15-case evaluation in a separate *_eval DB; pnpm evaluate:core:offline runs its fake-provider regression in *_test, sequentially with integration/e2e. Timestamped reports preserve failures; committed JSON freezes the source-aware vector baseline. Usage totals distinguish published estimates from provider charges. Read status.md before spending quota on a repeat run.
 
 ## References on demand
 

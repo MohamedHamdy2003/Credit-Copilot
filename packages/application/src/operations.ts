@@ -15,6 +15,7 @@ import { invariant } from '../../domain/src/errors.js';
 import { resolveMode, type AssessmentMode } from '../../domain/src/evidence-mode.js';
 import { parseApplicationForm } from './application-form.js';
 import { selectPolicy, type Policy } from '../../domain/src/policy.js';
+import type { UsagePort } from './usage.js';
 
 export interface Upload {
   filename: string;
@@ -61,6 +62,7 @@ export interface KnowledgePort {
 export interface OperationDependencies {
   policies: Record<ProductId, Policy[]>;
   store: ApplicationStore;
+  usage: UsagePort;
   knowledge: KnowledgePort;
   parse(upload: Upload): Promise<NormalizedDocument>;
   fixtures: { reference: string; filename: string; hash: string; bytes: Uint8Array }[];
@@ -86,7 +88,7 @@ export interface OperationDependencies {
 export class OperationsService {
   private readonly questionStreams = new QuestionStreams();
   constructor(private readonly deps: OperationDependencies) {}
-  async ingest(actor: Actor, uploads: Upload[]) {
+  async ingest(actor: Actor, uploads: Upload[], requestId: string) {
     invariant(
       actor.canIngest,
       'Forbidden',
@@ -94,23 +96,28 @@ export class OperationsService {
       403,
     );
     invariant(uploads.length > 0 && uploads.length <= 20, 'InvalidUpload', 'Select1–20 files');
-    const results = [];
-    for (const upload of uploads) {
-      try {
-        results.push({
-          filename: upload.filename,
-          result: await this.deps.knowledge.ingest(upload.filename, upload.bytes, upload.mime),
-          status: 'succeeded',
-        });
-      } catch (error) {
-        results.push({
-          filename: upload.filename,
-          status: 'failed',
-          code: error instanceof Error ? error.name : 'IngestionFailed',
-        });
-      }
-    }
-    return { results };
+    return this.deps.usage.track(
+      { actorId: actor.id, requestId, operation: 'knowledge_ingestion' },
+      async () => {
+        const results = [];
+        for (const upload of uploads) {
+          try {
+            results.push({
+              filename: upload.filename,
+              result: await this.deps.knowledge.ingest(upload.filename, upload.bytes, upload.mime),
+              status: 'succeeded',
+            });
+          } catch (error) {
+            results.push({
+              filename: upload.filename,
+              status: 'failed',
+              code: error instanceof Error ? error.name : 'IngestionFailed',
+            });
+          }
+        }
+        return { results };
+      },
+    );
   }
   documents() {
     return this.deps.knowledge.documents();
@@ -186,15 +193,19 @@ export class OperationsService {
     requestId: string,
   ) {
     try {
-      return await this.deps.assess(
-        {
-          document: job.document,
-          actorId: actor.id,
-          synthetic: job.synthetic,
-          requestedMode,
-          at: new Date().toISOString(),
-        },
-        { runId: job.runId, applicationId: id, requestId },
+      return await this.deps.usage.track(
+        { actorId: actor.id, requestId, runId: job.runId, operation: 'assessment' },
+        () =>
+          this.deps.assess(
+            {
+              document: job.document,
+              actorId: actor.id,
+              synthetic: job.synthetic,
+              requestedMode,
+              at: new Date().toISOString(),
+            },
+            { runId: job.runId, applicationId: id, requestId },
+          ),
       );
     } catch (error) {
       await this.deps.store.fail(
@@ -297,17 +308,23 @@ export class OperationsService {
       );
     return { question: input.question, product, asOfDate };
   }
-  async question(raw: unknown) {
-    return this.deps.ask(this.resolveQuestion(raw));
+  async question(actor: Actor, raw: unknown, requestId: string) {
+    const question = this.resolveQuestion(raw);
+    return this.deps.usage.track(
+      { actorId: actor.id, requestId, operation: 'policy_question' },
+      () => this.deps.ask(question),
+    );
   }
-  startQuestionStream(actor: Actor, raw: unknown, key: unknown) {
+  startQuestionStream(actor: Actor, raw: unknown, key: unknown, requestId: string) {
     const requestKey = this.requestKey(key);
     const question = this.resolveQuestion(raw);
     const fingerprint = createHash('sha256')
       .update(JSON.stringify({ ...question, question: maskPolicyQuestion(question.question) }))
       .digest('hex');
     return this.questionStreams.start(actor.id, requestKey, fingerprint, this.deps.newId, () =>
-      this.deps.ask(question),
+      this.deps.usage.track({ actorId: actor.id, requestId, operation: 'policy_question' }, () =>
+        this.deps.ask(question),
+      ),
     );
   }
   questionEvents(actor: Actor, id: string): StreamFrame<QuestionStreamEvent>[] {
@@ -315,6 +332,10 @@ export class OperationsService {
   }
   calculate(raw: unknown) {
     return this.deps.calculate(raw);
+  }
+  usage(actor: Actor, query: unknown) {
+    const { runId } = z.object({ runId: z.uuid().optional() }).strict().parse(query);
+    return this.deps.usage.summarize(actor.id, runId);
   }
   evidence(actor: Actor, id: string) {
     z.uuid().parse(id);
