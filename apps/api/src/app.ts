@@ -49,6 +49,7 @@ import { DomainError, invariant } from '../../../packages/domain/src/errors.js';
 import type { OperationsService } from '../../../packages/application/src/operations.js';
 import type { CaseReviewService } from '../../../packages/application/src/case-review.js';
 import { productIds } from '../../../packages/contracts/src/products.js';
+import { renderOfferLetter } from '../../../packages/infrastructure/src/pdf/offer-letter.js';
 import { sendEventStream } from './sse.js';
 
 const AUTH = Symbol('AUTH'),
@@ -524,6 +525,22 @@ export async function createApi(deps: {
     }
     @Get('offers/:id') offer(@Param('id') id: string, @Req() req: AuthRequest) {
       return this.service().offer(req.actor, id);
+    }
+    @Get('offers/:id/document')
+    @ApiProduces('application/pdf')
+    @ApiOkResponse({
+      description: 'Issued offer letter and repayment schedule',
+      schema: { type: 'string', format: 'binary' },
+    })
+    async offerDocument(@Param('id') id: string, @Req() req: AuthRequest, @Res() res: Response) {
+      const document = await this.service().offerDocument(req.actor, id);
+      const pdf = renderOfferLetter(document);
+      res.set({
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="credit-copilot-offer-${document.applicationReference}.pdf"`,
+        'Cache-Control': 'private, no-store',
+      });
+      res.send(pdf);
     }
   }
   @Controller('health')

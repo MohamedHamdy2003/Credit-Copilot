@@ -1,10 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import type { DataSource } from 'typeorm';
+import { ZodError } from 'zod';
 import type { Actor } from '../../../domain/src/access.js';
 import type { ApplicationStore } from '../../../application/src/operations.js';
+import type { AssessmentResult } from '../../../application/src/assessment-record.js';
 import type { NormalizedDocument } from '../../../contracts/src/documents.js';
+import { issuedOfferDocumentSchema } from '../../../contracts/src/offers.js';
 import { parseApplicationForm } from '../../../application/src/application-form.js';
-import { invariant } from '../../../domain/src/errors.js';
+import { compareMoney } from '../../../domain/src/calculations.js';
+import { DomainError, invariant } from '../../../domain/src/errors.js';
 import type { AssessmentMode } from '../../../domain/src/evidence-mode.js';
 import {
   ASSESSMENT_STAGES,
@@ -13,6 +17,11 @@ import {
   type AssessmentStreamEvent,
   type StreamFrame,
 } from '../../../contracts/src/streams.js';
+import {
+  buildIssuedOfferDocument,
+  recordedIssuerTier,
+  type OfferApprovalRow,
+} from './offer-document.js';
 interface Stored {
   id: string;
   preparer_id: string;
@@ -26,6 +35,22 @@ interface StoredProgress {
   status: 'running' | 'succeeded' | 'failed';
   expired: boolean;
   progress: unknown[];
+}
+interface StoredOffer {
+  id: string;
+  run_id: string;
+  approval_id: string;
+  data: Record<string, unknown>;
+  created_at: Date;
+  preparer_id: string;
+}
+interface LegacyOfferProvenance extends OfferApprovalRow {
+  issuer_id: string;
+  issuer_tier: string | null;
+  approval_authority: unknown;
+  version: number;
+  normalized: NormalizedDocument;
+  result: AssessmentResult;
 }
 const assessmentProgressQuery = `
   SELECT j.application_id, j.status,
@@ -242,18 +267,115 @@ export class PostgresApplicationStore implements ApplicationStore {
     invariant(rows[0], 'NotFound', 'Original evidence not found', 404);
     return { filename: rows[0].filename, bytes: rows[0].original_bytes };
   }
-  async offer(actor: Actor, id: string) {
+  private async readIssuedOffer(actor: Actor, id: string) {
     const rows = (await this.db.query(
-      'SELECT o.id,o.run_id,o.data,o.created_at,a.preparer_id FROM cases.offers o JOIN cases.assessment_runs r ON r.id=o.run_id JOIN cases.applications a ON a.id=r.application_id WHERE o.id=$1',
+      "SELECT o.id,o.run_id,o.approval_id,o.data,o.created_at,a.preparer_id FROM cases.offers o JOIN cases.assessment_runs r ON r.id=o.run_id JOIN cases.applications a ON a.id=r.application_id WHERE o.id=$1 AND r.status='issued'",
       [id],
-    )) as { preparer_id: string }[];
+    )) as StoredOffer[];
     invariant(rows[0], 'NotFound', 'Issued offer not found', 404);
     invariant(
-      rows[0].preparer_id === actor.id || actor.role === 'credit_officer',
+      rows[0].preparer_id === actor.id ||
+        (actor.role === 'credit_officer' && actor.tier !== 'none'),
       'Forbidden',
       'Offer access denied',
       403,
     );
     return rows[0];
+  }
+  async offer(actor: Actor, id: string) {
+    const row = await this.readIssuedOffer(actor, id);
+    const data = { ...row.data };
+    delete data.document;
+    return {
+      id: row.id,
+      run_id: row.run_id,
+      data,
+      created_at: row.created_at,
+      preparer_id: row.preparer_id,
+      documentAvailable: Boolean(await this.findOfferDocument(row)),
+    };
+  }
+  async offerDocument(actor: Actor, id: string) {
+    const document = await this.findOfferDocument(await this.readIssuedOffer(actor, id));
+    invariant(
+      document,
+      'OfferDocumentUnavailable',
+      'Verified offer document provenance is incomplete',
+      409,
+    );
+    return document;
+  }
+  private async findOfferDocument(row: StoredOffer) {
+    if (Object.hasOwn(row.data, 'document')) {
+      const snapshot = issuedOfferDocumentSchema.safeParse(row.data.document);
+      if (!snapshot.success) return undefined;
+      const value = snapshot.data;
+      return value.offerId === row.id &&
+        value.runId === row.run_id &&
+        value.approval.id === row.approval_id &&
+        value.approval.preparerId === row.preparer_id &&
+        value.issuance.issuedAt === row.created_at.toISOString()
+        ? value
+        : undefined;
+    }
+
+    const { amount, disbursementDate, productId, policyEdition, mode, fullyEvidenceVerified } =
+      row.data;
+    if (
+      typeof amount !== 'string' ||
+      !/^\d+(?:\.\d{1,2})?$/.test(amount) ||
+      typeof disbursementDate !== 'string'
+    )
+      return undefined;
+    const records = (await this.db.query(
+      `SELECT approval.id,approval.amount::text AS amount,approval.approver_id,approval.created_at,
+              approval.assessment_version,issued.actor_id AS issuer_id,
+              issued.details->>'issuerTier' AS issuer_tier,r.version,r.result,a.normalized,
+              (SELECT details FROM cases.audit_events event
+                WHERE event.run_id=r.id AND event.actor_id=approval.approver_id
+                  AND event.event='ASSESSMENT_APPROVED' AND event.details->>'approvalId'=approval.id::text
+                LIMIT 1) AS approval_authority
+         FROM cases.assessment_runs r
+         JOIN cases.applications a ON a.id=r.application_id
+         JOIN cases.approvals approval ON approval.run_id=r.id AND approval.id=$2 AND approval.decision='approved'
+         JOIN cases.audit_events issued ON issued.run_id=r.id AND issued.event='OFFER_ISSUED'
+              AND issued.details->>'offerId'=$3 AND issued.details->>'disbursementDate'=$4
+        WHERE r.id=$1 AND r.status='issued'
+        LIMIT 2`,
+      [row.run_id, row.approval_id, row.id, disbursementDate],
+    )) as LegacyOfferProvenance[];
+    const record = records[0];
+    if (records.length !== 1 || !record?.amount || !record.issuer_id) return undefined;
+    try {
+      if (
+        record.assessment_version !== record.version - 2 ||
+        compareMoney(amount, record.amount) !== 0 ||
+        record.result.mode !== mode ||
+        record.result.policyEdition !== policyEdition ||
+        record.result.evidence.fullyEvidenceVerified !== fullyEvidenceVerified ||
+        (record.result.productId ?? 'PL-100') !== (productId ?? 'PL-100')
+      )
+        return undefined;
+      return await buildIssuedOfferDocument({
+        offerId: row.id,
+        runId: row.run_id,
+        form: parseApplicationForm(record.normalized),
+        result: record.result,
+        preparerId: row.preparer_id,
+        approval: record,
+        approvalAuthority: record.approval_authority,
+        issuance: {
+          issuerId: record.issuer_id,
+          issuedAt: row.created_at.toISOString(),
+          issuerTier: recordedIssuerTier(record.issuer_tier),
+        },
+        disbursementDate,
+      });
+    } catch (error) {
+      // The legacy JSON offer remains readable even when it cannot support an exact document.
+      if (error instanceof DomainError || error instanceof ZodError || error instanceof TypeError)
+        return undefined;
+      throw error;
+    }
   }
 }

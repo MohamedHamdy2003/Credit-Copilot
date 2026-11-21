@@ -138,7 +138,7 @@ test('Strict default, evidence download, sources, workflow and fraud referral', 
 });
 test('explicit Demo, four-eyes human review and issued offer keep verification false', async ({
   page,
-}) => {
+}, testInfo) => {
   await login(page, 'demo');
   await add(page);
   await page.getByLabel('Assessment mode').selectOption('demo');
@@ -170,6 +170,13 @@ test('explicit Demo, four-eyes human review and issued offer keep verification f
   await expect(
     page.getByText('Demo offer — not fully evidence-verified.', { exact: true }),
   ).toBeVisible();
+  const download = page.waitForEvent('download');
+  await page
+    .getByRole('link', { name: 'Download offer letter and repayment schedule (PDF)' })
+    .click();
+  const letter = await download;
+  expect(letter.suggestedFilename()).toBe('credit-copilot-offer-APP-001.pdf');
+  await letter.saveAs(testInfo.outputPath('issued-offer-APP-001.pdf'));
 });
 
 test('auto application shows documented funding and cites its own product rules', async ({

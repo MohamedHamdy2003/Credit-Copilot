@@ -2,13 +2,19 @@ import { randomUUID } from 'node:crypto';
 import type { DataSource } from 'typeorm';
 import type { DecisionStore, DecisionCommand } from '../../../application/src/decisions.js';
 import type { AssessmentResult } from '../../../application/src/assessment-record.js';
-import { authorizeApproval, requireReviewer, type Actor } from '../../../domain/src/access.js';
+import {
+  approvalAuthorityLimit,
+  authorizeApproval,
+  requireReviewer,
+  type Actor,
+} from '../../../domain/src/access.js';
 import { invariant } from '../../../domain/src/errors.js';
 import { addMonths, compareMoney } from '../../../domain/src/calculations.js';
 import { parseApplicationForm } from '../../../application/src/application-form.js';
 import type { NormalizedDocument } from '../../../contracts/src/documents.js';
 import { selectPolicy, type Policy } from '../../../domain/src/policy.js';
 import { rejectionClauses } from '../../../domain/src/review-policy.js';
+import { buildIssuedOfferDocument, type OfferApprovalRow } from './offer-document.js';
 interface RunRow {
   latest_assessment_id?: string | null;
   id: string;
@@ -169,12 +175,16 @@ export class PostgresDecisionStore implements DecisionStore {
             409,
           );
         }
+        const approvalId = randomUUID();
         await manager.query(
           'INSERT INTO cases.approvals(id,run_id,approver_id,decision,comment,amount,assessment_version) VALUES($1,$2,$3,$4,$5,$6,$7)',
-          [randomUUID(), runId, actor.id, 'approved', command.comment, amount, run.version],
+          [approvalId, runId, actor.id, 'approved', command.comment, amount, run.version],
         );
         next = 'approved';
         await audit('ASSESSMENT_APPROVED', {
+          approvalId,
+          approverTier: actor.tier,
+          approverAuthorityLimit: approvalAuthorityLimit(actor.tier),
           amount,
           comment: command.comment,
           version: run.version,
@@ -254,18 +264,24 @@ export class PostgresDecisionStore implements DecisionStore {
           comment: command.comment,
         });
       } else {
+        requireReviewer(actor);
         invariant(
           run.status === 'approved',
           'InvalidTransition',
           'Only an approved assessment can be issued',
           409,
         );
-        const approval = (await manager.query(
-          "SELECT id,amount::text AS amount FROM cases.approvals WHERE run_id=$1 AND decision='approved'",
+        const [approval] = (await manager.query(
+          "SELECT id,amount::text AS amount,approver_id,created_at,assessment_version FROM cases.approvals WHERE run_id=$1 AND decision='approved'",
           [runId],
-        )) as { id: string; amount: string }[];
-        invariant(approval[0], 'ApprovalRequired', 'Recorded approval required', 409);
-        authorizeApproval(actor, run.preparer_id, approval[0].amount, false, command.comment);
+        )) as OfferApprovalRow[];
+        invariant(
+          approval && approval.assessment_version === run.version - 1,
+          'ApprovalRequired',
+          'Recorded approval for this assessment version is required',
+          409,
+        );
+        authorizeApproval(actor, run.preparer_id, approval.amount, false, command.comment);
         const form = parseApplicationForm(run.normalized);
         invariant(
           command.disbursementDate >= form.applicationDate,
@@ -289,26 +305,52 @@ export class PostgresDecisionStore implements DecisionStore {
           'Changed maturity date violates age limit',
         );
         const offerId = randomUUID();
+        const approvalAudit = (await manager.query(
+          "SELECT details FROM cases.audit_events WHERE run_id=$1 AND actor_id=$2 AND event='ASSESSMENT_APPROVED' AND details->>'approvalId'=$3 LIMIT 1",
+          [runId, approval.approver_id, approval.id],
+        )) as { details: unknown }[];
+        const [{ issued_at: issuedAt }] = (await manager.query(
+          'SELECT clock_timestamp() AS issued_at',
+        )) as [{ issued_at: Date }];
+        const document = await buildIssuedOfferDocument({
+          offerId,
+          runId,
+          form,
+          result,
+          preparerId: run.preparer_id,
+          approval,
+          approvalAuthority: approvalAudit[0]?.details,
+          issuance: {
+            issuerId: actor.id,
+            issuerTier: actor.tier,
+            issuedAt: issuedAt.toISOString(),
+          },
+          disbursementDate: command.disbursementDate,
+        });
         await manager.query(
-          'INSERT INTO cases.offers(id,run_id,approval_id,data) VALUES($1,$2,$3,$4)',
+          'INSERT INTO cases.offers(id,run_id,approval_id,data,created_at) VALUES($1,$2,$3,$4,$5)',
           [
             offerId,
             runId,
-            approval[0].id,
+            approval.id,
             {
-              amount: approval[0].amount,
+              amount: approval.amount,
               disbursementDate: command.disbursementDate,
               mode: result.mode,
               assumptions: result.evidence.assumptions,
               fullyEvidenceVerified: result.evidence.fullyEvidenceVerified,
               policyEdition: result.policyEdition,
               productId: form.productId,
+              document,
             },
+            issuedAt,
           ],
         );
         next = 'issued';
         await audit('OFFER_ISSUED', {
           offerId,
+          approvalId: approval.id,
+          issuerTier: document.issuance.issuerTier,
           disbursementDate: command.disbursementDate,
           comment: command.comment,
         });

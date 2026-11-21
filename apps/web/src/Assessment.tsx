@@ -336,6 +336,13 @@ export function Assessment({
               {offer.data.assumptions.map((a, i) => (
                 <p key={i}>{a.reason}</p>
               ))}
+              {offer.documentAvailable ? (
+                <a href={`/api/v1/offers/${offer.id}/document`} download>
+                  Download offer letter and repayment schedule (PDF)
+                </a>
+              ) : (
+                <p className="muted">PDF source details are unavailable for this offer.</p>
+              )}
             </div>
           )}
         </section>
