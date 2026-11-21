@@ -302,6 +302,22 @@ human approval and issuance, and the persisted PS-9 rejection source.
 The auto assessment and retrieval tests use deterministic provider fixtures.
 The original personal-loan evaluation remains a separate fifteen-case suite.
 
+## P16 issued offer checks
+
+Both products reconcile cent-rounded interest, principal, fees, disbursement
+and repayments. The 60-month personal-loan example has EGP 300,000 approved
+principal, 24% annual interest, EGP 8,630.39 regular instalment and an
+EGP 8,630.41 final instalment. Its EGP 3,000 administrative fee leaves
+EGP 297,000 net disbursement. AL-200 at EGP 250,000 and 20% has a
+regular EGP 6,623.47 instalment, final EGP 6,623.57, and EGP 247,500
+net disbursement. Both schedules end with zero balance.
+
+HTTP/PostgreSQL tests reconcile the PDF against the issued snapshot, check
+pending/rejected and unauthorized access, verify original rate provenance and
+an accepted alternative, and exercise legacy regeneration. Chromium downloads
+the issued document through the workspace. Rendered PDF pages were reviewed
+with Poppler for layout and legibility.
+
 ## Core gate and remaining submission work
 
 The measured functional gate passes: all15 cases, all critical safety/audit/numeric
@@ -314,9 +330,8 @@ API health and web200; stopping it closed its API/web ports. No deployment.
 
 This does not certify final submission: the3–5 minute unlisted video is still to be
 produced; an interactive clean-clone walkthrough remains pending (CI does install/
-check against a fresh checkout/DB). The P15 review found only three actual Cairo
-commit dates: 17, 19 and 20 November. The brief's four-date
-requirement is not met. The retrieval sample is small, browser checks cover
+check against a fresh checkout/DB). The P15 review counted three actual Cairo
+commit dates before the P16 work on 21 November. The retrieval sample is small, browser checks cover
 Chromium, and provider billing data is unavailable. Hybrid search and query
 rewriting are complete.
 

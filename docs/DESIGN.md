@@ -202,6 +202,26 @@ An auto affordability failure requires reassessment with revised financing
 evidence before a lower amount can be considered. The standard human decision
 flow stores the auto policy and product source used for issuance or rejection.
 
+## Issued offer documents
+
+Issuance records the offer and its document data in the same transaction. The
+document uses the approved principal, stored pricing evidence, valid
+disbursement date and recorded approver and issuer. An accepted alternative
+uses the approved amount. Approval and issuance identifiers and evidence status
+are included in the letter. The PDF excludes applicant documents and decision
+comments.
+
+The schedule applies the product's reducing-balance rate with monthly interest
+rounded to cents. Due dates are anchored to disbursement. The last payment
+settles the remaining balance and the upfront administrative fee reduces net
+disbursement. The letter cites the product fee and repayment clauses and the
+exact CSV pricing row. Late and early-settlement fees are stated as conditions.
+
+The PDF endpoint is available to the application owner and authorized credit
+reviewers after issuance. Legacy issued offers can be rendered when the stored
+approval, pricing, policy and issuance audit establish the terms. Otherwise the
+offer remains readable as JSON, and the PDF returns `OfferDocumentUnavailable`.
+
 ## Live assessment progress and verified answers
 
 Streaming uses the same workflow, citation verifier and session rules as the
@@ -260,8 +280,6 @@ Offline CI uses deterministic source/provider fixtures, explicitly not measured
 semantic quality. Live runs use isolated *_eval DBs, known source-vector reuse and
 fresh query/generation calls. No raw credentials/customer forms are exported.
 
-Plain memo wording is an intentional acceptable cut, not missing calculations.
-All nine stretches still follow the passing functional core gate. Final submission
-video, interactive clean-clone review and the missing fourth actual commit date
-remain explicit readiness gaps; the measured functional gate does not certify
-those deliverables. No paid-provider cost, general quality or deployment is claimed.
+Plain memo wording is allowed by the brief. The final submission video and
+interactive clean-clone review remain open. The functional evaluation covers the
+recorded cases and configurations.

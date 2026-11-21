@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
 import type { StreamFrame } from '../packages/contracts/src/streams.js';
+import { issuedOfferDocumentSchema } from '../packages/contracts/src/offers.js';
 import type { DataSource } from 'typeorm';
 import { createApi } from '../apps/api/src/app.js';
 import { createDataSource } from '../packages/infrastructure/src/db/data-source.js';
@@ -146,6 +147,27 @@ function readFrames<T>(body: string): StreamFrame<T>[] {
 }
 const readStream = (path: string, owner: Awaited<ReturnType<typeof account>>) =>
   request(app.getHttpServer()).get(`/api/v1/${path}`).set('Cookie', owner.cookie);
+
+async function extractOfferPdf(bytes: Uint8Array) {
+  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const task = getDocument({
+    data: new Uint8Array(bytes),
+    useSystemFonts: true,
+    disableFontFace: true,
+  });
+  try {
+    const document = await task.promise;
+    const pages = [];
+    for (let number = 1; number <= document.numPages; number++) {
+      const page = await document.getPage(number);
+      const { items } = await page.getTextContent();
+      pages.push(items.map((item) => ('str' in item ? item.str : '')).join(' '));
+    }
+    return pages;
+  } finally {
+    await task.destroy();
+  }
+}
 
 it('streams owned assessment stages and resumes after disconnect without a duplicate job or approval', async () => {
   const owner = await account();
@@ -422,6 +444,7 @@ it('runs upload→assessment→human approval→issue→authorized offer read wi
   const runId = assessment.body.runId;
   expect(assessment.body.result.recommendation).toBe('APPROVE');
   expect(assessment.body.result.calculation.monthlyInstallment).toBe('8630.39');
+  await readStream(`offers/${runId}/document`, owner).expect(404);
   await db.query(
     "INSERT INTO cases.assessment_jobs(run_id,application_id,request_key,mode,status,created_at) VALUES($1,$2,'review-after-timeout','demo','running',now()-interval '16 minutes')",
     [randomUUID(), id],
@@ -433,6 +456,7 @@ it('runs upload→assessment→human approval→issue→authorized offer read wi
       comment: 'Policy and evidence reviewed for synthetic demo',
     })
     .expect(201);
+  await readStream(`offers/${runId}/document`, owner).expect(404);
   await post(`assessments/${runId}/decisions`, senior)
     .send({
       action: 'issue',
@@ -450,11 +474,97 @@ it('runs upload→assessment→human approval→issue→authorized offer read wi
     .expect(200);
   expect(offer.body.data.mode).toBe('demo');
   expect(offer.body.data.fullyEvidenceVerified).toBe(false);
+  expect(offer.body.documentAvailable).toBe(true);
+  expect(offer.body.data.document).toBeUndefined();
+  const offerId = offers[0]!.id;
+  const downloadPath = `offers/${offerId}/document`;
+  await request(app.getHttpServer()).get(`/api/v1/${downloadPath}`).expect(401);
+  await readStream(downloadPath, other).expect(403);
+  const pdf = await readStream(downloadPath, owner)
+    .expect('Content-Type', /application\/pdf/)
+    .expect('Cache-Control', 'private, no-store')
+    .expect('Content-Disposition', 'attachment; filename="credit-copilot-offer-APP-001.pdf"')
+    .expect(200);
+  const reviewerPdf = await readStream(downloadPath, senior).expect(200);
+  expect(reviewerPdf.body).toEqual(pdf.body);
+  const [record] = await db.query(
+    'SELECT o.data, o.created_at, o.approval_id, ap.approver_id, ap.created_at AS approved_at FROM cases.offers o JOIN cases.approvals ap ON ap.id=o.approval_id WHERE o.id=$1',
+    [offerId],
+  );
+  const snapshot = issuedOfferDocumentSchema.parse(record.data.document);
+  expect(snapshot).toMatchObject({
+    offerId,
+    runId,
+    principal: '300000.00',
+    annualRatePercent: '24.00',
+    policyEdition: 'CP-2025',
+    fullyEvidenceVerified: false,
+    approval: {
+      id: record.approval_id,
+      preparerId: owner.id,
+      approverId: record.approver_id,
+      approvedAt: record.approved_at.toISOString(),
+      approverTier: 'senior',
+      approverAuthorityLimit: '500000.00',
+    },
+    issuance: {
+      issuedAt: record.created_at.toISOString(),
+      issuerId: senior.id,
+      issuerTier: 'senior',
+    },
+    schedule: {
+      installment: '8630.39',
+      administrativeFee: '3000.00',
+      netDisbursement: '297000.00',
+      totalInterest: '217823.42',
+      totalRepayment: '517823.42',
+    },
+  });
+  expect(snapshot.schedule.rows).toHaveLength(60);
+  expect(snapshot.schedule.rows.at(-1)).toMatchObject({
+    balance: '0.00',
+    installment: '8630.41',
+    dueDate: '2030-04-03',
+  });
+  const pages = await extractOfferPdf(pdf.body);
+  expect(pages.length).toBeGreaterThanOrEqual(2);
+  const text = pages.join(' ');
+  for (const value of [
+    '300,000.00',
+    '8,630.39',
+    '8,630.41',
+    '297,000.00',
+    'PS-5',
+    '2030-04-03',
+    snapshot.approval.id,
+    owner.id,
+    senior.id,
+  ]) {
+    expect(text).toContain(value);
+  }
+  expect(text).toMatch(/demo/i);
+  expect(text).not.toContain('Policy and evidence reviewed for synthetic demo');
   await request(app.getHttpServer())
     .get(`/api/v1/offers/${offers[0]!.id}`)
     .set('Cookie', other.cookie)
     .expect(403);
   await post(`applications/${id}/assessments`, owner).send({ mode: 'demo' }).expect(409);
+  // A pre-P16 offer can reuse its immutable assessment and audit records.
+  await db.query("UPDATE cases.offers SET data=data-'document' WHERE id=$1", [offerId]);
+  await readStream(downloadPath, owner).expect(200);
+  await db.query(
+    "UPDATE cases.audit_events SET details=details-'offerId' WHERE run_id=$1 AND event='OFFER_ISSUED'",
+    [runId],
+  );
+  await readStream(`offers/${offerId}`, owner)
+    .expect(200)
+    .expect(({ body }) => expect(body.documentAvailable).toBe(false));
+  await readStream(downloadPath, owner)
+    .expect(409)
+    .expect(({ body }) => expect(body.error.code).toBe('OfferDocumentUnavailable'));
+  // Deny even a known offer id when its run is outside the issued lifecycle.
+  await db.query('UPDATE cases.assessment_runs SET status=$2 WHERE id=$1', [runId, 'rejected']);
+  await readStream(downloadPath, owner).expect(404);
 });
 
 it('evaluates all three auto packs and records product-scoped human decisions', async () => {
@@ -517,6 +627,24 @@ it('evaluates all three auto packs and records product-scoped human decisions', 
             policyEdition: 'AUTO-2025',
             fullyEvidenceVerified: false,
             amount: '250000.00',
+            document: expect.objectContaining({
+              principal: '250000.00',
+              pricing: expect.objectContaining({
+                sourceFile: 'synthetic-auto-pricing.csv',
+                row: 3,
+              }),
+              schedule: expect.objectContaining({
+                installment: '6623.47',
+                administrativeFee: '2500.00',
+                netDisbursement: '247500.00',
+              }),
+              conditions: expect.arrayContaining([
+                expect.objectContaining({
+                  sourceFile: 'synthetic-auto-product.md',
+                  clause: 'PS-9',
+                }),
+              ]),
+            }),
           }),
         },
       ]);

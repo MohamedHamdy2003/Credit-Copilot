@@ -90,7 +90,7 @@ async function fixture(preparer: Actor, amount = '300000', alternative = false) 
     recommendation: alternative ? 'OFFER_ALTERNATIVE' : 'APPROVE',
     recommendedAmount: amount,
     calculation: affordability({
-      principal: amount,
+      principal: alternative ? '300000' : amount,
       income: '30000',
       obligations: '4000',
       annualRatePercent: '24',
@@ -98,6 +98,7 @@ async function fixture(preparer: Actor, amount = '300000', alternative = false) 
       maxDbr: '0.45',
       productMaximum: '1000000',
     }),
+    pricing: { annualRatePercent: '24.00', sourceFile: 'pricing-table.csv', row: 3 },
     steps: [],
     removedFields: [],
     fraudReferral: false,
@@ -226,6 +227,29 @@ it('blocks self approval and accepts exact authority boundary', async () => {
     comment: 'Boundary verified',
   }).expect(201);
 });
+it('keeps an assessment approved without issuing if its recorded pricing row is inconsistent', async () => {
+  const id = await fixture(await user());
+  const reviewer = await login(await user('senior'));
+  await post(id, reviewer, { action: 'approve', expectedVersion: 1, comment: 'Reviewed' }).expect(
+    201,
+  );
+  await db.query(
+    "UPDATE cases.assessment_runs SET result=jsonb_set(result,'{pricing,row}','4') WHERE id=$1",
+    [id],
+  );
+  await post(id, reviewer, {
+    action: 'issue',
+    expectedVersion: 2,
+    comment: 'Issue request',
+    disbursementDate: '2025-04-03',
+  })
+    .expect(409)
+    .expect(({ body }) => expect(body.error.code).toBe('OfferDocumentUnavailable'));
+  expect(
+    await db.query('SELECT status,version FROM cases.assessment_runs WHERE id=$1', [id]),
+  ).toEqual([{ status: 'approved', version: 2 }]);
+  expect(await db.query('SELECT id FROM cases.offers WHERE run_id=$1', [id])).toHaveLength(0);
+});
 it('serializes concurrent approvals so only one decision commits', async () => {
   const id = await fixture(await user(), '200000'),
     session = await login(await user('credit'));
@@ -254,6 +278,21 @@ it('requires recorded customer acceptance before approving an alternative', asyn
     expectedVersion: 2,
     comment: 'Accepted amount reviewed',
   }).expect(201);
+  await post(id, credit, {
+    action: 'issue',
+    expectedVersion: 3,
+    comment: 'Issue the approved alternative',
+    disbursementDate: '2025-04-03',
+  }).expect(201);
+  const [offer] = await db.query('SELECT data FROM cases.offers WHERE run_id=$1', [id]);
+  expect(offer.data.document).toMatchObject({
+    principal: '200000.00',
+    schedule: {
+      installment: '5753.59',
+      administrativeFee: '2000.00',
+      netDisbursement: '198000.00',
+    },
+  });
 });
 it('rejects expired sessions, hostile origins and repeated login attempts', async () => {
   const actor = await user(),

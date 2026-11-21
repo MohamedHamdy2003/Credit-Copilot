@@ -1,6 +1,6 @@
-# Current checkpoint —20 November2026
+# Current checkpoint — 21 November 2026
 
-Read agent.md and FEATURES.md first. Current feature: feature/auto-loan-product.
+Read agent.md and FEATURES.md first. Current feature: feature/offer-document.
 Core evaluation went through PR17/18, hybrid search through PR19/20, query
 rewriting through PR21/22 and local fallback through PR23/24 after CI.
 Local fallback is on main at da37033.
@@ -168,14 +168,26 @@ Local checks passed 131 unit tests, 38 PostgreSQL/HTTP tests and 10 Chromium
 journeys. Both offline modes passed 15/15, with 8/8 required citations and
 17/17 numeric assertions. Type checking, lint, formatting and builds passed.
 
+## Issued offer PDF and repayment schedule
+
+Issuance freezes the approved principal, dated CSV rate, source conditions,
+approval and issuance identities and cent-exact schedule in the offer record.
+An approved alternative uses its accepted amount. The download requires an
+issued offer and a session belonging to its owner or an authorized reviewer.
+Older offers can render from matching immutable approval, assessment and
+issuance records. An incomplete legacy record retains its JSON details and
+returns `OfferDocumentUnavailable` for the PDF.
+Local checks passed 143 unit tests, 39 PostgreSQL/HTTP tests, 10 Chromium
+journeys, types, lint, formatting and production builds. Both core-15-v2
+offline modes passed 15/15 using deterministic provider fixtures.
+
 ## Next and honest readiness
 
-P16 adds the approved offer PDF and repayment schedule. The brief overview
+P17 adds per-user token and cost accounting. The brief overview
 says 12 calendar days, while its submission section specifies day 10 at
 23:59 Cairo. The invitation date is unverified.
-The core memo and audit use plain wording as allowed by the brief. Final video and interactive clean-clone
-walkthrough are pending. The current history spans three Cairo commit dates
-(17, 19 and 20 November). The four-date brief requirement is unmet.
+The core memo uses plain wording as allowed by the brief. The final video and
+interactive clean-clone walkthrough are pending.
 Never fabricate dates, history, billing costs or final submission status. No email
 or video upload authorized/performed.
 

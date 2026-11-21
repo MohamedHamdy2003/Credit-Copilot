@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import type { Actor } from '../../domain/src/access.js';
 import type { NormalizedDocument } from '../../contracts/src/documents.js';
+import type { IssuedOfferDocument } from '../../contracts/src/offers.js';
 import { productIds, type ProductId } from '../../contracts/src/products.js';
 import type {
   AssessmentStreamEvent,
@@ -50,6 +51,7 @@ export interface ApplicationStore {
   fail(runId: string, code: string): Promise<void>;
   evidence(actor: Actor, id: string): Promise<{ filename: string; bytes: Uint8Array }>;
   offer(actor: Actor, id: string): Promise<unknown>;
+  offerDocument(actor: Actor, id: string): Promise<IssuedOfferDocument>;
 }
 export interface KnowledgePort {
   ingest(filename: string, bytes: Uint8Array, mime?: string): Promise<unknown>;
@@ -321,5 +323,9 @@ export class OperationsService {
   offer(actor: Actor, id: string) {
     z.uuid().parse(id);
     return this.deps.store.offer(actor, id);
+  }
+  offerDocument(actor: Actor, id: string) {
+    z.uuid().parse(id);
+    return this.deps.store.offerDocument(actor, id);
   }
 }
