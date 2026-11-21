@@ -212,6 +212,6 @@ export function summarizeEvaluation(results: EvaluationResult[], mode: 'offline'
     cost: null,
     embeddingTokens: null,
     usageNote:
-      'Only reported generation tokens are counted; embedding tokens/retry HTTP usage and billing cost are not supplied by the ports.',
+      'Use totalProviderMetrics.providerAccounting for per-attempt token coverage and USD subtotals.',
   };
 }

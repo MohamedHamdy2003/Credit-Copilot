@@ -47,6 +47,7 @@ export const configSchema = z
       .transform((value) => value === 'true'),
     ...ollamaSettingsSchema.shape,
     GEMINI_API_KEY: z.string().default(''),
+    GEMINI_BILLING_TIER: z.enum(['unknown', 'confirmed_free']).default('unknown'),
     GENERATION_MODEL: z.string().default('gemini-3.5-flash-lite'),
     EMBEDDING_MODEL: z.string().default('gemini-embedding-001'),
     EMBEDDING_DIMENSIONS: z.coerce.number().int().min(1).max(2000).default(768),

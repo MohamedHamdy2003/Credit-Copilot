@@ -328,6 +328,38 @@ dd {
   font-weight: 650;
   margin-top: 6px;
 }
+.metrics.usage-totals {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 8px 20px;
+}
+.usage-metrics dd small,
+.usage-totals dd small {
+  display: block;
+  color: var(--muted);
+  font-weight: 400;
+}
+.usage-run-filter {
+  max-width: 360px;
+  margin-bottom: 20px;
+}
+.usage-groups {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 16px;
+}
+.usage-groups .panel {
+  margin: 0;
+  min-width: 0;
+}
+.usage-groups dl > div {
+  grid-template-columns: minmax(100px, 1fr) minmax(0, 1fr);
+}
+.usage-groups dl {
+  margin-bottom: 0;
+}
 .tabs {
   display: flex;
   border-bottom: 1px solid var(--border);

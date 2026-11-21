@@ -274,6 +274,31 @@ event. Q&A includes local generation attribution in the answer or refusal when
 it receives a model completion. The memo remains code-generated.
 [Ollama structured output API](https://docs.ollama.com/capabilities/structured-outputs)
 
+### Usage and cost accounting
+
+Signed-in assessments, policy questions and knowledge ingestion record an
+event per observed Gemini or Ollama send. Retries and fallbacks retain distinct
+events. Each batch uses stable IDs when retrying a database write. Assessment
+and question replays reuse their existing results without a new provider send.
+The ledger stores request, actor, run and step identifiers with model, timing,
+reported counts and price data. It stores no prompts, source text or answers.
+Older assessment records are imported once as historical logical calls with
+unknown outcome, provider and price.
+
+Each recognized Gemini event snapshots the nominal standard, uncached rates for
+its model. Reported thinking tokens count toward generation output. Missing
+provider counters leave an unknown or partial subtotal. Billing defaults to
+unknown because an API response contains usage metadata rather than project
+billing. An operator-confirmed free-tier project records a zero charge on the
+supported models, and local Ollama records a zero provider fee with hosting
+outside the report. [Gemini pricing](https://aistudio.google.com/docs/pricing) · [Gemini billing tiers](https://aistudio.google.com/docs/billing)
+
+The usage endpoint scopes totals and the optional run filter to the session
+actor, including for reviewers. The database returns bounded model, operation
+and step groups with full recorded totals. Failed writes can leave missing
+records after a repeated storage failure or shutdown during a job. CLI evaluation
+writes isolated per-case and aggregate attempt metrics to its report.
+
 The frozen fifteen-case live baseline and failed first run are committed as JSON;
 EVALUATION.md defines denominators, source-context distinction and limitations.
 Offline CI uses deterministic source/provider fixtures, explicitly not measured

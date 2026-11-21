@@ -37,6 +37,7 @@ for (const username of [
   'strict',
   'demo',
   'question',
+  'usage',
   'upload',
   'head',
   'reasons',

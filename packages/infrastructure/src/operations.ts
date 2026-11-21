@@ -17,13 +17,18 @@ import { PostgresAssessmentRepository } from './db/assessment-repository.js';
 import { PostgresApplicationStore } from './db/application-store.js';
 import { createDocumentAssessmentWorkflow } from './workflows/document-assessment.js';
 import { assessmentAgents } from './workflows/assessment-agents.js';
+import { PostgresUsageStore } from './db/usage-store.js';
+import { instrumentProvider } from './llm/attempt-meter.js';
+import { UsageTracker, withUsageStep } from './llm/usage-tracker.js';
 export async function createOperations(
   db: DataSource,
-  provider: GenerationPort & EmbeddingPort,
+  rawProvider: GenerationPort & EmbeddingPort,
   config: Config,
   catalog?: Awaited<ReturnType<typeof loadProductCatalog>>,
 ) {
   const parser = new ParserRegistry(config.UPLOAD_MAX_BYTES);
+  const provider = instrumentProvider(rawProvider);
+  const usage = new UsageTracker(new PostgresUsageStore(db), config.GEMINI_BILLING_TIER);
   const products = catalog ?? (await loadProductCatalog(parser));
   const manifest = JSON.parse(
     await readFile('data/config/corpus-manifest.json', 'utf8'),
@@ -36,6 +41,7 @@ export async function createOperations(
   return new OperationsService({
     policies: { 'PL-100': products['PL-100'].policies, 'AL-200': products['AL-200'].policies },
     store,
+    usage,
     newId: randomUUID,
     fixtures: await loadAssessmentFixtures(),
     settings: { allowDemo: config.ALLOW_DEMO_MODE, defaultMode: config.ASSESSMENT_MODE },
@@ -64,6 +70,7 @@ export async function createOperations(
       const workflow = createDocumentAssessmentWorkflow(
         {
           provider,
+          withUsageStep,
           agents: assessmentAgents(config.ASSESSMENT_ORCHESTRATION),
           prompt: extractionPrompt,
           ...products[productId],

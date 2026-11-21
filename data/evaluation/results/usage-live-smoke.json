@@ -1,0 +1,64 @@
+{
+  "checkedAt": "2026-11-21T10:47:05.937Z",
+  "reconciled": true,
+  "received": [
+    {
+      "kind": "generation",
+      "counters": {
+        "promptTokenCount": 18,
+        "candidatesTokenCount": 9,
+        "thoughtsTokenCount": null,
+        "totalTokenCount": 27
+      }
+    },
+    {
+      "kind": "query_embedding",
+      "counters": {
+        "promptTokenCount": null,
+        "candidatesTokenCount": null,
+        "thoughtsTokenCount": null,
+        "totalTokenCount": null
+      }
+    }
+  ],
+  "attempts": [
+    {
+      "provider": "gemini",
+      "model": "gemini-3.5-flash-lite",
+      "kind": "generation",
+      "outcome": "succeeded",
+      "retry": false,
+      "inputTokens": 18,
+      "outputTokens": 9,
+      "price": {
+        "currency": "USD",
+        "capturedOn": "2026-11-21",
+        "source": "https://aistudio.google.com/docs/pricing#gemini-3.5-flash-lite",
+        "inputUsdPerMillion": "0.30",
+        "outputUsdPerMillion": "2.50"
+      },
+      "estimatedUsd": "0.00002790",
+      "chargeBasis": "unknown",
+      "actualUsd": null
+    },
+    {
+      "provider": "gemini",
+      "model": "gemini-embedding-001",
+      "kind": "query_embedding",
+      "outcome": "succeeded",
+      "retry": false,
+      "inputTokens": null,
+      "outputTokens": 0,
+      "price": {
+        "currency": "USD",
+        "capturedOn": "2026-11-21",
+        "source": "https://aistudio.google.com/docs/pricing#gemini-embedding",
+        "inputUsdPerMillion": "0.15",
+        "outputUsdPerMillion": "0.00"
+      },
+      "estimatedUsd": null,
+      "chargeBasis": "unknown",
+      "actualUsd": null
+    }
+  ]
+}
