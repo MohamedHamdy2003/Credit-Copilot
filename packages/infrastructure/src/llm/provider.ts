@@ -8,6 +8,7 @@ import type {
 import { DomainError } from '../../../domain/src/errors.js';
 import { GeminiAdapter } from './gemini.js';
 import { OllamaAdapter } from './ollama.js';
+import { observeEmbedding, observeGeneration, runProviderFallback } from './attempt-meter.js';
 
 export class GenerationFallback implements GenerationPort, EmbeddingPort {
   constructor(
@@ -24,7 +25,7 @@ export class GenerationFallback implements GenerationPort, EmbeddingPort {
   }
 
   embed(text: string, purpose: 'document' | 'query') {
-    return this.primary.embed(text, purpose);
+    return observeEmbedding(this.model, purpose, () => this.primary.embed(text, purpose));
   }
 
   async completeStructured(
@@ -33,7 +34,7 @@ export class GenerationFallback implements GenerationPort, EmbeddingPort {
     schema?: GenerationSchema,
   ): Promise<Completion> {
     try {
-      return await this.primary.completeStructured(system, data, schema);
+      return await observeGeneration(() => this.primary.completeStructured(system, data, schema));
     } catch (error) {
       if (
         !(error instanceof DomainError) ||
@@ -44,7 +45,9 @@ export class GenerationFallback implements GenerationPort, EmbeddingPort {
         throw error;
       const fallbackFrom = error.details.model;
       try {
-        const completion = await this.local.completeStructured(system, data, schema);
+        const completion = await runProviderFallback(fallbackFrom, () =>
+          observeGeneration(() => this.local.completeStructured(system, data, schema)),
+        );
         return { ...completion, fallbackFrom };
       } catch (localError) {
         if (!(localError instanceof DomainError)) throw localError;

@@ -37,6 +37,7 @@ import { ScryptCredentials } from '../../packages/infrastructure/src/auth/passwo
 import { createDocumentAssessmentWorkflow } from '../../packages/infrastructure/src/workflows/document-assessment.js';
 import type { PolicySearch } from '../../packages/application/src/questions.js';
 import { EvaluationMeter } from '../../packages/infrastructure/src/evaluation-meter.js';
+import { withUsageStep } from '../../packages/infrastructure/src/llm/usage-tracker.js';
 import { assessmentAgents } from '../../packages/infrastructure/src/workflows/assessment-agents.js';
 import { ASSESSMENT_AGENT_TOOLS } from '../../packages/application/src/assessment-agents.js';
 
@@ -134,6 +135,7 @@ export class CoreEvaluation {
     const workflow = createDocumentAssessmentWorkflow({
       provider: this.meter,
       agents: assessmentAgents(this.config.ASSESSMENT_ORCHESTRATION),
+      withUsageStep,
       prompt: this.extractionPrompt,
       policies: this.policies,
       product: this.product,

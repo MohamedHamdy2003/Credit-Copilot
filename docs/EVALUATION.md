@@ -318,6 +318,20 @@ an accepted alternative, and exercise legacy regeneration. Chromium downloads
 the issued document through the workspace. Rendered PDF pages were reviewed
 with Poppler for layout and legibility.
 
+## P17 usage accounting checks
+
+A synthetic two-call live probe reconciled the recorded Gemini payload
+counters. Gemini 3.5 Flash-Lite reported 18 input and 9 output tokens.
+The dated nominal list-rate estimate was USD 0.00002790. Gemini Embedding
+returned a vector with no input counter, so its estimated cost stayed unknown.
+The project billing tier was unknown for both calls. [Sanitized probe](../data/evaluation/results/usage-live-smoke.json) · [Gemini usage fields](https://aistudio.google.com/api-reference/generate-content#Resource:GenerateContentResponse)
+
+Unit and PostgreSQL tests cover retry and fallback attribution, partial
+subtotals, case boundaries, write and job idempotency, historical records,
+and actor-only access. Evaluation reports include a separate `providerAccounting`
+object per case and for the full evaluation. It records attempt counts, prices
+and known subtotals for the isolated evaluation workload.
+
 ## Core gate and remaining submission work
 
 The measured functional gate passes: all15 cases, all critical safety/audit/numeric

@@ -1,5 +1,12 @@
 # AI usage log
 
+## 2026-11-21 model usage accounting
+
+Codex added per-attempt telemetry and user-scoped summaries using the existing
+adapters, request IDs and workflow. The real probe observed that the embedding
+response omitted its token counter. The ledger and UI preserve the unknown
+value. The published rate snapshot and operator billing setting are explicit.
+
 ## 2026-11-21 issued offer document
 
 Codex implemented the code-calculated schedule, recorded terms linked to the

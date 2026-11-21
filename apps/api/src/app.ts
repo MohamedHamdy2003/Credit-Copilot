@@ -8,6 +8,7 @@ import {
   Res,
   Body,
   Param,
+  Query,
   Inject,
   Module,
   UseGuards,
@@ -15,6 +16,7 @@ import {
   UploadedFile,
   UploadedFiles,
   Headers,
+  Header,
   HttpCode,
   type CanActivate,
   type ExecutionContext,
@@ -32,6 +34,7 @@ import {
   ApiBody,
   ApiCookieAuth,
   ApiHeader,
+  ApiQuery,
   ApiConsumes,
   ApiProduces,
   ApiAcceptedResponse,
@@ -351,13 +354,14 @@ export async function createApi(deps: {
       return this.service().ingest(
         req.actor,
         (files ?? []).map((f) => ({ filename: f.originalname, bytes: f.buffer, mime: f.mimetype })),
+        req.requestId,
       );
     }
     @Post('questions')
     @ApiHeader({ name: 'x-csrf-token', required: true })
     @ApiBody({ schema: questionRequestBody })
-    question(@Body() body: unknown) {
-      return this.service().question(body);
+    question(@Body() body: unknown, @Req() req: AuthRequest) {
+      return this.service().question(req.actor, body, req.requestId);
     }
     @Post('questions/streams')
     @HttpCode(202)
@@ -376,7 +380,7 @@ export async function createApi(deps: {
       @Headers('idempotency-key') key: unknown,
       @Req() req: AuthRequest,
     ) {
-      return this.service().startQuestionStream(req.actor, body, key);
+      return this.service().startQuestionStream(req.actor, body, key, req.requestId);
     }
     @Get('question-streams/:id')
     @ApiProduces('text/event-stream')
@@ -417,6 +421,12 @@ export async function createApi(deps: {
     })
     calculate(@Body() body: unknown) {
       return this.service().calculate(body);
+    }
+    @Get('usage/me')
+    @Header('Cache-Control', 'private, no-store')
+    @ApiQuery({ name: 'runId', required: false, schema: { type: 'string', format: 'uuid' } })
+    usage(@Req() req: AuthRequest, @Query() query: unknown) {
+      return this.service().usage(req.actor, query);
     }
     @Get('applications/fixtures') fixtures() {
       return this.service().fixtures();

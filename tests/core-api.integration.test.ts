@@ -3,6 +3,10 @@ import { readFile } from 'node:fs/promises';
 import request from 'supertest';
 import type { INestApplication } from '@nestjs/common';
 import type { StreamFrame } from '../packages/contracts/src/streams.js';
+import type { UsageEvent, UsageSummary } from '../packages/contracts/src/usage.js';
+import { PostgresUsageStore } from '../packages/infrastructure/src/db/usage-store.js';
+import { ModelUsageEvents1794916800008 } from '../packages/infrastructure/src/db/migrations/ModelUsageEvents.js';
+import { priceAttempt } from '../packages/infrastructure/src/llm/pricing.js';
 import { issuedOfferDocumentSchema } from '../packages/contracts/src/offers.js';
 import type { DataSource } from 'typeorm';
 import { createApi } from '../apps/api/src/app.js';
@@ -147,6 +151,170 @@ function readFrames<T>(body: string): StreamFrame<T>[] {
 }
 const readStream = (path: string, owner: Awaited<ReturnType<typeof account>>) =>
   request(app.getHttpServer()).get(`/api/v1/${path}`).set('Cookie', owner.cookie);
+
+async function readUsage(owner: Awaited<ReturnType<typeof account>>, runId?: string) {
+  const result = await readStream(runId ? `usage/me?runId=${runId}` : 'usage/me', owner)
+    .expect('Cache-Control', 'private, no-store')
+    .expect(200);
+  return result.body as UsageSummary;
+}
+
+it('reports owned usage across assessment and question replays without counting them twice', async () => {
+  const owner = await account();
+  const reviewer = await account('senior');
+  await request(app.getHttpServer()).get('/api/v1/usage/me').expect(401);
+  await readStream(`usage/me?actorId=${owner.id}`, reviewer).expect(422);
+  expect((await readUsage(owner)).totals).toMatchObject({
+    calls: 0,
+    inputTokens: { knownTotal: null, missingCalls: 0 },
+    actualUsd: { knownTotal: null, missingCalls: 0 },
+  });
+  const id = await select(owner);
+  const strict = await post(`applications/${id}/assessments`, owner).send({}).expect(201);
+  expect((await readUsage(owner, strict.body.runId)).totals.calls).toBe(0);
+  const assess = () =>
+    post(`applications/${id}/assessments`, owner)
+      .set('Idempotency-Key', 'accounting-assessment')
+      .send({ mode: 'demo' })
+      .expect(201);
+  const assessment = await assess();
+  expect((await assess()).body.runId).toBe(assessment.body.runId);
+  const runId = assessment.body.runId as string;
+  const start = () =>
+    post('questions/streams', owner)
+      .set('Idempotency-Key', 'accounting-question')
+      .send({ question: 'Maximum DBR in CP-2025?' })
+      .expect(202);
+  const question = await start();
+  const streamId = question.body.streamId as string;
+  expect((await start()).body.streamId).toBe(streamId);
+  const firstRead = await readStream(`question-streams/${streamId}`, owner).expect(200);
+  expect(firstRead.text).toContain('"refused":false');
+  await readStream(`question-streams/${streamId}`, owner).set('Last-Event-ID', '1').expect(200);
+
+  const summary = await readUsage(owner);
+  expect(summary.totals).toMatchObject({
+    calls: 3,
+    failedCalls: 0,
+    retries: 0,
+    fallbacks: 0,
+    legacyCalls: 0,
+    inputTokens: { knownTotal: 13, missingCalls: 1 },
+    outputTokens: { knownTotal: 9, missingCalls: 0 },
+    estimatedUsd: { knownTotal: null, missingCalls: 3 },
+    actualUsd: { knownTotal: null, missingCalls: 3 },
+  });
+  expect(summary.groups.map((group) => group.step).sort()).toEqual([
+    'answer',
+    'extract_data',
+    'retrieve',
+  ]);
+  expect(summary.recentRuns).toEqual([{ runId, lastRecordedAt: expect.any(String), calls: 1 }]);
+  expect((await readUsage(owner, runId)).totals.calls).toBe(1);
+  expect((await readUsage(reviewer)).totals.calls).toBe(0);
+  expect((await readUsage(reviewer, runId)).groups).toEqual([]);
+  const [observed] = await db.query(
+    'SELECT request_id,step FROM cases.model_usage_events WHERE run_id=$1',
+    [runId],
+  );
+  expect(observed).toEqual({
+    request_id: assessment.headers['x-request-id'],
+    step: 'extract_data',
+  });
+});
+
+it('keeps decimal totals and rate snapshots when the same batch is submitted twice', async () => {
+  const owner = await account();
+  const store = new PostgresUsageStore(db);
+  const usage = {
+    model: 'gemini-3.5-flash-lite',
+    provider: 'gemini',
+    kind: 'generation',
+    outcome: 'succeeded',
+    retry: true,
+    inputTokens: 1000,
+    outputTokens: 200,
+  } as const;
+  const base: UsageEvent = {
+    ...usage,
+    id: randomUUID(),
+    actorId: owner.id,
+    runId: randomUUID(),
+    requestId: randomUUID(),
+    operation: 'assessment',
+    step: 'plan_extract_data',
+    fallbackFrom: null,
+    ...priceAttempt(usage, 'confirmed_free'),
+    occurredAt: new Date().toISOString(),
+  };
+  const failed = {
+    ...usage,
+    outcome: 'failed',
+    retry: false,
+    inputTokens: null,
+    outputTokens: null,
+  } as const;
+  const batch: UsageEvent[] = [
+    base,
+    { ...base, ...failed, ...priceAttempt(failed, 'unknown'), id: randomUUID() },
+  ];
+  await store.record(batch);
+  await store.record(batch);
+  const { totals } = await readUsage(owner, base.runId!);
+  expect(totals).toMatchObject({
+    calls: 2,
+    failedCalls: 1,
+    retries: 1,
+    freeTierCalls: 1,
+    inputTokens: { knownTotal: 1000, missingCalls: 1 },
+    estimatedUsd: { knownTotal: '0.0008', missingCalls: 1 },
+    actualUsd: { knownTotal: '0', missingCalls: 1 },
+  });
+  const [row] = await db.query('SELECT rate_snapshot FROM cases.model_usage_events WHERE id=$1', [
+    base.id,
+  ]);
+  expect(row.rate_snapshot).toMatchObject({
+    capturedOn: '2026-11-21',
+    inputUsdPerMillion: '0.30',
+    outputUsdPerMillion: '2.50',
+  });
+});
+
+it('backfills attributable historical usage without assigning it a price or provider', async () => {
+  const owner = await account();
+  const legacyId = randomUUID();
+  const migration = new ModelUsageEvents1794916800008();
+  const tx = db.createQueryRunner();
+  await tx.connect();
+  await tx.startTransaction();
+  try {
+    // Exercise the upgrade in a rolled-back transaction on the dedicated test database.
+    await migration.down(tx);
+    await tx.query(
+      "INSERT INTO cases.llm_usage(id,actor_id,model,operation,input_tokens) VALUES($1,$2,'older-model','extraction',17)",
+      [legacyId, owner.id],
+    );
+    await migration.up(tx);
+    const [entry] = await tx.query(
+      'SELECT id,actor_id,step,provider,outcome,input_tokens,output_tokens,list_cost_usd,actual_cost_usd FROM cases.model_usage_events WHERE id=$1',
+      [legacyId],
+    );
+    expect(entry).toEqual({
+      id: legacyId,
+      actor_id: owner.id,
+      step: 'legacy_assessment',
+      provider: 'unknown',
+      outcome: 'unknown',
+      input_tokens: '17',
+      output_tokens: null,
+      list_cost_usd: null,
+      actual_cost_usd: null,
+    });
+  } finally {
+    await tx.rollbackTransaction();
+    await tx.release();
+  }
+});
 
 async function extractOfferPdf(bytes: Uint8Array) {
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');

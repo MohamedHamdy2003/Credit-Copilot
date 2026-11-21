@@ -207,6 +207,32 @@ test('auto application shows documented funding and cites its own product rules'
   await page.screenshot({ path: shot('auto-policy-mobile'), fullPage: true });
   expect(errors).toEqual([]);
 });
+
+test('Usage shows only recorded model activity with unknown provider charges on mobile', async ({
+  page,
+}) => {
+  await login(page, 'usage');
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.getByRole('button', { name: 'Usage', exact: true }).click();
+  await expect(page.getByText('No model usage recorded yet.')).toBeVisible();
+  await page.getByRole('button', { name: 'Policy questions', exact: true }).click();
+  await page.getByLabel('Question', { exact: true }).fill('Maximum DBR in CP-2025?');
+  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Verified source excerpts', exact: true }),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Usage', exact: true }).click();
+  const summary = page.getByRole('region', { name: 'Recorded usage' });
+  await expect(summary.getByText('2 calls · 0 failed · 0 retries · 0 fallbacks')).toBeVisible();
+  await expect(summary.getByText('Actual provider charges')).toBeVisible();
+  await expect(summary.getByText(/^Unknown/, { exact: false }).last()).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'By model and operation' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: shot('usage-live-mobile'), fullPage: true });
+  expect(errors).toEqual([]);
+});
 test('grounded questions, refusal, conflicts and edition-specific code calculations', async ({
   page,
 }) => {
