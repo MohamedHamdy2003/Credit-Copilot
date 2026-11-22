@@ -1,156 +1,105 @@
 # Credit Copilot
 
-بيئة تدريب لتقييم القرض الشخصي PL-100 وقرض السيارة AL-200 باستخدام React وNestJS وPostgreSQL/pgvector وMastra. كل البيانات تدريبية، والإصدار يحتاج قرارًا بشريًا.
+Credit Copilot is a synthetic underwriting workspace for Delta Commercial Bank’s personal and auto loans. It indexes dated policies, answers questions with verified citations, computes eligibility and affordability in code, and records a human decision before issuing a simulated offer. All cases are fictional.
 
 ## Quick start
 
-المتطلبات: Node24، pnpm11.25.0، Docker Desktop/Compose v2 وGit. من جذر المشروع:
+Use Node.js 24, pnpm 11.25.0, Docker with Compose v2, and Git. Run commands from the repository root.
 
 ```powershell
 pnpm install --frozen-lockfile
 if (!(Test-Path .env)) { Copy-Item .env.example .env }
 ```
 
-ضع `GEMINI_API_KEY` و`DEMO_PASSWORD` محليًا في `.env`؛ لا ترسلهما في الشات أو Git. أنشئ المفتاح من [Google AI Studio](https://aistudio.google.com/apikey)، وفق [تعليمات المزود الرسمية](https://aistudio.google.com/docs/api-key). استخدم نموذجًا متاحًا ضمن quota حسابك؛ لا يلزم شراء اشتراك، ولا نفترض تكلفة صفرية أو quota مضمونة.
+On macOS or Linux use `test -f .env || cp .env.example .env`. In your local `.env`, set `GEMINI_API_KEY` and a unique 12–256 character `DEMO_PASSWORD`. Create a key in a Google AI Studio project and check its models, quota and billing tier before running the live demo. Keep the key and password out of recordings and Git. [Google AI Studio keys](https://aistudio.google.com/apikey) · [Gemini API key setup](https://aistudio.google.com/docs/api-key)
 
-```powershell
-pnpm dev
+```sh
+pnpm dev --seed
 ```
 
-الأمر يشغّل Docker DB وينتظر health، ثم migration CLI الصريح، ثم API والويب. الافتراضي: `http://localhost:5173` وOpenAPI على `http://127.0.0.1:3000/api/docs`. Ctrl+C يوقف API/الويب ويحتفظ بقاعدة البيانات. افحص Docker Desktop لو البداية فشلت؛ لو المنفذ مشغول غيّر PORT/WEB_ORIGIN قبل التشغيل. لا يوجد deployment تلقائي.
+On a fresh local database, this command starts PostgreSQL, runs the migration CLI, indexes the reviewed policy sources, seeds the demo accounts, and starts the API and web app. Open `http://localhost:5173` for the app and `http://127.0.0.1:3000/api/docs` for OpenAPI. Ctrl+C stops the API and web processes and keeps PostgreSQL data. Use `pnpm dev` for later starts. Run `pnpm seed` separately to index the policy corpus, or `pnpm seed:users` to reset demo passwords and revoke their old sessions. If the provider returns HTTP 429 during seeding, wait for the project quota to recover, then rerun. Completed sources are skipped. Increase `SEED_EMBEDDING_INTERVAL_MS` for a lower per-minute quota. On a reused database, `pnpm dev --seed` also resets those four accounts.
 
-في terminal آخر:
+All four demo accounts use the password you set locally. Use separate accounts for assessment preparation and review.
 
-```powershell
-pnpm seed
-pnpm seed:users
-```
-
-seed يفهرس مستندات السياسات والتسعير والإجراءات من الـmanifest. تكرار الأمر يرجع skipped. حسابات Demo تستخدم كلمة المرور المحلية المحددة بطول 12–256 حرفًا. الحسابات هي `loan-officer`، و`credit-officer` بحد 250,000، و`senior-credit-officer` بحد 500,000، و`head-credit` بحد 1,000,000. إعادة seed:users تحدّث كلمات المرور وتلغي الجلسات. حسابات fixture CLI لا تصلح للدخول.
+| Account | Role and authority |
+| --- | --- |
+| `loan-officer` | Loan Officer. Prepares cases and asks policy questions. |
+| `credit-officer` | Credit Officer. Up to EGP 250,000. |
+| `senior-credit-officer` | Senior Credit Officer. Up to EGP 500,000 and referral review. |
+| `head-credit` | Head Credit Officer. Up to EGP 1,000,000 with reviewed knowledge ingestion permission. |
 
 ## 5-Minute Demo Path
 
-1. سجّل دخول loan-officer. من Knowledge راجع المصادر؛ الرفع يحتاج canIngest وهو متاح لحساب head-credit.
-2. اسأل `What is the maximum debt burden ratio in CP-2024?` ثم CP-2025. الاقتباسات المتحققة بتظهر مع المصدر والتاريخ. راجع 50% و45%.
-3. اسأل عن crypto-backed loans: يجب رفض السؤال لغياب المصدر. أسئلة التعارض تعرض اقتباسات السياسة والمنتج/التعميم، بمراجع زمنية صريحة.
-4. جرّب Calculate: مبلغ300000، دخل30000، التزامات4000،60 شهرًا؛2025-04-03 يعطي EMI8630.39 وmaximum330000. غيّر التاريخ إلى2024-12-01 فيصبح maximum382000. الحساب وحده ليس موافقة.
-5. Add application → APP-001 → Run assessment. تابع المراحل أثناء التقييم، وبعد الحفظ افتح تبويب Workflow لمراجعة سجلها. Strict افتراضي ونقص البطاقة يؤدي لإحالة CP-8/PS-7. الأصل متاح للتنزيل من صفحة الطلب.
-6. لتجربة مسار الاعتماد، فعّل ALLOW_DEMO_MODE=true محليًا وأعد تشغيل API ثم اختار Demo صراحة. APP-001 يعطي توصية pending_approval؛ افتراض وجود البطاقة وverified=false واضحان. APP-004 يُحال للاحتيال بدون استدعاء نموذج. APP-002/003/005 تظل إحالات لنقص إثبات probation؛ لا نفترض اكتماله.
-7. سجّل دخول credit-officer وحاول اعتماد توصية 300,000. السيرفر يرفض تجاوز 250,000. مستخدم Senior مستقل يسجل التبرير والاعتماد ثم يصدر العرض بتاريخ صرف مناسب. افتح View issued offer ونزّل خطاب الـPDF وجدول الأقساط. الخطاب يوضّح افتراض الـDemo.
-8. في Senior referral queue سجّل انتظار الأدلة/إعادة تقييم أو الإقرار بسجل Fraud Unit الداخلي. الملاحظة لا تلغي نقص الأدلة ولا تغيّر القرار. PM-9 يتيح طلب السبب المكتوب بعد رفض بشري صحيح خلال30 يومًا، بلا استئناف آلي أو تعديل قرار. توجد رحلة اختبار مستقلة لهذا المسار؛ لا ترفض pack ناقص الأدلة لفرض مثال.
+For a filmed walkthrough, use a fresh synthetic database and set `ALLOW_DEMO_MODE=true` before starting. Keep `ASSESSMENT_MODE=strict` and select Demo explicitly for the approval example. Capture the first successful ingestion before recording Q&A. A seeded workspace can demonstrate idempotency by uploading the same source again.
 
-## Evaluation and checks
+1. **0:00–0:35 · Ingest.** Show `pnpm seed` indexing trusted sources on a fresh database, or use **Knowledge → Ingest documents** as `head-credit`. Show a successful source, then repeat it and observe **skipped**. Use files from `data/corpus/policy/`.
+2. **0:35–1:15 · Cite, refuse and compare editions.** Sign in as `loan-officer`. In **Policy questions**, ask “What is the minimum net monthly income for PL-100?” for CP-2024, then CP-2025. Show the source and the change from EGP 8,000 to EGP 10,000. Ask “What are the terms for a crypto-backed loan?” and show the insufficient-evidence refusal.
+3. **1:15–2:25 · Assess and show the numbers.** In **Applications**, add `APP-001` and run Strict. Explain the missing national ID copy referral under CP-8 and PS-7. Select Demo and rerun. Show the explicit ID-copy assumption, the dated 24% CSV rate, EGP 8,630.39 instalment, 42.10% DBR and EGP 330,000 maximum under CP-2025. Open **Rules & sources** or **Workflow** to show provenance and stage history.
+4. **2:25–3:00 · Show the failed injection.** Add and assess `APP-004`. Open the case result and show the internal suspected-tampering referral and skipped extraction and rule stages. The supplied salary certificate contains the malicious EGP 200,000 instruction alongside the actual EGP 18,000 field.
+5. **3:00–4:15 · Show independent approval.** Sign in as `credit-officer` and open the Demo APP-001 run in **Review queue**. Attempt approval with a justification and show `AuthorityLimitExceeded` on EGP 300,000. Then sign in as `senior-credit-officer`, approve with a justification, and issue with the synthetic disbursement date `2025-04-03`. Open **View issued offer** and download the PDF.
+6. **4:15–5:00 · Sample the extensions.** Show the PDF’s source-cited conditions and repayment table. Show **Usage** and its known and missing counters. If time permits, assess `AUTO-001` in Demo and point out the EGP 100,000 documented down payment and EGP 250,000 financed principal.
 
-```powershell
+## Tests and evaluation
+
+These checks run without a Gemini key. Use a dedicated PostgreSQL database whose name ends in `_test`. Create the default database `credit_copilot_test` once if it is absent.
+
+```sh
+docker compose up -d --wait db
+docker compose exec -T db psql -U copilot -d postgres -c "CREATE DATABASE credit_copilot_test"
 pnpm test
-pnpm typecheck
 pnpm lint
 pnpm format:check
+pnpm typecheck
+pnpm build
 pnpm test:integration
 pnpm evaluate:core:offline
+pnpm evaluate --offline-agents
 pnpm exec playwright install chromium
 pnpm test:e2e
-pnpm build
-pnpm evaluate --vector
-pnpm evaluate --hybrid
-pnpm evaluate --rewrite
-pnpm evaluate --offline-agents
-pnpm evaluate --agents
 ```
 
-integration وcore:offline وe2e تستخدم قاعدة تنتهي بـ_test؛ شغّلها بالتتابع. لو غير موجودة، أنشئها مرة عبر `docker compose exec -T db psql -U copilot -d postgres -c "CREATE DATABASE credit_copilot_test"`. e2e تفرغ حسابات/طلبات قاعدة الاختبار، وتشغّل API4304 وVite5174. الصور/traces خارج Git. offline لا يقيس جودة semantic/LLM.
+Run the database, offline evaluation and browser suites sequentially. Playwright resets case and account fixtures in the test database and launches its own services on ports 4304 and 5174. Unit, integration and browser tests use provider fixtures.
 
-`pnpm evaluate` يشغّل15 حالة فعلية عبر Gemini في قاعدة منفصلة تنتهي بـ_eval، وينشئها إن كانت صلاحية المستخدم تسمح. لا يغيّر بيانات الطلبات في قاعدة التطبيق. يقرأ cache موثوقًا لمتجهات السياسات المطابقة للنص/model/dimensions، بينما embeddings الأسئلة والاستدعاءات التوليدية live. يحفظ كل تشغيل، حتى الفاشل، في `artifacts/evaluation/`، ويخرج بكود فشل إذا لم تمر البوابة. يلزم مفتاح وquota؛ هذا الأمر يستهلكها.
-
-الحالات الذهبية في `data/evaluation/cases.json` والتقارير الفعلية في `data/evaluation/results/`. الـvector والـhybrid عدّوا 15/15 وhit@5 كان 4/4 في الوضعين على الأسئلة القابلة للإجابة. شغّل `pnpm evaluate --vector` و`pnpm evaluate --hybrid` و`pnpm evaluate --rewrite` للمقارنة. البحث الافتراضي يدمج BM25 وpgvector بـRRF ويضيف مصطلحات بحث من قاموس ثابت. التقييم مع إعادة الصياغة حقق 15/15 وhit@5 ‏4/4. التفاصيل وتقارير الفشل في `docs/EVALUATION.md`. `pnpm evaluate:smoke` يحتفظ بفحص الـvector القديم لخمس حالات، و`pnpm evaluate:offline` يشغّل regression tests بسيطة من غير DB.
-
-## تقييم الطلبات باستخدام الـAgents
-
-اضبط `ASSESSMENT_ORCHESTRATION=agents` لتجربة ثلاث أدوات Mastra من خلال الـAPI أو
-`pnpm assess`. السيرفر بيحدد مدخلات كل أداة: بيانات منقّحة، سياسة بالتاريخ
-والمنتج، أو نتيجة التقييم للمذكرة المحسوبة. كل دور له محاولة تخطيط واحدة.
-لو طلب الأداة غير صالح أو التخطيط تعذّر، نفس مرحلة الـworkflow بتشتغل مباشرة.
-سجل التقييم بيحفظ نتيجة كل استدعاء واستخدام التخطيط. الفحص المعزول بيشتغل
-بـ`pnpm evaluate --offline-agents` أو بـ`pnpm evaluate --agents` مع Gemini.
-لو احتجت فاصل بين طلبات التوليد في القياس اضبط
-`EVALUATION_GENERATION_INTERVAL_MS` بالمللي ثانية. الإعداد خاص بالتقييم.
-
-## تجربة قرض السيارة التجريبي
-
-من Applications اختار `AUTO-001`، أو شغّل `pnpm assess AUTO-001 --demo` بعد
-تمكين Demo. تقييم العينة يحسب تمويل 250,000 جنيه من سعر السيارة 350,000
-ودفعة موثقة 100,000. بند PS-9 يشترط دفعة لا تقل عن 25%. العينة `AUTO-002`
-تحت الحد وتنتظر قرار رفض بشري، و`AUTO-003` تتحوّل لمراجعة بشرية لأن سعر
-السيارة غير موثق. كل العينات تحفظ نتيجة Strict وDemo حسب الأدلة.
-في Policy questions اختار Auto loan لعرض مصادر المنتج وتواريخه فقط.
-
-## تشغيل Ollama كبديل محلي
-
-التحويل اختياري. شغّل حاوية Ollama وحمّل النموذج مرة واحدة، وبعدها فعّل
-`OLLAMA_FALLBACK_ENABLED=true` في `.env` وأعد تشغيل الـAPI. خدمة Compose متاحة
-على جهازك فقط، وخصائص Ollama Cloud مقفولة. [دليل Ollama المحلي](https://docs.ollama.com/faq)
-
-```powershell
-docker compose --profile local-llm up -d ollama
-docker compose exec -T ollama ollama pull qwen3:4b-instruct-2507-q4_K_M
-pnpm evaluate:fallback
-```
-
-Gemini بيظل المزود الأساسي. لو التوليد فشل بسبب quota أو timeout أو عطل مؤقت
-بعد محاولات Gemini، التطبيق بيجرّب Ollama مرة على نفس المدخلات المنقّحة.
-استرجاع السياسات وفهرستها بيعتمدوا على Gemini embeddings. لو embedding السؤال
-تعذّر، الـAPI بيرجع خطأ خدمة 503. تقييم `pnpm evaluate` يقيس Gemini، وفحص
-`pnpm evaluate:fallback` بيحقن تعطل Gemini ويستخدم Ollama فعليًا لاختبار استخراج
-APP-001، المذكرة المحسوبة واقتباس سياسة محدد. تقرير الفحص المنقّح في
-`artifacts/evaluation/`.
+Run `pnpm evaluate --vector`, `pnpm evaluate --hybrid`, `pnpm evaluate --rewrite` or `pnpm evaluate --agents` for live Gemini runs of the current 15-case suite. Live runs use a separate database ending in `_eval` and consume provider quota. Each run writes a report under `artifacts/evaluation/`, including failed results. Use `pnpm assess AUTO-001 --demo` to assess the synthetic auto case, or choose **Auto loan** in **Policy questions** to search the product’s sources. [Evaluation results and reproducibility](docs/EVALUATION.md)
 
 ## Configuration
 
-كل المتغيرات الحالية في `.env.example`. أعد تشغيل API عند تغييرها؛ الأسرار تبقى على السيرفر.
+Use [.env.example](.env.example) as the local template. Restart services after changing runtime settings. Set test or Compose overrides in the shell when launching their commands.
 
-| Variable | Default / use |
-|---|---|
-| DATABASE_URL | PostgreSQL local54329/credit_copilot؛ migrations عبر CLI، synchronize=false |
-| EVALUATION_DATABASE_URL | اختياري؛ إن غاب يُشتق اسم _eval من DATABASE_URL |
-| PORT / WEB_ORIGIN | 3000 / http://localhost:5173؛ origin لازم يطابق عنوان المتصفح |
-| GEMINI_API_KEY | سر محلي؛ غير مطلوب لاختبارات fake/offline |
-| LLM_PROVIDER | gemini هو المزود الأساسي |
-| OLLAMA_FALLBACK_ENABLED | false افتراضيًا. true يفعّل التحويل للتوليد المحلي |
-| OLLAMA_BASE_URL | http://127.0.0.1:11434 افتراضيًا. يقبل عنوان HTTP محلي فقط |
-| OLLAMA_MODEL | qwen3:4b-instruct-2507-q4_K_M افتراضيًا. لازم النموذج يكون محمّل في Ollama |
-| OLLAMA_TIMEOUT_MS | 120000 مهلة محاولة التوليد المحلية بالمللي ثانية |
-| GENERATION_MODEL | gemini-3.5-flash-lite؛ اسم النموذج المسجل في القياس |
-| GEMINI_BILLING_TIER | `unknown` افتراضيًا. اضبط `confirmed_free` بعد التحقق من أن مشروع المفتاح على Gemini Free Tier |
-| EMBEDDING_MODEL / EMBEDDING_DIMENSIONS | gemini-embedding-001 /768؛ تغييرهما يحتاج إعادة فهرسة وbaseline جديد |
-| RETRIEVAL_STRATEGY | hybrid افتراضيًا؛ vector لتشغيل البحث الدلالي وحده |
-| RETRIEVAL_MIN_SIMILARITY | 0.65 عتبة cosine للأدلة |
-| QUERY_REWRITE_MAX_EXPANSIONS | 2 مصطلح إضافي كحد أقصى افتراضيًا في hybrid. من 0 إلى 4. قيمة 0 توقف إعادة الصياغة |
-| ASSESSMENT_ORCHESTRATION | workflow افتراضيًا. agents يفعّل الأدوات المحددة لمراحل الاستخراج والسياسة والمذكرة |
-| ASSESSMENT_MODE / ALLOW_DEMO_MODE | strict /false؛ Demo يحتاج تمكينًا واختيارًا صريحًا لبيانات synthetic |
-| UPLOAD_MAX_BYTES | 10485760؛ PDF/CSV/MD، وحد100 صفحة PDF، بلا OCR |
-| DEMO_PASSWORD | محلي12–256 حرفًا لإنشاء حسابات التدريب |
-| SESSION_TTL_HOURS / COOKIE_SECURE | 8 /false للتطوير؛ Secure يحتاج HTTPS |
-| TEST_DATABASE_URL | اختياري للاختبارات؛ الاسم يجب أن ينتهي _test |
-| API_PROXY_TARGET | اختياري عند تشغيل Vite منفردًا؛ pnpm dev يضبطه حسب PORT |
-| POSTGRES_PASSWORD | إعداد Compose اختياري؛ الافتراضي copilot_local المحلي، ويجب أن يطابق DATABASE_URL |
+| Variable | Default and purpose |
+| --- | --- |
+| `DATABASE_URL` | Local PostgreSQL on port 54329, database `credit_copilot`. Match the Compose credentials and port. |
+| `POSTGRES_PORT` / `POSTGRES_PASSWORD` | Compose host port 54329 and local-only default password `copilot_local`. |
+| `COMPOSE_PROJECT_NAME` | Optional Docker Compose namespace for an isolated container and volume. Use a distinct `POSTGRES_PORT` for simultaneous instances. |
+| `PORT` / `WEB_ORIGIN` | API port 3000 and web origin `http://localhost:5173`. Open the exact origin configured. |
+| `GEMINI_API_KEY` / `LLM_PROVIDER` | Local AI Studio key and primary provider `gemini`. |
+| `GENERATION_MODEL` | `gemini-3.5-flash-lite`. Choose a model available to your project. |
+| `GEMINI_BILLING_TIER` | `unknown`. Use `confirmed_free` only after verifying your key’s project is on Gemini Free Tier. |
+| `EMBEDDING_MODEL` / `EMBEDDING_DIMENSIONS` | `gemini-embedding-001` / 768. Reindex trusted sources after changing either. |
+| `SEED_EMBEDDING_INTERVAL_MS` | 750 ms. Minimum spacing between logical embedding calls when seeding policies with the CLI. |
+| `RETRIEVAL_STRATEGY` / `RETRIEVAL_MIN_SIMILARITY` | `hybrid` / 0.65. Choose `vector` for cosine-only retrieval. |
+| `QUERY_REWRITE_MAX_EXPANSIONS` | 2 additional glossary phrases. Accepts 0–4, where 0 disables rewriting. |
+| `ASSESSMENT_MODE` / `ALLOW_DEMO_MODE` | `strict` / `false`. Set the second to `true` to allow explicit synthetic Demo assessment. |
+| `ASSESSMENT_ORCHESTRATION` | `workflow`. Choose `agents` for three bounded Mastra tool planners. |
+| `OLLAMA_FALLBACK_ENABLED` | `false`. Allows generation fallback after transient Gemini failures when enabled. |
+| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434`. Accepts a loopback HTTP origin. |
+| `OLLAMA_MODEL` | `qwen3:4b-instruct-2507-q4_K_M`. Download it before use. |
+| `OLLAMA_TIMEOUT_MS` | 120000 ms. Timeout for the local generation attempt. |
+| `UPLOAD_MAX_BYTES` | 10485760. Maximum per upload. The PDF parser also limits documents to 100 text pages. |
+| `DEMO_PASSWORD` | Required for account seeding. Choose a unique local password of 12–256 characters. |
+| `SESSION_TTL_HOURS` / `COOKIE_SECURE` | 8 / `false` for local HTTP. Enable secure cookies with HTTPS. |
+| `EVALUATION_DATABASE_URL` | Optional isolated live database. By default derive an `_eval` database from `DATABASE_URL`. |
+| `EVALUATION_GENERATION_INTERVAL_MS` | 0. Optional pacing between logical generation calls in evaluation. |
+| `TEST_DATABASE_URL` | Optional dedicated database ending in `_test`. |
+| `API_PROXY_TARGET` | Optional API origin when running Vite separately. `pnpm dev` sets the proxy using `PORT`. |
 
-`data/config/review-calendar.json` يضبط عطلة الأسبوع والإجازات لتقدير PM-4 فقط: الجمعة/السبت افتراضيًا، بلا إجازات رسمية مختلقة. مهلة PM-9 هي30 يومًا تقويميًا من الرفض المسجل بتوقيت القاهرة، شاملة اليوم30؛ مصدر الملفات لا يوفر تاريخ إخطار منفصلًا.
+For local fallback, start `docker compose --profile local-llm up -d ollama`, download the model with `docker compose exec -T ollama ollama pull qwen3:4b-instruct-2507-q4_K_M`, then enable `OLLAMA_FALLBACK_ENABLED`. Gemini continues to supply embeddings. Use `pnpm evaluate:fallback` to test local generation with an injected primary outage. [Ollama setup and behavior](https://docs.ollama.com/faq)
 
-## API, privacy and limits
+## Data handling and API
 
-المسارات تحت `/api/v1` وموثقة في OpenAPI. Login يرجع HttpOnly/SameSite cookie وcsrfToken؛ أرسل cookie و`x-csrf-token` مع POST. عند التقييم أرسل Idempotency-Key ثابتًا للمحاولة نفسها؛ الرد الناجح يتكرر بنفس run، وتغيير mode يحتاج مفتاحًا مختلفًا. job واحد لكل طلب، منع القرار أثناء reassessment، وإغلاق المحاولة العالقة بعد15 دقيقة عند محاولة جديدة. النتائج المتأخرة لا تستبدل الأحدث، والطلب الصادر عرضه لا يعاد تقييمه.
+- Indexing sends the normalized, chunked **trusted policy** documents to the Gemini embedding model. Query embeddings use the masked policy question. Answer generation receives that question and the retrieved policy excerpts, source IDs, sections, pages and effective dates.
+- Assessment generation receives the canonical pack reference and allowlisted salary or bureau fields with their page and section. Those fields are net income, existing obligations, employment start and bureau score. Code filters out raw documents, applicant names, IDs, phone numbers and protected attributes. Agent planners receive a generic task and one tool name. Egyptian IDs and mobile numbers are masked in policy questions. Keep customer data out of that input.
+- Applications recognize reviewed synthetic packs by content hash and store their PDFs in the private case store. Login uses a session cookie, with CSRF checks on changes. Only the preparer or an authorized reviewer can read an issued PDF at `GET /api/v1/offers/:id/document`. The signed-in user’s usage aggregate is available at `GET /api/v1/usage/me` with an optional `runId` filter.
+- Usage separates published-rate estimates from provider charges. Missing counters and unknown Gemini billing tiers are explicit. Confirmed free-tier calls have zero provider fees. Local Ollama’s zero fee covers the provider charge and excludes machine costs. [Gemini pricing](https://aistudio.google.com/docs/pricing)
 
-- Knowledge يعرض السياسات ويدعم multipart `files` لدفعات 1–20 مع نتيجة كل ملف. الـmanifest يحدد المصادر المعتمدة حسب المنتج.
-- Applications يدعم multipart `file` أو اختيار fixture. قبول الـPDF مرتبط ببصمة الحزمة المعتمدة. بيانات العملاء محفوظة في مخزن الحالات.
-- Reviews/decisions/offers: الصلاحيات والمبلغ والنسخة وfour-eyes على السيرفر. لا endpoint لتجاوز نقص الأدلة أو استثناء التسعير/السياسة.
-- خطاب العرض الصادر متاح لصاحب الطلب والمراجع المصرح له عبر `GET /api/v1/offers/:id/document`. يشمل المبلغ المعتمد، والقسط، والرسوم الإدارية، وصافي الصرف، وجدول الأقساط، ومراجع الشروط والتسعير.
-- صفحة **Usage** تعرض التوكنز المبلّغ عنها والمحاولات والإخفاقات والـfallback للحساب الحالي. تقدر تختار تقييم بعينه. المسار `GET /api/v1/usage/me` يقبل `runId` اختياريًا.
-- Referrals/written-reason/reason-requests: Senior notes داخلية فقط؛ طلب السبب يعيد snapshot بالبند والإصدار والمصدر وتبرير المراجع، ولا يغير حالة التقييم. رد محفوظ يظل مقروءًا بعد انتهاء المهلة؛ تاريخ/مستخدم الطلب لا يأتيان من العميل.
-
-**مدخلات التوليد في Gemini وOllama:** للسياسات: السؤال بعد إخفاء ID ذي14 رقمًا والتليفونات المصرية، ونصوص السياسات المسترجعة ومراجعها. للاستخراج: اسم pack، الصفحة/القسم، وأربعة أنواع سطور فقط: صافي الدخل، الالتزامات، بدء العمل والـbureau score. لا تُرسل الاستمارة الخام أو الأسماء أو قيم gender/religion/marital status/nationality أو صورة البطاقة. لا تدخل بيانات أشخاص في الأسئلة؛ masking ليس redaction عامًا لكل شكل PII. تحفظ النسخ الأصلية في cases الخاصة مع صلاحية owner/reviewer، ولا تُعرض مخرجات النموذج كـHTML.
-
-تقدير Usage بيستخدم السعر القياسي المنشور بالدولار للنماذج المسجلة، ومن ضمن عدّاد إخراج Gemini توكنز التفكير المبلّغ عنها. التكلفة الفعلية من Gemini تظل غير متاحة إذا كانت خطة الفوترة غير مؤكدة. التشغيل المحلي يسجل صفر رسوم للمزوّد، وتكلفة تشغيل الجهاز خارج التقرير. استدعاءات التقييم المعزول تظهر في `providerAccounting` داخل تقرير التقييم. [أسعار Gemini الرسمية](https://aistudio.google.com/docs/pricing)
-
-التسليم النهائي يحتاج فيديو 3–5 دقائق وتجربة تشغيل من clone جديد.
-
-اقرأ `docs/DESIGN.md` للقرارات، `docs/EVALUATION.md` للأرقام، `docs/AI-USAGE-LOG.md` لاستخدام AI، و`FEATURES.md` للحالة.
+The original ITI exercise supplied seven policy documents and five personal-loan packs. The repository adds four fictional AL-200 policy sources and three auto cases as the synthetic extension. The policy and fixture manifests record their provenance and hashes. This workspace was assembled for the exercise. [Design](docs/DESIGN.md) · [AI usage log](docs/AI-USAGE-LOG.md) · [Current verification status](status.md)

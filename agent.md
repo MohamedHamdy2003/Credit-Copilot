@@ -18,11 +18,11 @@ Reported local hardware:16GB RAM and4GB graphics. Gemini is the primary provider
 
 ## Working conventions
 
-Workspace G:/Credit Copilot, PowerShell, Node24, pnpm11.25.0. Main/dev/feature branches already exist. Test before feature merge into dev. Keep main promotions through >=3 actual PRs when GitHub authentication exists. Never fake four days of commits or results. No automatic deployment. GitHub repo https://github.com/MohamedHamdy2003/Credit-Copilot; Gemini approved. Never print/read API keys into logs; user configures local.env.
+Workspace G:/Credit Copilot, PowerShell, Node24, pnpm11.25.0. Main/dev/feature branches already exist. Test before feature merge into dev. Keep main promotions through >=3 actual PRs when GitHub authentication exists. Never fake four days of commits or results. No automatic deployment. GitHub repo https://github.com/MohamedHamdy2003/Credit-Copilot; Gemini approved. The user configures the ignored `.env` file. Keep API keys out of logs.
 
 Commands: pnpm test; pnpm typecheck; pnpm lint; pnpm format:check; pnpm build; pnpm test:integration. Docker DB port54329. Dedicated integration DB name must end _test; tests truncate only that database. DB migrations explicit via pnpm db:migrate; synchronize=false. Unit tests require no keys. Fake embeddings are lexical test vectors, never claim semantic/live evaluation.
 
-pnpm dev starts local DB/migrations/API/web. pnpm evaluate runs full live15-case evaluation in a separate *_eval DB; pnpm evaluate:core:offline runs its fake-provider regression in *_test, sequentially with integration/e2e. Timestamped reports preserve failures; committed JSON freezes the source-aware vector baseline. Usage totals distinguish published estimates from provider charges. Read status.md before spending quota on a repeat run.
+pnpm dev starts the local DB, runs migrations, and starts the API and web app. On a fresh setup, pnpm dev --seed also indexes the trusted corpus and seeds the four named demo accounts before starting either server. Rerunning --seed resets those accounts' passwords and revokes their sessions. pnpm evaluate runs the live 15-case evaluation in a separate *_eval DB. Run pnpm evaluate:core:offline with integration and browser checks sequentially on *_test. Timestamped reports preserve failures. The committed JSON freezes the source-aware vector baseline. Usage totals distinguish published estimates from provider charges. Read status.md before spending quota on a repeat run.
 
 ## References on demand
 

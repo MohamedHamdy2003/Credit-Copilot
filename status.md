@@ -1,9 +1,9 @@
-# Current checkpoint — 21 November 2026
+# Current checkpoint — 22 November 2026
 
-Read agent.md and FEATURES.md first. Current feature: feature/usage-accounting.
+Read agent.md and FEATURES.md first. Current release checkpoint: P18.
 Core evaluation went through PR17/18, hybrid search through PR19/20, query
 rewriting through PR21/22 and local fallback through PR23/24 after CI.
-Local fallback is on main at da37033.
+P17 usage accounting reached main through PR34 before this release.
 
 ## Implemented
 
@@ -194,15 +194,45 @@ Local checks passed 152 unit tests, 42 PostgreSQL/HTTP tests, 11 Chromium
 journeys, type checks, lint, formatting and builds. Both core-15-v2 offline
 suites passed 15/15.
 
-## Next and honest readiness
+## P18 release verification
 
-P18 adds final submission verification, documentation and a demo video. The brief overview
-says 12 calendar days, while its submission section specifies day 10 at
-23:59 Cairo. The invitation date is unverified.
-The core memo uses plain wording as allowed by the brief. The final video and
-interactive clean-clone walkthrough are pending.
-Never fabricate dates, history, billing costs or final submission status. No email
-or video upload authorized/performed.
+- An anonymous HTTPS clone from public main opened a separate Compose project.
+  The first live bootstrap indexed eight sources before Gemini returned HTTP 429.
+  A second bootstrap skipped the completed sources and finished all eleven.
+  The release seeder now spaces document embeddings by 750 ms by default. A
+  clean checkout of a1b6dc3 then ran the updated launcher against a new empty
+  database. All nine migrations and eleven sources completed with zero failed
+  ingestion attempts. API and web readiness took 117 seconds.
+- The browser rehearsal used real Gemini with synthetic data. It verified the
+  50% and 45% policy answers, cited evidence and the out-of-corpus refusal.
+  It also verified the Strict missing-ID referral, APP-001 Demo's EGP 8,630.39
+  instalment and EGP 330,000 capacity, APP-004's fraud referral, the Credit
+  Officer's authority denial, Senior approval and actual PDF download,
+  the Usage ledger, and the AL-200 EGP 6,623.47 instalment.
+- Release checks on the clean candidate include 152 unit tests, 42 PostgreSQL/
+  HTTP tests, 11 Chromium journeys, lint, formatting, type checks and the API
+  and web production build. Both current deterministic modes passed 15/15.
+- The first clean v2 live agents run passed 14/15. Gemini failed all three
+  attempts to plan Q14's policy-read tool. The audited fallback completed the
+  same bounded read and the human approval checks passed. The agent-execution
+  assertion still failed and the report is retained.
+  [Initial live v2 report](data/evaluation/results/release-core-v2-initial-failure.json)
+- The repeat at 8,500 ms generation spacing on the same clean a1b6dc3
+  commit passed 15/15. Retrieval hit@5 was 4/4, citation coverage 8/8,
+  out-of-corpus refusals 3/3, exact calculations 17/17, security and audit
+  assertions 94/94 and original Strict packs 5/5.
+  [Passing live v2 report](data/evaluation/results/release-core-v2-agents.json)
+- The local 3:53.60 WebM in artifacts/release/Credit-Copilot-demo.webm was
+  recorded in the application and visually checked. It uses synthetic
+  cases and a deterministic provider fixture, labeled in English captions.
+  It shows a trusted upload, cited DBR changes, refusal, calculations, tampering,
+  the over-limit denial, an independent Head approval and the issued PDF.
+- Before P18 promotion the public repository already had 45 non-merge commits
+  across four Cairo dates and 17 merged PRs to main. The original exercise
+  asks the candidate to keep the repository public for 30 days. Its overview
+  mentions 12 calendar days and its submission section specifies day 10 by
+  23:59 Cairo. The invitation date, candidate time and reflection, unlisted
+  upload and submission are still candidate-owned.
 
 ## Fixed decisions
 
@@ -214,5 +244,5 @@ protected attributes before model/rules; customer packs never KB. Authority0/250
 500k/1m and four-eyes. No missing-evidence/pricing/policy-exception bypass. PM-9 is
 written reasons, not an appeal override; Cairo inclusive30 calendar days from recorded
 rejection. PM-4 target is indicative with configured Fri/Sat/holidays. Fraud routing
-internal only. Secrets local.env; never print them. Tests *_test, live eval *_eval;
+internal only. Secrets are kept in the ignored .env file. Tests *_test, live eval *_eval;
 no concurrent suites against shared test DB. DB54329; web origin must match browser.
