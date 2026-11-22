@@ -3,7 +3,7 @@
 ## Scope and reproducibility
 
 The current fifteen-case suite is in `data/evaluation/cases.json` (core-15-v2).
-The historical live reports below use the original case set. The scenarios contain
+The historical live baselines use the original case set. P18 also ran the revised suite against Gemini. The scenarios contain
 three out-of-corpus cases, two edition-change pairs (Q01/02 andQ04/05), three
 calculation cases and two injection surfaces (Q10 question,Q11 applicant document).
 Expected answers come from supplied synthetic sources, not model output. Full
@@ -265,7 +265,15 @@ applicable policy and product clauses and, for tenor, the current circular.
 Both offline modes passed 15/15 on `core-15-v2`, including these two new
 assertions. The workflow scored 80/80 security and audit checks and the agent
 mode scored 94/94. Both passed 8/8 citation coverage and 17/17 numeric checks.
-Live provider and semantic retrieval quality for version 2 remain unmeasured.
+On 22 November 2026, the first clean Gemini agents run on a1b6dc3 passed 14/15.
+Q14 used the bounded policy read after three unsuccessful Gemini sends.
+The audit retained the fallback and the expected agent-execution assertion
+failed. The repeat on the same clean commit at 8,500 ms between logical
+generation calls passed 15/15, with hit@5 4/4, citation coverage 8/8,
+out-of-corpus refusals 3/3, calculations 17/17, security and audit 94/94 and
+all five original Strict packs passing. The reports include the settings,
+source hashes and observed provider usage.
+[Initial failure](../data/evaluation/results/release-core-v2-initial-failure.json) · [Passing live v2 report](../data/evaluation/results/release-core-v2-agents.json)
 
 ## P14 streaming regression — 20 November 2026
 
@@ -337,7 +345,8 @@ and known subtotals for the isolated evaluation workload.
 | Checkpoint                                            | Observed result                                                                                                                                                                                    |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Live Gemini, frozen `core-15-v1`                      | Vector, hybrid, rewrite and typed-agent runs each passed 15/15 on their recorded commits. The vector baseline passed hit@5 4/4, OOC refusal 3/3, citation coverage 8/8 and exact arithmetic 17/17. |
-| Revised `core-15-v2`, deterministic provider fixtures | Workflow and typed-agent modes each passed 15/15. The revised cases check source precedence explicitly. Live semantic results for v2 are unmeasured.                                               |
+| Revised `core-15-v2`, deterministic provider fixtures | Workflow and typed-agent modes each passed 15/15. The revised cases check source precedence explicitly.                                                                                              |
+| Revised core-15-v2, live Gemini agents                 | The clean release run passed 15/15, with hit@5 4/4 and 94/94 audit and security assertions. The preceding 14/15 report is retained. |
 | P17 regression checkpoint                             | 152 unit tests, 42 PostgreSQL/HTTP tests and 11 Chromium journeys passed, along with type checks, lint, formatting and builds.                                                                     |
 | Added product, PDF and metering                       | AL-200 fixture tests, PDF reconciliation and the synthetic two-call Gemini usage probe are documented above.                                                                                       |
 
