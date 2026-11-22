@@ -64,8 +64,8 @@ export function Knowledge({ actor }: { actor: Actor }) {
               <input name="files" type="file" multiple accept=".pdf,.csv,.md" required />
             </label>
             <p className="muted">
-              PDF, CSV or MD · 10 MiB per file · 20 files maximum. Only the seven reviewed source
-              hashes are accepted.
+              PDF, CSV or MD · 10 MiB per file · 20 files maximum. Only the reviewed source hashes
+              are accepted.
             </p>
             <button className="primary" disabled={busy}>
               {busy ? 'Ingesting…' : 'Ingest documents'}

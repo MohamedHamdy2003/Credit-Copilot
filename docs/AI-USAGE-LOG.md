@@ -1,5 +1,17 @@
 # AI usage log
 
+## 2026-11-22 reviewer setup and release evidence
+
+The user asked Codex to review the supplied brief and sources, finish the next
+feature and verify the setup for a reviewer. Codex drafted the quick start and
+walkthrough, condensed the design and reconciled evaluation claims with the
+recorded run versions. Codex also added explicit `pnpm dev --seed` support so
+fresh setups run migrations, ingest the trusted sources and seed local accounts
+before the servers start. The user set the requirement to preserve the supplied
+source bytes and the strict/demo behavior. The checked-in log reflects known
+authorship and configuration choices. It does not allocate candidate hours or
+claim independent manual authorship. [Verification status](../status.md)
+
 ## 2026-11-21 model usage accounting
 
 Codex added per-attempt telemetry and user-scoped summaries using the existing

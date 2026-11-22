@@ -1,310 +1,137 @@
 # Credit Copilot design
 
-## Architecture and boundaries
+## Architecture
 
 ```mermaid
-flowchart TD
-  P[React / Nest controllers] --> A[Application use cases and ports]
-  A --> D[Pure Domain: policy / calculations / rules]
-  I[Infrastructure: TypeORM / pgvector / parsers / Gemini / Mastra] --> A
-  I --> D
-  C[API main / CLI composition] --> I
+flowchart LR
+  UI["React workspace"] --> HTTP["NestJS REST / OpenAPI"]
+  HTTP --> APP["Application use cases and ports"]
+  CLI["Seed and evaluation CLI"] --> APP
+  APP --> DOMAIN["Pure credit domain"]
+  INFRA["Parsers, Mastra, TypeORM and provider adapters"] -. implements ports .-> APP
+  INFRA --> DB["PostgreSQL: knowledge and cases"]
+  INFRA --> MODEL["Gemini; optional local Ollama generation"]
 ```
 
-Domain has no database, model, network, NestJS or vector-store imports; ESLint
-checks the boundary. Application owns validation/orchestration and ports.
-Infrastructure implements I/O. Nest controllers bind authenticated transport to
-those use cases; React never supplies authority, evidence verification or synthetic
-status. Evaluation orchestration belongs in scripts/evaluation/runner.ts, not the
-production pipeline. PostgreSQL knowledge/cases schemas isolate trusted policy
-from untrusted case evidence. synchronize=false; explicit TypeORM migrations only.
-`pnpm dev` runs Compose health, the migration CLI and API/web processes; it retains
-the DB on shutdown. It is a local launcher, not production hosting/deployment.
+The application layer orchestrates evidence, policy lookup and decisions. The
+domain owns eligibility and exact arithmetic, with no framework, model or
+database dependencies. ESLint enforces the boundary. Infrastructure implements
+the ports, and controllers enforce session and authority checks. Explicit
+TypeORM migrations create the database schema. The local launcher starts
+Compose, migrates the schema and starts the API and web app. [Run instructions](../README.md)
 
-## Ingestion and retrieval
+The ITI exercise supplied seven policy sources and five personal-loan packs.
+The repository adds four authored AL-200 policy sources and three authored
+auto-loan packs. The trusted sources are verified by SHA-256 against the policy
+manifest. Application packs have their own manifest and stay in the private
+case store. [Policy manifest](../data/config/corpus-manifest.json) · [Case manifest](../data/config/assessment-fixtures.json)
 
-ParserRegistry dispatches PDF/CSV/MD only, checks extension/MIME/signature,10MiB
-and100 PDF-page limits, then normalizes into a Zod-validated document schema.
-Blank/encrypted/corrupt PDFs fail by name; no OCR is provided. Source text/page/
-CSV-row provenance is retained. The original seven policy files and four added
-auto-loan sources use a SHA-256 manifest. Five original application PDFs and
-three auto packs have a separate manifest and stay in the private case store.
+## Ingestion and cited retrieval
 
-Clause/page/row-aware chunks use cl100k_base, maximum800 tokens and60 overlap for
-oversized spans. This is a stable budget tokenizer, not Gemini's exact tokenizer.
-Index revisions retain historical chunks/citations; active revision/model/dimensions
-and half-open effective dates filter search. Ingestion is atomic and idempotent;
-one failed file is reported without claiming the entire batch succeeded.
+The parser validates type, size and content for PDF, CSV and Markdown. PDF input
+is limited to 100 pages and needs a usable text layer. Normalization retains
+section, page and CSV row references. Chunks follow clause, page and row
+boundaries so the enclosing source can be cited. Oversized spans split at 800
+`cl100k_base` tokens with 60-token overlap to preserve nearby text across the
+split. Ingestion is atomic per file and idempotent. New revisions preserve old
+chunks for previously recorded citations. [Chunker](../packages/infrastructure/src/parsers/chunker.ts)
 
-Hybrid is the default policy search. PostgreSQL matches any distinct English
-query lexeme against the existing GIN-indexed `tsvector`. Lexeme positions give
-term frequencies and chunk lengths. BM25 uses k1=1.2 and b=0.75, with document
-frequency and mean length computed over the eligible chunks. Both branches share
-the active revision, product, effective date, embedding model and dimensions.
-[PostgreSQL 17 text search functions](https://www.postgresql.org/docs/17/functions-textsearch.html)
+The default hybrid search combines PostgreSQL BM25 (`k1=1.2`, `b=0.75`) and
+pgvector cosine search over the same active revisions, product, half-open
+effective dates, embedding model and dimensions. Each contributes up to 20
+candidates to reciprocal rank fusion (`k=60`), which returns five. Q&A still
+requires a qualifying cosine score, 0.65 by default. The glossary rewrite adds
+up to two equivalent lexical phrases by default. The original masked question
+drives the embedding and answer prompt, and eligible original results keep their
+places. `QUERY_REWRITE_MAX_EXPANSIONS=0` disables expansion.
+`RETRIEVAL_STRATEGY=vector` enables the historical baseline strategy.
 
-Each branch contributes up to 20 results. Reciprocal rank fusion adds
-`1 / (60 + rank)` per branch in which the chunk appears, deduplicates by chunk ID
-and returns the top five with ties settled by chunk ID. Q&A still requires an
-actual cosine similarity of at least 0.65 by default, including for candidates
-found only by BM25. Set `RETRIEVAL_STRATEGY=vector` for the cosine-only baseline.
-The existing indexes and ingestion pipeline support both modes.
+The model chooses quoted spans from supplied candidates. The verifier validates
+their IDs and wording against the stored source. After a qualifying result, a
+separate lookup can supply dated governing and precedence clauses for a complete
+citation set. Weak evidence, invalid quotes or a model refusal return a refusal.
+Approval-bypass questions with qualifying procedure evidence receive an
+explicit rejection and applicable procedure citations. Those questions remain
+read-only. [Q&A implementation](../packages/application/src/questions.ts)
 
-Hybrid Q&A also supports deterministic query rewriting. A fixed glossary appends
-up to two equivalent search phrases by default. The original masked question
-drives the embedding, original hybrid rank, source lookup and evidence prompt.
-PostgreSQL scores the two lexical variants within one database snapshot using
-the same product, effective date, active revisions and vector. The alternate
-can replace an original candidate below the cosine floor only with a different
-candidate that clears the floor. Qualified original hits keep their slots.
-The original search handles unsupported aliases, disabled budgets and approval
-bypass requests. Set `QUERY_REWRITE_MAX_EXPANSIONS` between 0 and 4. Zero runs the
-plain hybrid search. A rewrite adds no provider calls.
+## Dated policy and code-only calculations
 
-With a qualifying primary hit, a separate date- and product-filtered lookup can
-load the operative income, tenor or approval procedure clauses. It takes the
-operative clauses before annex comparison rows. Relevant approval bypass
-requests receive the dated procedure excerpts and an explicit rejection of the
-requested action.
+The application’s date and product select a unique policy and applicable price
+row. A policy question can specify an edition or date, with the current Cairo
+date as its default. Explicit edition/date references must agree. CP-2024
+sets a 50% DBR ceiling and EGP 8,000 minimum net income. CP-2025 applies from
+1 March 2025 and sets 45% and EGP 10,000. CP-14 and PS-3 keep PL-100 at its
+60-month product limit when the circular allows 72 months conditionally.
+The latest applicable rate comes from the dated CSV by tenor and payroll
+segment. Missing, conflicting or unsupported source data triggers review.
 
-Generation receives source metadata and exact evidence, chooses quoted spans,
-and the verifier rejects unknown IDs/changed words/numbers (whitespace folding and
-explicit text→quote alias only). After a valid non-refusal selection, the answer
-includes the associated canonical verbatim references so conflicts are not shown
-one-sidedly. Weak primary search, invalid model output or model refusal still
-refuse. The read-only approval response also requires qualifying procedure
-evidence. The interface deliberately
-returns evidence excerpts rather than unrestricted model prose. Date/edition
-selectors and explicit question references must agree; default is today's Cairo
-calendar date. The standalone calculator covers PL-100. Both product assessment
-paths use exact code calculations.
+The domain uses Decimal arithmetic at 50-digit precision. It rounds monthly
+instalments to cents, tests DBR before display rounding and floors capacity to
+EGP 1,000. At EGP 30,000 net income, EGP 4,000 debt, 24% interest and 60 months,
+the monthly instalment on EGP 300,000 is EGP 8,630.39. Maximum capacity is
+EGP 382,000 under CP-2024 and EGP 330,000 under CP-2025. Appendix E pairs the
+50% capacity with the CP-2025 label. The applicable source governs the result.
+The AL-200 extension separately enforces a documented vehicle quote and at
+least 25% down. Its financing cap is the lowest of affordability, the product
+ceiling and 75% of the vehicle price. The model extracts evidence and selects
+quotes. Code evaluates rules, computes every number and fills the memo.
+[Calculations](../packages/domain/src/calculations.ts) · [Personal-loan policy](../data/config/policies.json) · [Auto product](../data/config/auto-loan.json)
 
-An adapter for a different full provider goes in
-`packages/infrastructure/src/llm/<provider>.ts` and implements `EmbeddingPort`
-and `GenerationPort` from `packages/application/src/ports.ts`. Register it in
-`createProvider` in `packages/infrastructure/src/llm/provider.ts` and add its
-`LLM_PROVIDER` value and settings to `packages/contracts/src/config.ts` and
-`.env.example`. A changed embedding model or dimensions requires reindexing
-the trusted sources. The current Ollama adapter implements generation and uses
-the primary provider's embeddings through the fallback wrapper.
+## Assessment, privacy and accountability
 
-## Source authority and arithmetic
+Mastra loads the form, removes protected fields, selects policy, verifies
+extraction, loads clauses, evaluates the case, prepares the memo and persists
+pending-review state. Optional agent orchestration exposes three bounded tools
+for extraction, policy and memo. Code binds the sanitized arguments and
+validates each plan. An AI planner cannot change the case or grant approval.
 
-Application date selects a unique policy edition. CP-2024 applies50% DBR/minimum
-income8000; CP-2025 applies45%/10000 from2025-03-01. PL-100 stays20000–1000000 and
-12–60 months even though Circular2025/02 conditionally allows72. CP-14/PS-3 require
-the stricter product cap; cite both sides. Pricing selects latest applicable CSV
-row by date, tenor and payroll-transfer segment. Policy/pricing values never come
-from the caller. Unsupported/ambiguous dates or rows fail/referral explicitly.
+Gender, religion, marital status and nationality stay out of model and rule
+inputs. The extraction model receives an allowlisted reference and only net
+income, monthly obligations, employment start and bureau score, with source
+section and page. Each value must match its labeled source evidence. Policy
+questions mask Egyptian national IDs and phone numbers before provider calls.
+The fairness comparison changes only protected fields and checks equal hashes
+of sanitized provider inputs, rule outcomes, calculations, recommendations and
+the canonical memo. APP-004’s injected EGP 200,000 instruction cannot replace
+the documented EGP 18,000. The tampering path records an internal fraud referral
+and skips extraction and rules. [Verified extraction](../packages/application/src/extraction.ts) · [Evaluation](EVALUATION.md)
 
-Decimal uses isolated50-digit precision; EMI rounds half up to cents. DBR compares
-exact instalment/obligation values before display rounding; capacity floors to1000.
-One unchanged formula yields EMI8630.39 and max382000 under50% or330000 under45%
-for income30000/debts4000/rate24%/60 months. Appendix E incorrectly labels the50%
-capacity as CP-2025. The actual source policy wins; no example-specific hardcode.
-Eligibility precedes affordability: employment6 completed months, confirmed
-probation, net income, age>=21, final maturity no later than60th birthday, bureau
-score>=600, no default, permitted purpose, salary certificate/stamp within60 days.
-Unknown evidence refers. Below600 refers rather than auto-declines. Product bounds
-are checked. Admin1%, early settlement2% and late150EGP are not silently added to
-principal/DBR without an applicable source rule. Dates clamp calendar month-end.
+Strict is the default. The original packs lack a national ID copy, so Strict
+refers under CP-8 and PS-7. Explicit opt-in Demo for synthetic cases assumes
+ID-copy presence only. The result, audit and offer record the actual gap and
+unverified status. Employment alone cannot establish completed probation. A
+bureau score below 600 refers. Code records request and actor IDs, workflow
+statuses, policy and chunk IDs, removed-field names and observed model usage.
+Reported tokens and nominal Gemini prices give estimates. Missing counters and
+unknown Gemini billing tiers stay visible.
 
-## Assessment, evidence and privacy
+Only a separate authorized reviewer can approve. Loan Officers prepare cases.
+Credit, Senior and Head reviewers have limits of EGP 250,000, 500,000 and
+1,000,000. Issuance rechecks maturity and freezes the approved amount, dated
+rate, conditions and actors. The PDF uses that snapshot and a cent-reconciled
+repayment schedule. Senior and Head reviewers handle referrals. Written PM-9
+reason requests use 30 calendar days inclusive from the recorded Cairo rejection
+date, since the sources supply no separate notification timestamp. Signed-in
+streams share the same checks, and Q&A streams only send verified citations.
 
-With `ASSESSMENT_ORCHESTRATION=agents`, three Mastra agents invoke the existing
-evidence extraction, operative policy retrieval and code memo operations as tools.
-The provider proposes one tool call in a strict JSON contract. A bridge passes
-only validated calls into Mastra. Arguments must be empty because the workflow
-already binds the sanitized evidence, edition, effective date, product and
-assessment result. The planner sees a generic task. The Mastra runtime receives
-a tool receipt, and the result stays in the assessment workflow.
-Each role gets one planning turn and can execute its single tool once. A rejected
-or unavailable plan uses the baseline operation. A started tool retains its normal
-failure semantics. Preflight referrals and fraud stay on the code-only path.
-The assessment persists `ASSESSMENT_AGENT_TOOL` events and planner usage separately.
-The default `workflow` mode runs the same operations directly.
-[Mastra typed tools](https://mastra.ai/reference/tools/create-tool)
+## Switching providers
 
-The supported Mastra adapter executes eight typed stages: load form, locally
-remove protected fields/derive evidence facts, select policy, verified extraction,
-retrieve applicable clauses, code rules/calculations, code memo, transactional
-pending-review persistence. Tampering skips model/rules but still records policy
-when a valid form date exists. Missing clauses or source/config drift refer.
-Original packs have no ID copy: Strict is default and refers under CP-8/PS-7.
-Explicit enabled synthetic Demo assumes ID presence only, records actual missing
-reality/actor/time/verified=false in result/audit/offer/reply, and fabricates no ID.
-Permanent employment alone is not completed probation; APP-002/003/005 continue to
-refer even in Demo. Original pack financial-only/rule evaluations must be labeled
-separately from whole-application recommendations; no fixture is silently completed.
+Add `packages/infrastructure/src/llm/<provider>.ts` and implement
+`EmbeddingPort` and `GenerationPort`. Select the adapter in `createProvider`
+and add its `LLM_PROVIDER` value and required settings to the config schema
+and `.env.example`. Domain rules and workflow stages stay the same. Configure
+the generation and embedding models and dimensions. Reindex trusted sources
+when the embedding model or dimensions change. The included Ollama adapter
+handles opt-in generation fallback on transient failures. Gemini supplies
+embeddings in that mode. [Provider ports](../packages/application/src/ports.ts) · [Factory](../packages/infrastructure/src/llm/provider.ts) · [Configuration](../packages/contracts/src/config.ts)
 
-Raw forms and protected gender/religion/marital-status/nationality values stay out
-of model/rule input. The model sees only allowlisted salary/bureau labels and source
-provenance, no names/IDs/phones; quoted values are verified against their exact
-labeled source field. Q&A masks14-digit ID/Egyptian phones, not arbitrary PII; do
-not put customer profiles into questions. Injection in customer evidence has no
-authority; APP-004's18000 cannot become injected200000. Fraud routing is recorded
-internally, not claimed externally delivered. React renders text, never model HTML.
+## Intentional scope and follow-up
 
-Each persisted run records request/actor IDs, stage statuses, retrieved chunk IDs,
-policy edition, removed-field names and reported token usage. Invalid JSON retains
-available usage; unreported usage is null/unknown, never invented zero. Code-filled
-plain memos include mode, evidence, source rules, CSV rate provenance and computed
-numbers, including a safe summary for referrals. No model generates lending numbers.
-Fairness pairs compare sanitized-provider-input hashes, rules, calculations,
-recommendation and canonical memo after only protected attributes change.
-
-## Sessions, human decisions and case review
-
-Server sessions are random32-byte tokens stored only as SHA256 digests; passwords
-are scrypt hashed. HttpOnly/SameSite Strict cookies, CSRF/origin checks, expiry/
-revocation, active-user checks and atomic per-IP login throttle apply. No public
-registration/role-upgrade endpoint. Loan Officer authority0; Credit250k, Senior500k,
-Head1m. Different preparer/approver, current version/latest run, complete eligibility
-and customer alternative acceptance precede approval. Only stored human approval
-can issue, with a source-policy maturity recheck. Demo is never relabeled verified.
-
-Application locks bind one running assessment and idempotency key/mode. Retry
-replays its immutable result; failed attempts need a new key. New attempts expire
-abandoned15-minute jobs and reject late writes. Decisions wait for reassessment;
-issued applications cannot be reassessed. Assessment result/latest pointer/audit/
-usage commit together; queue omits superseded runs. No waiver or pricing exception
-endpoint is provided. Originals and decisions/approver identity remain in private
-case storage with seven-year retention metadata.
-
-Senior/Head handle referrals, with independent written evidence/reassessment/fraud
-notes that never clear missing evidence or change eligibility. Standard Credit
-queues omit referrals. PM-4's two-business-day target is indicative, using the
-configured Fri/Sat/default holiday list; no public holidays are invented. Verified
-failed clauses or a customer-declined alternative support rejection; missing
-ID/fraud/bureau-only referral does not. A notice snapshots failed criterion, human
-justification, applied clause, original edition/source and decision time.
-
-PM-9 requests a written reason, not an appeal outcome. The preparer records the
-applicant request within30 inclusive calendar days of the recorded Cairo rejection
-date (documented interpretation: no separate notification timestamp supplied).
-Locked concurrent retries return one stored deterministic written reply/audit pair,
-without changing credit status/version; replies remain readable after expiry.
-
-## Synthetic auto-loan extension
-
-AL-200 uses the authored synthetic AUTO-2025 edition effective 1 March 2025,
-a separate product sheet, rate table and procedures. The reviewed PDF form
-selects the product; every assessment and policy query scopes its sources to
-that product and date. The original personal-loan files retain their bytes and
-their policy IDs.
-
-The auto product requires a documented vehicle quote and down payment of at
-least 25%. Decimal arithmetic subtracts the down payment from the documented
-price, verifies the requested amount and caps eligible finance at the lower of
-affordability, the product ceiling and 75% of vehicle price. Below-minimum down
-payment is a verified failed PS-9 rule. Missing vehicle evidence refers.
-An auto affordability failure requires reassessment with revised financing
-evidence before a lower amount can be considered. The standard human decision
-flow stores the auto policy and product source used for issuance or rejection.
-
-## Issued offer documents
-
-Issuance records the offer and its document data in the same transaction. The
-document uses the approved principal, stored pricing evidence, valid
-disbursement date and recorded approver and issuer. An accepted alternative
-uses the approved amount. Approval and issuance identifiers and evidence status
-are included in the letter. The PDF excludes applicant documents and decision
-comments.
-
-The schedule applies the product's reducing-balance rate with monthly interest
-rounded to cents. Due dates are anchored to disbursement. The last payment
-settles the remaining balance and the upfront administrative fee reduces net
-disbursement. The letter cites the product fee and repayment clauses and the
-exact CSV pricing row. Late and early-settlement fees are stated as conditions.
-
-The PDF endpoint is available to the application owner and authorized credit
-reviewers after issuance. Legacy issued offers can be rendered when the stored
-approval, pricing, policy and issuance audit establish the terms. Otherwise the
-offer remains readable as JSON, and the PDF returns `OfferDocumentUnavailable`.
-
-## Live assessment progress and verified answers
-
-Streaming uses the same workflow, citation verifier and session rules as the
-synchronous REST endpoints. Starts return HTTP 202 and require CSRF and an
-`Idempotency-Key`. Use the returned UUID to read the owner's stream.
-
-| Operation | Start | Read |
-| --- | --- | --- |
-| Assessment | `POST /api/v1/applications/:id/assessment-streams` | `GET /api/v1/assessment-streams/:runId` |
-| Policy question | `POST /api/v1/questions/streams` | `GET /api/v1/question-streams/:id` |
-
-Reads deliver `text/event-stream` with increasing numeric event IDs. React
-reconnects with `Last-Event-ID` and ignores events it already received. Reads
-check owner and session, and an open connection closes when the session expires or
-is revoked. Heartbeats keep idle connections active. Disconnecting a reader leaves
-the accepted work running. [SSE event format and reconnection](https://html.spec.whatwg.org/multipage/server-sent-events.html)
-
-Assessment progress contains stage identifiers and execution statuses. The
-reserved job and progress are stored in PostgreSQL. The final stage and completion
-event reflect the committed assessment, audit and review state. React retrieves
-the existing result resource on completion. An interrupted job reaches a failed
-terminal state after 15 minutes. Unavailable assessment providers can still produce
-a completed workflow with a saved human referral.
-
-Question events carry only verified source excerpts with dated citation metadata.
-The verifier completes before the first citation is sent. Insufficient evidence
-returns a refusal after verification and provider outages close with a safe failure
-code. Replay is process-local and available for five minutes after completion.
-The replay registry holds at most 128 jobs and expires pending streams after three
-minutes. A process restart clears the question replay cache.
-Legacy history is backfilled only from recorded clause/edition; missing history
-requires human review instead of a fabricated response.
-
-## Provider, evaluation and intentional limits
-
-The API and CLI use a shared provider factory. Gemini owns document and query
-embeddings. When local fallback is enabled, exhausted Gemini retries for HTTP
-408, 429, 5xx and transport failures can trigger one Ollama generation request.
-The primary error is returned for configuration, credentials or validation
-problems. An embedding outage returns a service failure before vector search.
-
-Ollama receives the same sanitized input and a JSON schema derived from the
-application validator through loopback HTTP with redirects disabled. Compose
-disables Ollama Cloud. Model replies still pass the source quote and extracted
-value checks. For citations, its schema pairs each allowed chunk ID with exact
-source spans and permits an empty selection. The assessment workflow records the
-failed Gemini logical call
-with unknown usage, the Ollama model and its reported counts, and a fallback
-event. Q&A includes local generation attribution in the answer or refusal when
-it receives a model completion. The memo remains code-generated.
-[Ollama structured output API](https://docs.ollama.com/capabilities/structured-outputs)
-
-### Usage and cost accounting
-
-Signed-in assessments, policy questions and knowledge ingestion record an
-event per observed Gemini or Ollama send. Retries and fallbacks retain distinct
-events. Each batch uses stable IDs when retrying a database write. Assessment
-and question replays reuse their existing results without a new provider send.
-The ledger stores request, actor, run and step identifiers with model, timing,
-reported counts and price data. It stores no prompts, source text or answers.
-Older assessment records are imported once as historical logical calls with
-unknown outcome, provider and price.
-
-Each recognized Gemini event snapshots the nominal standard, uncached rates for
-its model. Reported thinking tokens count toward generation output. Missing
-provider counters leave an unknown or partial subtotal. Billing defaults to
-unknown because an API response contains usage metadata rather than project
-billing. An operator-confirmed free-tier project records a zero charge on the
-supported models, and local Ollama records a zero provider fee with hosting
-outside the report. [Gemini pricing](https://aistudio.google.com/docs/pricing) · [Gemini billing tiers](https://aistudio.google.com/docs/billing)
-
-The usage endpoint scopes totals and the optional run filter to the session
-actor, including for reviewers. The database returns bounded model, operation
-and step groups with full recorded totals. Failed writes can leave missing
-records after a repeated storage failure or shutdown during a job. CLI evaluation
-writes isolated per-case and aggregate attempt metrics to its report.
-
-The frozen fifteen-case live baseline and failed first run are committed as JSON;
-EVALUATION.md defines denominators, source-context distinction and limitations.
-Offline CI uses deterministic source/provider fixtures, explicitly not measured
-semantic quality. Live runs use isolated *_eval DBs, known source-vector reuse and
-fresh query/generation calls. No raw credentials/customer forms are exported.
-
-Plain memo wording is allowed by the brief. The final submission video and
-interactive clean-clone review remain open. The functional evaluation covers the
-recorded cases and configurations.
+The interface and code-filled memo use plain language. Ingestion covers
+reviewed text documents. Fraud routing stays in the application, and issuance
+produces a simulated offer. External case processing, OCR and production
+deployment are outside this exercise. With more time, I would first expand
+the dated policy and out-of-corpus benchmark, add cross-browser and
+recovery tests, and exercise additional provider outages. The four
+answerable retrieval examples and offline provider fixtures limit how far
+the reported quality scores generalize. [Evaluation](EVALUATION.md) · [Verification status](../status.md)

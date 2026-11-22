@@ -332,24 +332,19 @@ and actor-only access. Evaluation reports include a separate `providerAccounting
 object per case and for the full evaluation. It records attempt counts, prices
 and known subtotals for the isolated evaluation workload.
 
-## Core gate and remaining submission work
+## Reviewer verification
 
-The measured functional gate passes: all15 cases, all critical safety/audit/numeric
-assertions, OOC3/3, hit@5>=90% and complete required-source coverage. These quality
-targets were our documented choices, not extra thresholds asserted by the brief.
-Regression checks pass locally:95 unit,28 PostgreSQL/HTTP integration,8 Chromium
-browser journeys, offline15-case evaluation, types/lint/format and builds.
-`pnpm dev` was smoke-tested end-to-end: Compose health, explicit migrations,
-API health and web200; stopping it closed its API/web ports. No deployment.
+| Checkpoint                                            | Observed result                                                                                                                                                                                    |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Live Gemini, frozen `core-15-v1`                      | Vector, hybrid, rewrite and typed-agent runs each passed 15/15 on their recorded commits. The vector baseline passed hit@5 4/4, OOC refusal 3/3, citation coverage 8/8 and exact arithmetic 17/17. |
+| Revised `core-15-v2`, deterministic provider fixtures | Workflow and typed-agent modes each passed 15/15. The revised cases check source precedence explicitly. Live semantic results for v2 are unmeasured.                                               |
+| P17 regression checkpoint                             | 152 unit tests, 42 PostgreSQL/HTTP tests and 11 Chromium journeys passed, along with type checks, lint, formatting and builds.                                                                     |
+| Added product, PDF and metering                       | AL-200 fixture tests, PDF reconciliation and the synthetic two-call Gemini usage probe are documented above.                                                                                       |
 
-This does not certify final submission: the3–5 minute unlisted video is still to be
-produced; an interactive clean-clone walkthrough remains pending (CI does install/
-check against a fresh checkout/DB). The P15 review counted three actual Cairo
-commit dates before the P16 work on 21 November. The retrieval sample is small, browser checks cover
-Chromium, and provider billing data is unavailable. Hybrid search and query
-rewriting are complete.
-
-Appendix E conflict remains resolved by the actual policy: CP-2024 DBR50% gives
-382000 and CP-2025 DBR45% gives330000 with the same Decimal function. Strict missing
-ID refers under CP-8/PS-7. Demo assumes only ID presence, records verified=false
-and never invents ID/probation evidence. The original corpus hashes are preserved.
+The retained JSON reports include the first vector 11/15 run, repeated 14/15
+runs, provider failures and the recorded Ollama fallback failure. Compare
+results with the original corpus, case version, model and settings in each
+report. The measured live retrieval sample covers four answerable questions.
+Chromium covers the recorded browser journeys. The usage probe reports
+a nominal estimate and leaves account charges unknown.
+[Recorded reports](../data/evaluation/results/) · [Current release checks](../status.md)
