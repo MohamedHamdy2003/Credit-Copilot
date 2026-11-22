@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: copilot
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-copilot_local}
     ports:
-      - '127.0.0.1:54329:5432'
+      - '127.0.0.1:${POSTGRES_PORT:-54329}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
