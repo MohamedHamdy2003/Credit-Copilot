@@ -279,8 +279,11 @@ docker compose --profile local-llm up -d ollama
 docker compose exec -T ollama ollama pull qwen3:4b-instruct-2507-q4_K_M
 ```
 
-Set `OLLAMA_FALLBACK_ENABLED=true` in `.env` and restart. Verify fallback
-end-to-end with an injected primary outage:
+Set `OLLAMA_FALLBACK_ENABLED=true` in `.env` and restart, or switch live at
+runtime as **`head-credit`** from the **Model** switcher in the workspace
+sidebar (**Gemini** / **Auto** / **Ollama**) via `GET /api/v1/llm/status` and
+`POST /api/v1/llm/provider`. Verify fallback end-to-end with an injected primary
+outage:
 
 ```bash
 pnpm evaluate:fallback
@@ -428,8 +431,8 @@ pnpm build
 
 | Suite | Verified Count | Needs | Notes |
 | --- | --- | --- | --- |
-| `pnpm test` (unit) | **156 tests** (24 suites) | Nothing | Pure domain math, rules, chunker, masking, agents, parser checks |
-| `pnpm test:integration` | **45 tests** (3 suites) | Postgres (`*_test`) | Real PostgreSQL + NestJS HTTP, SSE, hybrid BM25/pgvector, PM-4/PM-9, custom ingestion & delete |
+| `pnpm test` (unit) | **157 tests** (24 suites) | Nothing | Pure domain math, rules, chunker, masking, agents, provider router, parser checks |
+| `pnpm test:integration` | **46 tests** (3 suites) | Postgres (`*_test`) | Real PostgreSQL + NestJS HTTP, SSE, hybrid BM25/pgvector, PM-4/PM-9, custom ingestion, delete & LLM switcher |
 | `pnpm test:e2e` (Playwright) | **11 journeys** | Postgres (`*_test`) + Chromium | Desktop & mobile UI flows on ports 4304 / 5174 |
 | `pnpm evaluate:core:offline` | **15/15 cases** | Postgres (`*_test`) | Deterministic workflow regression (`79/79` security & audit) |
 | `pnpm evaluate --offline-agents` | **15/15 cases** | Postgres (`*_test`) | Deterministic typed-agents regression (`93/93` security & audit) |

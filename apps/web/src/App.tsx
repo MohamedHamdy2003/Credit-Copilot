@@ -8,6 +8,7 @@ import { Affordability } from './Affordability';
 import { Knowledge } from './Knowledge';
 import { Reviews } from './Reviews';
 import { Usage } from './Usage';
+import { ModelSwitcher } from './ModelSwitcher';
 const pages = [
   'Applications',
   'Delta Copilot',
@@ -166,6 +167,7 @@ export function App() {
               </button>
             ))}
         </nav>
+        <ModelSwitcher key={session.user.id} actor={session.user} />
         <div className="identity">
           <strong>{session.user.username}</strong>
           <small>

@@ -20,7 +20,7 @@ import { createOperations } from '../packages/infrastructure/src/operations.js';
 import { configSchema } from '../packages/contracts/src/config.js';
 import { WorkflowTestProvider } from './helpers/workflow-provider.js';
 import { DomainError } from '../packages/domain/src/errors.js';
-import { GenerationFallback } from '../packages/infrastructure/src/llm/provider.js';
+import { RuntimeGenerationProvider } from '../packages/infrastructure/src/llm/provider.js';
 import { PostgresAssessmentRepository } from '../packages/infrastructure/src/db/assessment-repository.js';
 import type { AssessmentResult } from '../packages/application/src/assessment-record.js';
 import { loadProductCatalog } from '../packages/infrastructure/src/product-catalog.js';
@@ -63,7 +63,7 @@ beforeAll(async () => {
     decisions: new DecisionService(new PostgresDecisionStore(db, policies, catalog)),
     operations: await createOperations(
       db,
-      new GenerationFallback(
+      new RuntimeGenerationProvider(
         {
           model: provider.model,
           dimensions: provider.dimensions,
@@ -84,14 +84,32 @@ beforeAll(async () => {
           },
         },
         {
-          completeStructured: async (system, data) => {
-            if (localUnavailable)
-              throw new DomainError('ProviderUnavailable', 'Fixture private provider detail', 503);
-            return {
-              ...(await localProvider.completeStructured(system, data)),
-              model: 'ollama:test-local',
-            };
+          geminiConfigured: true,
+          geminiModel: 'gemini-test',
+          ollama: {
+            OLLAMA_BASE_URL: 'http://127.0.0.1:11434',
+            OLLAMA_MODEL: 'test-local',
+            OLLAMA_TIMEOUT_MS: 120000,
           },
+          initialMode: 'auto',
+          localFactory: () => ({
+            completeStructured: async (system, data) => {
+              if (localUnavailable)
+                throw new DomainError(
+                  'ProviderUnavailable',
+                  'Fixture private provider detail',
+                  503,
+                );
+              return {
+                ...(await localProvider.completeStructured(system, data)),
+                model: 'ollama:test-local',
+              };
+            },
+          }),
+          probeOllama: async () => ({
+            reachable: true,
+            models: ['test-local', 'qwen3:4b-instruct-2507-q4_K_M'],
+          }),
         },
       ),
       config,
@@ -1331,4 +1349,44 @@ it('streams live extract-chunk-embed-index stages for custom policies, blocks cu
     await db.query("SELECT id FROM knowledge.chunks WHERE document_id='CUSTOM-2026-01'"),
   ).toHaveLength(0);
   await del('knowledge/documents/CUSTOM-2026-01', head).expect(404);
+});
+
+it('restricts runtime Gemini/Auto/Ollama generation switching to head-credit and routes requests live', async () => {
+  const loan = await account();
+  const credit = await account('credit');
+  const senior = await account('senior');
+  const head = await account('head', true);
+
+  // Every signed-in actor can view current provider status; only head-credit gets canManage=true.
+  const loanStatus = await readStream('llm/status', loan).expect(200);
+  expect(loanStatus.body).toMatchObject({ canManage: false, ollamaReachable: true });
+  const headStatus = await readStream('llm/status', head).expect(200);
+  expect(headStatus.body).toMatchObject({
+    canManage: true,
+    ollamaReachable: true,
+    ollamaModels: ['test-local', 'qwen3:4b-instruct-2507-q4_K_M'],
+  });
+
+  // Loan, Credit, and Senior officers are rejected server-side with 403.
+  for (const actor of [loan, credit, senior]) {
+    await post('llm/provider', actor).send({ mode: 'ollama' }).expect(403);
+  }
+
+  // Head Credit switches live to local Ollama; policy Q&A routes generation to Ollama directly.
+  const switched = await post('llm/provider', head)
+    .send({ mode: 'ollama', ollamaModel: 'test-local' })
+    .expect(201);
+  expect(switched.body).toMatchObject({
+    mode: 'ollama',
+    activeProvider: 'ollama',
+    activeModel: 'ollama:test-local',
+  });
+  const answer = await post('questions', loan)
+    .send({ question: 'Maximum DBR in CP-2025?' })
+    .expect(201);
+  expect(answer.body.refused).toBe(false);
+  expect(localProvider.texts.length).toBeGreaterThan(0);
+
+  // Switch cleanly back to auto so other tests observe the initial fallback mode.
+  await post('llm/provider', head).send({ mode: 'auto' }).expect(201);
 });

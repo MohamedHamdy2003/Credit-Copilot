@@ -354,6 +354,25 @@ export async function createApi(deps: {
     @Get('knowledge/documents') documents() {
       return this.service().documents();
     }
+    @Get('llm/status') llmStatus(@Req() req: AuthRequest) {
+      return this.service().llmStatus(req.actor);
+    }
+    @Post('llm/provider')
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    @ApiBody({
+      schema: {
+        type: 'object',
+        required: ['mode'],
+        additionalProperties: false,
+        properties: {
+          mode: { type: 'string', enum: ['gemini', 'auto', 'ollama'] },
+          ollamaModel: { type: 'string' },
+        },
+      },
+    })
+    setLlmProvider(@Body() body: unknown, @Req() req: AuthRequest) {
+      return this.service().setLlmProvider(req.actor, body);
+    }
     @Delete('knowledge/documents/:id')
     @UseGuards(IngestionGuard)
     @ApiHeader({ name: 'x-csrf-token', required: true })

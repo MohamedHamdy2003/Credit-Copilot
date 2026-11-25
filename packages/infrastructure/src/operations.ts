@@ -20,6 +20,19 @@ import { assessmentAgents } from './workflows/assessment-agents.js';
 import { PostgresUsageStore } from './db/usage-store.js';
 import { instrumentProvider } from './llm/attempt-meter.js';
 import { UsageTracker, withUsageStep } from './llm/usage-tracker.js';
+import type { RuntimeProviderControl } from './llm/provider.js';
+
+function isRuntimeProviderControl(value: unknown): value is RuntimeProviderControl {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'status' in value &&
+    typeof value.status === 'function' &&
+    'configure' in value &&
+    typeof value.configure === 'function'
+  );
+}
+
 export async function createOperations(
   db: DataSource,
   rawProvider: GenerationPort & EmbeddingPort,
@@ -40,10 +53,35 @@ export async function createOperations(
   const ingestion = new IngestionService(db, provider, manifest, parser, excludedHashes),
     search = new RetrievalService(db, provider, config.RETRIEVAL_STRATEGY, config);
   const store = new PostgresApplicationStore(db);
+  const llmControl: RuntimeProviderControl = isRuntimeProviderControl(rawProvider)
+    ? rawProvider
+    : {
+        status: async (canManage) => ({
+          mode: config.OLLAMA_FALLBACK_ENABLED ? 'auto' : 'gemini',
+          activeProvider: 'gemini',
+          activeModel: config.GENERATION_MODEL,
+          geminiConfigured: config.GEMINI_API_KEY.trim().length > 0,
+          geminiModel: config.GENERATION_MODEL,
+          ollamaReachable: false,
+          ollamaBaseUrl: config.OLLAMA_BASE_URL,
+          ollamaModel: config.OLLAMA_MODEL,
+          ollamaModels: [],
+          canManage,
+        }),
+        configure: async () => {
+          invariant(
+            false,
+            'ServiceUnavailable',
+            'Runtime provider switching is unavailable for this provider instance',
+            503,
+          );
+        },
+      };
   return new OperationsService({
     policies: { 'PL-100': products['PL-100'].policies, 'AL-200': products['AL-200'].policies },
     store,
     usage,
+    llm: llmControl,
     newId: randomUUID,
     fixtures,
     settings: { allowDemo: config.ALLOW_DEMO_MODE, defaultMode: config.ASSESSMENT_MODE },

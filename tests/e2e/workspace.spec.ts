@@ -295,8 +295,15 @@ test('real multipart upload, duplicate registration and mixed knowledge batch re
     page.getByText('Ingestion requires separate permission.', { exact: false }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ingest documents' })).toHaveCount(0);
+  await expect(page.getByTestId('model-readonly')).toBeVisible();
+  await expect(page.getByRole('group', { name: 'LLM provider mode' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await login(page, 'head');
+  const modeGroup = page.getByRole('group', { name: 'LLM provider mode' });
+  await expect(modeGroup).toBeVisible();
+  await modeGroup.getByRole('button', { name: 'Ollama', exact: true }).click();
+  await expect(page.getByLabel('Local Ollama model')).toBeVisible();
+  await modeGroup.getByRole('button', { name: 'Gemini', exact: true }).click();
   await page.getByRole('button', { name: 'Policy library', exact: true }).click();
   await page
     .getByLabel('Policy files')

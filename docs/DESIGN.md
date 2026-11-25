@@ -251,9 +251,13 @@ bitwise-identical memos across protected-attribute fairness pairs (Scenario S5).
    are not comparable.
 
 The built-in Ollama adapter (`OLLAMA_FALLBACK_ENABLED=true`) provides opt-in
-local generation fallback after transient Gemini outages while keeping Gemini
-embeddings, sanitized payloads, source-quote verification, and per-attempt usage
-accounting intact.
+local generation fallback after transient Gemini outages, and `RuntimeGenerationProvider`
+also lets **`head-credit`** switch generation live in the UI between **`Gemini`**,
+**`Auto`** (Gemini with automatic Ollama fallback), and **`Ollama`** (local
+generation) via `GET /api/v1/llm/status` and `POST /api/v1/llm/provider`
+(`403 Forbidden` for all non-head roles) while keeping Gemini embeddings,
+sanitized payloads, source-quote verification, and per-attempt usage accounting
+intact.
 
 ## Intentional scope and follow-up
 
