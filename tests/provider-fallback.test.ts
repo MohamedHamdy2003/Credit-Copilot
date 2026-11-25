@@ -1,5 +1,8 @@
 import { configSchema } from '../packages/contracts/src/config.js';
-import { createProvider } from '../packages/infrastructure/src/llm/provider.js';
+import {
+  createProvider,
+  RuntimeGenerationProvider,
+} from '../packages/infrastructure/src/llm/provider.js';
 import {
   instrumentProvider,
   withProviderAttemptObserver,
@@ -203,5 +206,77 @@ it('reports both provider models when the optional local server is unavailable',
   ).rejects.toMatchObject({
     code: 'ProviderUnavailable',
     details: { model: 'gemini-test' },
+  });
+});
+
+it('switches generation dynamically between gemini, ollama, and auto while keeping embeddings on primary', async () => {
+  let ollamaReachable = true;
+  const localCalls: string[] = [];
+  const primaryCalls: string[] = [];
+  const runtime = new RuntimeGenerationProvider(
+    {
+      model: 'embedding-test',
+      dimensions: 2,
+      embed: async () => [1, 0],
+      completeStructured: async () => {
+        primaryCalls.push('gemini');
+        return {
+          model: 'gemini-test',
+          usage: { inputTokens: 10, outputTokens: 5 },
+          value: { from: 'gemini' },
+        };
+      },
+    },
+    {
+      geminiConfigured: true,
+      geminiModel: 'gemini-test',
+      ollama: {
+        OLLAMA_BASE_URL: 'http://127.0.0.1:11434',
+        OLLAMA_MODEL: 'qwen3:4b-instruct-2507-q4_K_M',
+        OLLAMA_TIMEOUT_MS: 120000,
+      },
+      initialMode: 'gemini',
+      localFactory: (settings) => ({
+        completeStructured: async () => {
+          localCalls.push(settings.OLLAMA_MODEL);
+          return {
+            model: `ollama:${settings.OLLAMA_MODEL}`,
+            usage: { inputTokens: 20, outputTokens: 4 },
+            value: { from: 'ollama' },
+          };
+        },
+      }),
+      probeOllama: async () =>
+        ollamaReachable
+          ? { reachable: true, models: ['qwen3:4b-instruct-2507-q4_K_M', 'llama3.2:3b'] }
+          : { reachable: false, models: [] },
+    },
+  );
+
+  await expect(runtime.completeStructured('s', 'd')).resolves.toMatchObject({
+    model: 'gemini-test',
+  });
+  await expect(
+    runtime.configure({ mode: 'ollama', ollamaModel: 'llama3.2:3b' }),
+  ).resolves.toMatchObject({
+    mode: 'ollama',
+    activeProvider: 'ollama',
+    activeModel: 'ollama:llama3.2:3b',
+  });
+  await expect(runtime.completeStructured('s', 'd')).resolves.toMatchObject({
+    model: 'ollama:llama3.2:3b',
+  });
+  expect(primaryCalls).toHaveLength(1);
+  expect(localCalls).toEqual(['llama3.2:3b']);
+  await expect(runtime.embed('policy', 'query')).resolves.toEqual([1, 0]);
+
+  await expect(
+    runtime.configure({ mode: 'ollama', ollamaModel: 'missing-model' }),
+  ).rejects.toMatchObject({ code: 'OllamaModelNotFound', status: 422 });
+
+  ollamaReachable = false;
+  await expect(runtime.configure({ mode: 'ollama' })).rejects.toMatchObject({
+    code: 'OllamaUnavailable',
+    status: 503,
   });
 });
