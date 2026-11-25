@@ -47,7 +47,6 @@ simulated offer PDF. All cases are fictional.
 
 ## Table of contents
 
-- [Videos](#videos)
 - [Prerequisites](#prerequisites)
 - [Quick start — Docker Compose (recommended)](#quick-start--docker-compose-recommended)
 - [Local setup (Node.js + pnpm)](#local-setup-nodejs--pnpm)
@@ -62,14 +61,6 @@ simulated offer PDF. All cases are fictional.
 - [Where to look in the code](#where-to-look-in-the-code)
 - [Further reading](#further-reading)
 - [License](#license)
-
----
-
-## Videos
-
-| Clip | Length | Status / Path |
-| --- | --- | --- |
-| Product walkthrough (draft) | 3 min 53 s | Local draft in `artifacts/release/Credit-Copilot-demo.webm` (recorded with deterministic fixtures prior to the Policy Chat UI refresh; re-record on the current UI and upload as an unlisted link before final submission) |
 
 ---
 
