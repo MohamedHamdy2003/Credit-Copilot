@@ -1,6 +1,10 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
-import type { UsageContext, UsagePort } from '../../../application/src/usage.js';
+import type {
+  UsageContext,
+  UsagePort,
+  UsageProviderFilter,
+} from '../../../application/src/usage.js';
 import type { Config } from '../../../contracts/src/config.js';
 import type { UsageEvent, UsageStep } from '../../../contracts/src/usage.js';
 import type { PostgresUsageStore } from '../db/usage-store.js';
@@ -49,8 +53,8 @@ export class UsageTracker implements UsagePort {
     }
   }
 
-  summarize(actorId: string, runId?: string) {
-    return this.store.summarize(actorId, runId);
+  summarize(actorId: string, runId?: string, provider?: UsageProviderFilter) {
+    return this.store.summarize(actorId, runId, provider);
   }
 
   private async record(events: UsageEvent[]) {

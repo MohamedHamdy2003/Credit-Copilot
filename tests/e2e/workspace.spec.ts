@@ -207,20 +207,21 @@ test('auto application shows documented funding and cites its own product rules'
   expect(errors).toEqual([]);
 });
 
-test('Usage shows only recorded model activity with unknown provider charges on mobile', async ({
+test('LLM Usage shows only recorded model activity with unknown provider charges on mobile', async ({
   page,
 }) => {
   await login(page, 'usage');
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.getByRole('button', { name: 'Usage', exact: true }).click();
+  await page.getByRole('button', { name: 'LLM Usage', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'LLM Usage', exact: true })).toBeVisible();
   await expect(page.getByText('No model usage recorded yet.')).toBeVisible();
   await page.getByRole('button', { name: 'Delta Copilot', exact: true }).click();
   await page.getByLabel('Your question', { exact: true }).fill('Maximum DBR in CP-2025?');
   await page.getByRole('button', { name: 'Send question', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Citations', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Usage', exact: true }).click();
+  await page.getByRole('button', { name: 'LLM Usage', exact: true }).click();
   const summary = page.getByRole('region', { name: 'Recorded usage' });
   await expect(summary.getByText('2 calls · 0 failed · 0 retries · 0 fallbacks')).toBeVisible();
   await expect(summary.getByText('Actual provider charges')).toBeVisible();
@@ -295,15 +296,23 @@ test('real multipart upload, duplicate registration and mixed knowledge batch re
     page.getByText('Ingestion requires separate permission.', { exact: false }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ingest documents' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'LLM Usage', exact: true }).click();
   await expect(page.getByTestId('model-readonly')).toBeVisible();
   await expect(page.getByRole('group', { name: 'LLM provider mode' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await login(page, 'head');
+  await page.getByRole('button', { name: 'LLM Usage', exact: true }).click();
   const modeGroup = page.getByRole('group', { name: 'LLM provider mode' });
   await expect(modeGroup).toBeVisible();
   await modeGroup.getByRole('button', { name: 'Ollama', exact: true }).click();
+  await expect(page.getByTestId('llm-status-badge')).toHaveText('Ollama local');
   await expect(page.getByLabel('Local Ollama model')).toBeVisible();
+  await expect(page.getByText('No Ollama usage recorded yet.')).toBeVisible();
   await modeGroup.getByRole('button', { name: 'Gemini', exact: true }).click();
+  await expect(page.getByTestId('llm-status-badge')).toHaveText('Gemini active');
+  await expect(page.getByText('No Gemini usage recorded yet.')).toBeVisible();
+  await modeGroup.getByRole('button', { name: 'Auto', exact: true }).click();
+  await expect(page.getByTestId('llm-status-badge')).toHaveText('Auto · Gemini + Ollama');
   await page.getByRole('button', { name: 'Policy library', exact: true }).click();
   await page
     .getByLabel('Policy files')

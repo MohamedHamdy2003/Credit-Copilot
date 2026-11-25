@@ -1387,6 +1387,70 @@ it('restricts runtime Gemini/Auto/Ollama generation switching to head-credit and
   expect(answer.body.refused).toBe(false);
   expect(localProvider.texts.length).toBeGreaterThan(0);
 
+  // Per-provider usage filtering separates Gemini, Ollama, and combined usage accurately.
+  const usageStore = new PostgresUsageStore(db);
+  await usageStore.record([
+    {
+      id: randomUUID(),
+      actorId: head.id,
+      runId: null,
+      requestId: 'req-gemini',
+      operation: 'policy_question',
+      step: 'answer',
+      provider: 'gemini',
+      model: 'gemini-3.5-flash-lite',
+      kind: 'generation',
+      outcome: 'succeeded',
+      retry: false,
+      fallbackFrom: null,
+      inputTokens: 120,
+      outputTokens: 30,
+      estimatedUsd: '0.00010',
+      price: null,
+      actualUsd: null,
+      chargeBasis: 'unknown',
+      occurredAt: new Date().toISOString(),
+    },
+    {
+      id: randomUUID(),
+      actorId: head.id,
+      runId: null,
+      requestId: 'req-ollama',
+      operation: 'policy_question',
+      step: 'answer',
+      provider: 'ollama',
+      model: 'ollama:qwen3:4b-instruct-2507-q4_K_M',
+      kind: 'generation',
+      outcome: 'succeeded',
+      retry: false,
+      fallbackFrom: null,
+      inputTokens: 240,
+      outputTokens: 60,
+      estimatedUsd: null,
+      price: null,
+      actualUsd: '0',
+      chargeBasis: 'local',
+      occurredAt: new Date().toISOString(),
+    },
+  ]);
+  const allUsage = await readStream('usage/me', head).expect(200);
+  expect(allUsage.body.totals.calls).toBe(2);
+  expect(allUsage.body.totals.inputTokens.knownTotal).toBe(360);
+  const geminiUsage = await readStream('usage/me?provider=gemini', head).expect(200);
+  expect(geminiUsage.body.totals.calls).toBe(1);
+  expect(geminiUsage.body.totals.inputTokens.knownTotal).toBe(120);
+  expect(geminiUsage.body.groups).toEqual([
+    expect.objectContaining({ provider: 'gemini', model: 'gemini-3.5-flash-lite' }),
+  ]);
+  const ollamaUsage = await readStream('usage/me?provider=ollama', head).expect(200);
+  expect(ollamaUsage.body.totals.calls).toBe(1);
+  expect(ollamaUsage.body.totals.inputTokens.knownTotal).toBe(240);
+  expect(ollamaUsage.body.totals.localCalls).toBe(1);
+  expect(ollamaUsage.body.groups).toEqual([
+    expect.objectContaining({ provider: 'ollama', model: 'ollama:qwen3:4b-instruct-2507-q4_K_M' }),
+  ]);
+  await readStream('usage/me?provider=invalid', head).expect(422);
+
   // Switch cleanly back to auto so other tests observe the initial fallback mode.
   await post('llm/provider', head).send({ mode: 'auto' }).expect(201);
 });

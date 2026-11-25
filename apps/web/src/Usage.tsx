@@ -5,8 +5,13 @@ import type {
   UsageSummary,
   UsageTotals,
 } from '../../../packages/contracts/src/usage.js';
+import type { GenerationMode, LlmProviderStatus } from '../../../packages/contracts/src/llm.js';
 import { api } from './api';
+import type { Actor } from './types';
 import { Empty, ResourceState, useResource } from './components';
+import { ModelSwitcher } from './ModelSwitcher';
+
+type ProviderScope = 'gemini' | 'ollama' | undefined;
 
 const counts = new Intl.NumberFormat('en-GB');
 const recordedDate = new Intl.DateTimeFormat('en-GB', {
@@ -45,6 +50,14 @@ function formatUsd(amount: string) {
   const [whole, decimals = ''] = amount.split('.');
   const fraction = decimals.replace(/0+$/, '').padEnd(2, '0');
   return `USD ${whole!.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}.${fraction}`;
+}
+
+function usagePath(runId?: string, provider?: ProviderScope) {
+  const params = new URLSearchParams();
+  if (runId) params.set('runId', runId);
+  if (provider) params.set('provider', provider);
+  const query = params.toString();
+  return query ? `usage/me?${query}` : 'usage/me';
 }
 
 function Metric({ metric, label }: { metric: UsageMetric<string | number>; label: string }) {
@@ -104,9 +117,19 @@ function ModelUsage({ group }: { group: UsageGroup }) {
   );
 }
 
-function UsageReport({ report }: { report: UsageSummary }) {
+function UsageReport({ report, provider }: { report: UsageSummary; provider: ProviderScope }) {
   const { totals, groups, truncated } = report;
-  if (totals.calls === 0) return <Empty>No model usage recorded yet.</Empty>;
+  if (totals.calls === 0) {
+    return (
+      <Empty>
+        {provider === 'gemini'
+          ? 'No Gemini usage recorded yet.'
+          : provider === 'ollama'
+            ? 'No Ollama usage recorded yet.'
+            : 'No model usage recorded yet.'}
+      </Empty>
+    );
+  }
   const zeroChargeCalls = [
     totals.freeTierCalls > 0 && `${calls(totals.freeTierCalls)} on confirmed free tier`,
     totals.localCalls > 0 && `${calls(totals.localCalls)} on the local model`,
@@ -117,6 +140,11 @@ function UsageReport({ report }: { report: UsageSummary }) {
         <h2 id="usage-totals-title">Recorded usage</h2>
         <AttemptCounts totals={totals} />
         <Metrics totals={totals} prominent />
+        {provider === 'ollama' && (
+          <p className="muted">
+            Showing local Ollama generation calls. Policy embeddings remain on Gemini.
+          </p>
+        )}
         {totals.legacyCalls > 0 && (
           <p className="muted">
             Includes {calls(totals.legacyCalls)} from older assessment records.
@@ -158,31 +186,27 @@ function UsageReport({ report }: { report: UsageSummary }) {
   );
 }
 
-function RunUsage({ runId }: { runId: string }) {
+function RunUsage({ runId, provider }: { runId: string; provider: ProviderScope }) {
   const run = useResource(
-    (signal) =>
-      api.request<UsageSummary>(`usage/me?runId=${encodeURIComponent(runId)}`, { signal }),
-    [runId],
+    (signal) => api.request<UsageSummary>(usagePath(runId, provider), { signal }),
+    [runId, provider],
   );
   return (
     <>
       <ResourceState {...run} retry={run.refresh} />
-      {run.data && <UsageReport report={run.data} />}
+      {run.data && <UsageReport report={run.data} provider={provider} />}
     </>
   );
 }
 
-export function Usage() {
-  const account = useResource((signal) => api.request<UsageSummary>('usage/me', { signal }), []);
+function UsageAnalytics({ provider }: { provider: ProviderScope }) {
+  const account = useResource(
+    (signal) => api.request<UsageSummary>(usagePath(undefined, provider), { signal }),
+    [provider],
+  );
   const [runId, setRunId] = useState('');
   return (
     <>
-      <header className="page-heading">
-        <div>
-          <h1>Usage</h1>
-          <p>Model usage recorded for your account.</p>
-        </div>
-      </header>
       <ResourceState {...account} retry={account.refresh} />
       {account.data && (
         <>
@@ -199,8 +223,79 @@ export function Usage() {
               </select>
             </label>
           )}
-          {runId ? <RunUsage key={runId} runId={runId} /> : <UsageReport report={account.data} />}
+          {runId ? (
+            <RunUsage key={`${provider ?? 'all'}:${runId}`} runId={runId} provider={provider} />
+          ) : (
+            <UsageReport report={account.data} provider={provider} />
+          )}
         </>
+      )}
+    </>
+  );
+}
+
+export function Usage({ actor }: { actor: Actor }) {
+  const llmStatus = useResource(
+    (signal) => api.request<LlmProviderStatus>('llm/status', { signal }),
+    [actor.id],
+  );
+  const [overrideStatus, setOverrideStatus] = useState<LlmProviderStatus | null>(null);
+  const [switchBusy, setSwitchBusy] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
+
+  const status = overrideStatus ?? llmStatus.data;
+  const providerScope: ProviderScope =
+    status?.mode === 'gemini' ? 'gemini' : status?.mode === 'ollama' ? 'ollama' : undefined;
+
+  async function handleSwitch(mode: GenerationMode, ollamaModel?: string) {
+    setSwitchBusy(true);
+    setSwitchError(null);
+    try {
+      const updated = await api.request<LlmProviderStatus>('llm/provider', {
+        body: { mode, ...(ollamaModel ? { ollamaModel } : {}) },
+      });
+      setOverrideStatus(updated);
+    } catch (e) {
+      setSwitchError(e instanceof Error ? e.message : 'Failed to switch model provider.');
+    } finally {
+      setSwitchBusy(false);
+    }
+  }
+
+  function handleRefreshStatus() {
+    setOverrideStatus(null);
+    setSwitchError(null);
+    llmStatus.refresh();
+  }
+
+  const subtitle =
+    status?.mode === 'gemini'
+      ? `Gemini usage recorded for your account (${status.geminiModel}).`
+      : status?.mode === 'ollama'
+        ? `Local Ollama usage recorded for your account (${status.ollamaModel}).`
+        : 'Combined Gemini and Ollama usage recorded for your account.';
+
+  return (
+    <>
+      <header className="page-heading llm-usage-heading">
+        <div>
+          <h1>LLM Usage</h1>
+          <p>{subtitle}</p>
+        </div>
+        {status && (
+          <ModelSwitcher
+            status={status}
+            busy={switchBusy}
+            error={switchError}
+            onSwitch={(mode, ollamaModel) => void handleSwitch(mode, ollamaModel)}
+            onRefresh={handleRefreshStatus}
+          />
+        )}
+      </header>
+      {llmStatus.loading && !status ? (
+        <p role="status">Loading…</p>
+      ) : (
+        <UsageAnalytics key={providerScope ?? 'all'} provider={providerScope} />
       )}
     </>
   );

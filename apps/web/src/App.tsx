@@ -8,13 +8,12 @@ import { Affordability } from './Affordability';
 import { Knowledge } from './Knowledge';
 import { Reviews } from './Reviews';
 import { Usage } from './Usage';
-import { ModelSwitcher } from './ModelSwitcher';
 const pages = [
   'Applications',
   'Delta Copilot',
   'Affordability calculator',
   'Policy library',
-  'Usage',
+  'LLM Usage',
   'Review queue',
 ] as const;
 type Page = (typeof pages)[number];
@@ -167,7 +166,6 @@ export function App() {
               </button>
             ))}
         </nav>
-        <ModelSwitcher key={session.user.id} actor={session.user} />
         <div className="identity">
           <strong>{session.user.username}</strong>
           <small>
@@ -184,7 +182,7 @@ export function App() {
         {page === 'Delta Copilot' && <Questions />}
         {page === 'Affordability calculator' && <Affordability />}
         {page === 'Policy library' && <Knowledge actor={session.user} />}{' '}
-        {page === 'Usage' && <Usage />}
+        {page === 'LLM Usage' && <Usage actor={session.user} />}
         {page === 'Review queue' && <Reviews actor={session.user} />}
       </main>
     </div>

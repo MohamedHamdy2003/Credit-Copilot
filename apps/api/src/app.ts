@@ -547,6 +547,11 @@ export async function createApi(deps: {
     @Get('usage/me')
     @Header('Cache-Control', 'private, no-store')
     @ApiQuery({ name: 'runId', required: false, schema: { type: 'string', format: 'uuid' } })
+    @ApiQuery({
+      name: 'provider',
+      required: false,
+      schema: { type: 'string', enum: ['gemini', 'ollama'] },
+    })
     usage(@Req() req: AuthRequest, @Query() query: unknown) {
       return this.service().usage(req.actor, query);
     }

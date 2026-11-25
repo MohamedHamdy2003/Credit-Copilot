@@ -254,9 +254,11 @@ in Demo (bureau score 580 → **`REFER_TO_HUMAN`** on `CP-6`, authority
 justification/conditions (server computes exact Decimal affordability and
 authority checks before allowing PDF issuance) or reject citing `CP-6`.
 
-**⑧ Usage & traceability** — open **Usage** to inspect per-actor native calls,
-retries, fallbacks, explicit known vs unknown token counters, and nominal
-list-rate USD estimates.
+**⑧ LLM Usage & traceability** — open **LLM Usage** to inspect per-actor native
+calls, retries, fallbacks, explicit known vs unknown token counters, and nominal
+list-rate USD estimates (scoped dynamically by the active provider). As
+`head-credit`, use the top-right **Gemini / Auto / Ollama** toggle bar to switch
+the active generation provider live and view each provider's consumption.
 
 ---
 
@@ -280,8 +282,8 @@ docker compose exec -T ollama ollama pull qwen3:4b-instruct-2507-q4_K_M
 ```
 
 Set `OLLAMA_FALLBACK_ENABLED=true` in `.env` and restart, or switch live at
-runtime as **`head-credit`** from the **Model** switcher in the workspace
-sidebar (**Gemini** / **Auto** / **Ollama**) via `GET /api/v1/llm/status` and
+runtime as **`head-credit`** from the top-right toggle bar on **LLM Usage**
+(**Gemini** / **Auto** / **Ollama**) via `GET /api/v1/llm/status` and
 `POST /api/v1/llm/provider`. Verify fallback end-to-end with an injected primary
 outage:
 
@@ -431,7 +433,7 @@ pnpm build
 
 | Suite | Verified Count | Needs | Notes |
 | --- | --- | --- | --- |
-| `pnpm test` (unit) | **157 tests** (24 suites) | Nothing | Pure domain math, rules, chunker, masking, agents, provider router, parser checks |
+| `pnpm test` (unit) | **158 tests** (24 suites) | Nothing | Pure domain math, rules, chunker, masking, agents, provider router, parser checks |
 | `pnpm test:integration` | **46 tests** (3 suites) | Postgres (`*_test`) | Real PostgreSQL + NestJS HTTP, SSE, hybrid BM25/pgvector, PM-4/PM-9, custom ingestion, delete & LLM switcher |
 | `pnpm test:e2e` (Playwright) | **11 journeys** | Postgres (`*_test`) + Chromium | Desktop & mobile UI flows on ports 4304 / 5174 |
 | `pnpm evaluate:core:offline` | **15/15 cases** | Postgres (`*_test`) | Deterministic workflow regression (`79/79` security & audit) |
@@ -512,7 +514,7 @@ pnpm assess AUTO-001 --demo
 | Human approval, PM-4 referrals, offers & PM-9 reasons | [`packages/infrastructure/src/db/decision-store.ts`](packages/infrastructure/src/db/decision-store.ts), [`offer-document.ts`](packages/infrastructure/src/db/offer-document.ts), [`case-review-store.ts`](packages/infrastructure/src/db/case-review-store.ts) |
 | Gemini, Ollama fallback & usage metering | [`packages/infrastructure/src/llm/gemini.ts`](packages/infrastructure/src/llm/gemini.ts), [`ollama.ts`](packages/infrastructure/src/llm/ollama.ts), [`provider.ts`](packages/infrastructure/src/llm/provider.ts), [`usage-tracker.ts`](packages/infrastructure/src/llm/usage-tracker.ts) |
 | REST API, OpenAPI, session/CSRF guards & SSE streams | [`apps/api/src/app.ts`](apps/api/src/app.ts), [`apps/api/src/sse.ts`](apps/api/src/sse.ts) |
-| React workspace (Policy library, Chat, Applications, Reviews, Usage) | [`apps/web/src/App.tsx`](apps/web/src/App.tsx), [`Questions.tsx`](apps/web/src/Questions.tsx), [`Assessment.tsx`](apps/web/src/Assessment.tsx), [`Reviews.tsx`](apps/web/src/Reviews.tsx), [`Usage.tsx`](apps/web/src/Usage.tsx) |
+| React workspace (Policy library, Chat, Applications, Reviews, LLM Usage) | [`apps/web/src/App.tsx`](apps/web/src/App.tsx), [`Questions.tsx`](apps/web/src/Questions.tsx), [`Assessment.tsx`](apps/web/src/Assessment.tsx), [`Reviews.tsx`](apps/web/src/Reviews.tsx), [`Usage.tsx`](apps/web/src/Usage.tsx) |
 | Evaluation harness & golden cases | [`scripts/evaluate.ts`](scripts/evaluate.ts), [`scripts/evaluation/runner.ts`](scripts/evaluation/runner.ts), [`data/evaluation/cases.json`](data/evaluation/cases.json) |
 
 ---

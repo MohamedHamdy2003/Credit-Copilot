@@ -561,8 +561,14 @@ export class OperationsService {
     return this.deps.calculate(raw);
   }
   usage(actor: Actor, query: unknown) {
-    const { runId } = z.object({ runId: z.uuid().optional() }).strict().parse(query);
-    return this.deps.usage.summarize(actor.id, runId);
+    const { runId, provider } = z
+      .object({
+        runId: z.uuid().optional(),
+        provider: z.enum(['gemini', 'ollama']).optional(),
+      })
+      .strict()
+      .parse(query);
+    return this.deps.usage.summarize(actor.id, runId, provider);
   }
   evidence(actor: Actor, id: string) {
     z.uuid().parse(id);

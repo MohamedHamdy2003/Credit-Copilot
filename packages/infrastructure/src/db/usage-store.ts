@@ -27,8 +27,11 @@ const insertEvents = `
   ON CONFLICT (id) DO NOTHING
 `;
 
-function summaryQuery(runId: string | undefined) {
-  const scope = runId ? 'actor_id = $1 AND run_id = $2' : 'actor_id = $1';
+function summaryQuery(runId: string | undefined, provider: 'gemini' | 'ollama' | undefined) {
+  const conditions = ['actor_id = $1'];
+  if (runId) conditions.push(`run_id = $${conditions.length + 1}`);
+  if (provider) conditions.push(`provider = $${conditions.length + 1}`);
+  const scope = conditions.join(' AND ');
   return `
     WITH scoped AS NOT MATERIALIZED (
       SELECT * FROM cases.model_usage_events WHERE ${scope}
@@ -168,10 +171,17 @@ export class PostgresUsageStore {
     await this.db.query(insertEvents, [JSON.stringify(payload)]);
   }
 
-  async summarize(actorId: string, runId?: string): Promise<UsageSummary> {
+  async summarize(
+    actorId: string,
+    runId?: string,
+    provider?: 'gemini' | 'ollama',
+  ): Promise<UsageSummary> {
+    const params: string[] = [actorId];
+    if (runId) params.push(runId);
+    if (provider) params.push(provider);
     const [overall, ...grouped] = (await this.db.query(
-      summaryQuery(runId),
-      runId ? [actorId, runId] : [actorId],
+      summaryQuery(runId, provider),
+      params,
     )) as SummaryRow[];
     if (!overall?.is_total) throw new Error('Usage summary totals are missing');
     const groups = grouped.filter((row) => !row.is_total);

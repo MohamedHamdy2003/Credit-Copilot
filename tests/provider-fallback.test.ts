@@ -280,3 +280,64 @@ it('switches generation dynamically between gemini, ollama, and auto while keepi
     status: 503,
   });
 });
+
+it('auto-selects the first pulled Ollama model when the configured default tag is not installed locally', async () => {
+  const localCalls: string[] = [];
+  const runtime = new RuntimeGenerationProvider(
+    {
+      model: 'embedding-test',
+      dimensions: 2,
+      embed: async () => [1, 0],
+      completeStructured: async () => ({
+        model: 'gemini-test',
+        usage: { inputTokens: 5, outputTokens: 2 },
+        value: { ok: true },
+      }),
+    },
+    {
+      geminiConfigured: true,
+      geminiModel: 'gemini-test',
+      ollama: {
+        OLLAMA_BASE_URL: 'http://127.0.0.1:11434',
+        OLLAMA_MODEL: 'qwen3:1.7b',
+        OLLAMA_TIMEOUT_MS: 120000,
+      },
+      initialMode: 'gemini',
+      localFactory: (settings) => ({
+        completeStructured: async () => {
+          localCalls.push(settings.OLLAMA_MODEL);
+          return {
+            model: `ollama:${settings.OLLAMA_MODEL}`,
+            usage: { inputTokens: 12, outputTokens: 3 },
+            value: { ok: true },
+          };
+        },
+      }),
+      probeOllama: async () => ({
+        reachable: true,
+        models: ['qwen3:4b-instruct-2507-q4_K_M'],
+      }),
+    },
+  );
+
+  await expect(runtime.status(true)).resolves.toMatchObject({
+    mode: 'gemini',
+    ollamaModel: 'qwen3:4b-instruct-2507-q4_K_M',
+    ollamaModels: ['qwen3:4b-instruct-2507-q4_K_M'],
+  });
+  await expect(runtime.configure({ mode: 'ollama' })).resolves.toMatchObject({
+    mode: 'ollama',
+    activeProvider: 'ollama',
+    activeModel: 'ollama:qwen3:4b-instruct-2507-q4_K_M',
+    ollamaModel: 'qwen3:4b-instruct-2507-q4_K_M',
+  });
+  await expect(runtime.completeStructured('s', 'd')).resolves.toMatchObject({
+    model: 'ollama:qwen3:4b-instruct-2507-q4_K_M',
+  });
+  expect(localCalls).toEqual(['qwen3:4b-instruct-2507-q4_K_M']);
+
+  // An explicit request for an unpulled tag still fails with 422.
+  await expect(
+    runtime.configure({ mode: 'ollama', ollamaModel: 'qwen3:1.7b' }),
+  ).rejects.toMatchObject({ code: 'OllamaModelNotFound', status: 422 });
+});

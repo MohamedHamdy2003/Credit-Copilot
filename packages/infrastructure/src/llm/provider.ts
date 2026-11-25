@@ -131,15 +131,20 @@ export class RuntimeGenerationProvider
     return observeGeneration(() => this.primary.completeStructured(system, data, schema));
   }
 
-  async status(canManage: boolean): Promise<LlmProviderStatus> {
-    const ollama = await this.probe();
-    const activeProvider = this.mode === 'ollama' ? 'ollama' : 'gemini';
-    const activeModel =
-      this.mode === 'ollama' ? `ollama:${this.ollamaModel}` : this.options.geminiModel;
+  private resolveOllamaModel(models: string[], requested?: string): string {
+    if (requested) return requested;
+    if (models.length > 0 && !models.includes(this.ollamaModel)) return models[0]!;
+    return this.ollamaModel;
+  }
+
+  private buildStatus(
+    ollama: { reachable: boolean; models: string[] },
+    canManage: boolean,
+  ): LlmProviderStatus {
     return {
       mode: this.mode,
-      activeProvider,
-      activeModel,
+      activeProvider: this.mode === 'ollama' ? 'ollama' : 'gemini',
+      activeModel: this.mode === 'ollama' ? `ollama:${this.ollamaModel}` : this.options.geminiModel,
       geminiConfigured: this.options.geminiConfigured,
       geminiModel: this.options.geminiModel,
       ollamaReachable: ollama.reachable,
@@ -150,10 +155,20 @@ export class RuntimeGenerationProvider
     };
   }
 
+  async status(canManage: boolean): Promise<LlmProviderStatus> {
+    const ollama = await this.probe();
+    if (ollama.reachable && ollama.models.length > 0 && !ollama.models.includes(this.ollamaModel)) {
+      this.ollamaModel = ollama.models[0]!;
+    }
+    return this.buildStatus(ollama, canManage);
+  }
+
   async configure(raw: GenerationProviderUpdate): Promise<LlmProviderStatus> {
     const update = generationProviderUpdateSchema.parse(raw);
-    const nextModel = update.ollamaModel ?? this.ollamaModel;
     const ollama = await this.probe();
+    const nextModel = ollama.reachable
+      ? this.resolveOllamaModel(ollama.models, update.ollamaModel)
+      : (update.ollamaModel ?? this.ollamaModel);
     if (update.mode === 'ollama') {
       invariant(
         ollama.reachable,
@@ -164,7 +179,9 @@ export class RuntimeGenerationProvider
       invariant(
         ollama.models.length > 0 && ollama.models.includes(nextModel),
         'OllamaModelNotFound',
-        `Ollama model "${nextModel}" is not pulled locally`,
+        ollama.models.length === 0
+          ? 'No Ollama models are pulled locally. Pull one with: docker compose exec -T ollama ollama pull qwen3:4b-instruct-2507-q4_K_M'
+          : `Ollama model "${nextModel}" is not pulled locally`,
         422,
       );
     } else if (update.mode === 'auto' && update.ollamaModel && ollama.reachable) {
@@ -177,18 +194,7 @@ export class RuntimeGenerationProvider
     }
     this.mode = update.mode;
     this.ollamaModel = nextModel;
-    return {
-      mode: this.mode,
-      activeProvider: this.mode === 'ollama' ? 'ollama' : 'gemini',
-      activeModel: this.mode === 'ollama' ? `ollama:${this.ollamaModel}` : this.options.geminiModel,
-      geminiConfigured: this.options.geminiConfigured,
-      geminiModel: this.options.geminiModel,
-      ollamaReachable: ollama.reachable,
-      ollamaBaseUrl: this.options.ollama.OLLAMA_BASE_URL,
-      ollamaModel: this.ollamaModel,
-      ollamaModels: ollama.models,
-      canManage: true,
-    };
+    return this.buildStatus(ollama, true);
   }
 }
 

@@ -7,7 +7,9 @@ export interface UsageContext {
   operation: UsageOperation;
 }
 
+export type UsageProviderFilter = 'gemini' | 'ollama';
+
 export interface UsagePort {
   track<T>(context: UsageContext, work: () => Promise<T>): Promise<T>;
-  summarize(actorId: string, runId?: string): Promise<UsageSummary>;
+  summarize(actorId: string, runId?: string, provider?: UsageProviderFilter): Promise<UsageSummary>;
 }
