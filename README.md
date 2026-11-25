@@ -362,7 +362,7 @@ Configuration is validated at startup by
 | `ASSESSMENT_ORCHESTRATION` | `workflow` | `workflow` (8-stage Mastra workflow) or `agents` (3 bounded Mastra agents with typed Zod tools). |
 | `UPLOAD_MAX_BYTES` | `10485760` | Maximum upload size in bytes (10 MiB). PDF parser also enforces a 100-page cap. |
 | `DEMO_PASSWORD` | *(empty — required for seed)* | Local password (12–256 chars) applied to the four demo accounts on `pnpm seed:users` / Compose boot. **Secret.** |
-| `SESSION_TTL_HOURS` | `8` | Cookie session lifetime in hours. |
+| `SESSION_TTL_HOURS` | `720` | Cookie session lifetime in hours (default 720 = 30 days, or until explicit logout). |
 | `COOKIE_SECURE` | `false` | Set `true` behind HTTPS; keep `false` for local HTTP. |
 
 ---
@@ -434,7 +434,7 @@ pnpm build
 
 | Suite | Verified Count | Needs | Notes |
 | --- | --- | --- | --- |
-| `pnpm test` (unit) | **158 tests** (24 suites) | Nothing | Pure domain math, rules, chunker, masking, agents, provider router, parser checks |
+| `pnpm test` (unit) | **159 tests** (24 suites) | Nothing | Pure domain math, rules, chunker, masking, agents, provider router, parser checks |
 | `pnpm test:integration` | **46 tests** (3 suites) | Postgres (`*_test`) | Real PostgreSQL + NestJS HTTP, SSE, hybrid BM25/pgvector, PM-4/PM-9, custom ingestion, delete & LLM switcher |
 | `pnpm test:e2e` (Playwright) | **11 journeys** | Postgres (`*_test`) + Chromium | Desktop & mobile UI flows on ports 4304 / 5174 |
 | `pnpm evaluate:core:offline` | **15/15 cases** | Postgres (`*_test`) | Deterministic workflow regression (`79/79` security & audit) |

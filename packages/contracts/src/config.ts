@@ -62,7 +62,7 @@ export const configSchema = z
       .default(2),
     UPLOAD_MAX_BYTES: z.coerce.number().int().positive().default(10485760),
     DEMO_PASSWORD: z.string().default(''),
-    SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(24).default(8),
+    SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(720),
     COOKIE_SECURE: z
       .enum(['true', 'false'])
       .default('false')

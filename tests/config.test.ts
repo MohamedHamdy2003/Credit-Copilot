@@ -7,6 +7,12 @@ describe('safe configuration', () => {
     expect(config.ASSESSMENT_MODE).toBe('strict');
     expect(config.ALLOW_DEMO_MODE).toBe(false);
     expect(config.OLLAMA_FALLBACK_ENABLED).toBe(false);
+    expect(config.SESSION_TTL_HOURS).toBe(720);
+  });
+  it('enforces session TTL bounds up to 30 days (720 hours)', () => {
+    expect(configSchema.parse({ ...base, SESSION_TTL_HOURS: '720' }).SESSION_TTL_HOURS).toBe(720);
+    expect(configSchema.safeParse({ ...base, SESSION_TTL_HOURS: '721' }).success).toBe(false);
+    expect(configSchema.safeParse({ ...base, SESSION_TTL_HOURS: '0' }).success).toBe(false);
   });
   it('does not silently select the real provider when a fake runtime provider was requested', () => {
     expect(() => configSchema.parse({ ...base, LLM_PROVIDER: 'fake' })).toThrow();

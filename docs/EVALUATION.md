@@ -384,7 +384,7 @@ and known subtotals for the isolated evaluation workload.
 | Revised `core-15-v2`, deterministic provider fixtures | Workflow and typed-agent modes each passed 15/15. The revised cases check source precedence explicitly.                                                                                              |
 | Revised core-15-v2, live Gemini agents                 | The clean release run passed 15/15, with hit@5 4/4 and 94/94 audit and security assertions. The preceding 14/15 report is retained. |
 | Aligned `core-15-v3`, deterministic provider fixtures  | Workflow (79/79 security & audit) and typed-agent (93/93 security & audit) modes each passed 15/15, including full Demo S1/over-age/CP-6 outcomes, verified 4-field Q15 Religion mutation, and typed Zod agent receipts. |
-| Audit-alignment regression checkpoint                  | 158 unit tests, 46 PostgreSQL/HTTP tests and 11 Chromium journeys passed, along with type checks, lint, formatting and builds.      |
+| Audit-alignment regression checkpoint                  | 159 unit tests, 46 PostgreSQL/HTTP tests and 11 Chromium journeys passed, along with type checks, lint, formatting and builds.      |
 | Added product, PDF and metering                        | AL-200 fixture tests, PDF reconciliation and the synthetic two-call Gemini usage probe are documented above.                        |
 
 The retained JSON reports include the first vector 11/15 run, repeated 14/15
