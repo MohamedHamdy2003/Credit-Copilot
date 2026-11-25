@@ -328,6 +328,69 @@ small {
   border-color: #b8892b;
   background: #fff8e8;
 }
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 12px 14px 12px 16px;
+  border: 1px solid #1e5b49;
+  border-radius: 10px;
+  background: #14362d;
+  color: #f4faf7;
+  box-shadow: 0 12px 28px rgba(16, 42, 36, 0.22);
+  font-size: 13.5px;
+  line-height: 1.45;
+  animation: toast-in 0.24s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  transition:
+    opacity 0.28s ease,
+    transform 0.28s ease;
+}
+.toast.is-leaving {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+.toast-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #4cd29d;
+  flex: none;
+}
+.toast-text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.toast-close {
+  flex: none;
+  padding: 2px 7px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: #b9dcd0;
+  font-size: 16px;
+  line-height: 1;
+}
+.toast-close:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 .panel,
 .table-wrap {
   border: 1px solid var(--border);
@@ -1472,6 +1535,12 @@ button.danger-button:hover {
   .notice {
     padding: 12px 14px;
   }
+  .toast {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    max-width: none;
+  }
   .tabs button {
     font-size: 13px;
     padding: 12px 8px;
@@ -1559,6 +1628,7 @@ button.danger-button:hover {
 }
 @media (prefers-reduced-motion: reduce) {
   * {
+    animation: none !important;
     transition: none !important;
     scroll-behavior: auto !important;
   }

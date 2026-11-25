@@ -42,10 +42,6 @@ export function Reviews({ actor }: { actor: Actor }) {
         </div>
         <button onClick={queue.refresh}>Refresh queue</button>
       </header>
-      <p className="notice">
-        Your tier: {actor.tier}. The server enforces authority, four-eyes and current assessment
-        version.
-      </p>
       {['senior', 'head'].includes(actor.tier) && <ReferralQueue onSelect={setSelected} />}
       <ResourceState {...queue} retry={queue.refresh} />
       {queue.data && (

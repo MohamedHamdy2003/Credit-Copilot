@@ -6,7 +6,7 @@ import {
 } from '../../../packages/contracts/src/streams.js';
 import { api } from './api';
 import type { Actor, KnowledgeDocument, IngestionAttempt } from './types';
-import { Empty, ErrorNotice, ResourceState, Status, useResource } from './components';
+import { Empty, ErrorNotice, ResourceState, Status, Toast, useResource } from './components';
 
 type StageState = {
   status: 'pending' | 'running' | 'completed' | 'skipped' | 'failed';
@@ -257,10 +257,6 @@ export function Knowledge({ actor }: { actor: Actor }) {
           <p>Ingest, inspect, and manage dated lending policies with live pipeline stages.</p>
         </div>
       </header>
-      <p className="notice">
-        Policy documents only. Customer applications (APP-* / AUTO-*) are stored separately and are
-        always blocked from entering this library.
-      </p>
       {actor.canIngest ? (
         <section className="panel">
           <div className="library-header">
@@ -474,11 +470,7 @@ export function Knowledge({ actor }: { actor: Actor }) {
         </p>
       )}
 
-      {deleteNotice && (
-        <p className="notice" role="status">
-          {deleteNotice}
-        </p>
-      )}
+      {deleteNotice && <Toast message={deleteNotice} onDone={() => setDeleteNotice(null)} />}
       <ErrorNotice error={deleteError} />
       <ResourceState {...documents} retry={documents.refresh} />
 

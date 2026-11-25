@@ -6,7 +6,7 @@ import {
 } from '../../../packages/contracts/src/streams';
 import { api, ApiError } from './api';
 import type { Actor, ApplicationDetail, ApplicationRow, Run } from './types';
-import { Empty, ErrorNotice, Money, ResourceState, Status, useResource } from './components';
+import { Empty, ErrorNotice, Money, ResourceState, Status, Toast, useResource } from './components';
 import { Assessment } from './Assessment';
 
 const stageLabels = {
@@ -272,7 +272,12 @@ function ApplicationView({
                   </p>
                 </>
               )}
-              {completed && <p role="status">Assessment saved for human review.</p>}
+              {completed && (
+                <Toast
+                  message="Assessment saved for human review."
+                  onDone={() => setCompleted(false)}
+                />
+              )}
               <ErrorNotice error={error} />
             </div>
             <div>
@@ -350,7 +355,6 @@ export function Applications({ actor }: { actor: Actor }) {
           Add application
         </button>
       </header>
-      <div className="notice">Synthetic applications only. Strict mode is the default.</div>
       {adding && (
         <AddApplication
           onAdded={(id) => {

@@ -1,7 +1,48 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ApiError } from './api';
 export function message(error: unknown) {
   return error instanceof Error ? error.message : 'Request failed';
+}
+export function Toast({
+  message: text,
+  durationMs = 2600,
+  onDone,
+}: {
+  message: string;
+  durationMs?: number;
+  onDone: () => void;
+}) {
+  const [leaving, setLeaving] = useState(false);
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
+  const closeTimer = useRef<number | null>(null);
+  useEffect(() => {
+    setLeaving(false);
+    const fadeTimer = window.setTimeout(() => setLeaving(true), durationMs);
+    const removeTimer = window.setTimeout(() => doneRef.current(), durationMs + 320);
+    return () => {
+      window.clearTimeout(fadeTimer);
+      window.clearTimeout(removeTimer);
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    };
+  }, [text, durationMs]);
+  return (
+    <div className={`toast${leaving ? ' is-leaving' : ''}`} role="status" aria-live="polite">
+      <span className="toast-dot" aria-hidden="true" />
+      <span className="toast-text">{text}</span>
+      <button
+        type="button"
+        className="toast-close"
+        aria-label="Dismiss notification"
+        onClick={() => {
+          setLeaving(true);
+          closeTimer.current = window.setTimeout(() => doneRef.current(), 180);
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
 }
 export function ErrorNotice({ error }: { error: unknown }) {
   if (!error) return null;
