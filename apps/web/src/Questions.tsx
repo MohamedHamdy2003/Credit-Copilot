@@ -73,7 +73,10 @@ export function Questions() {
 
     const controller = new AbortController();
     const turnId = crypto.randomUUID();
-    const context = turns.slice(-3).map((turn) => turn.question);
+    const context = turns
+      .filter((turn) => !turn.error && turn.answer && !turn.answer.refused)
+      .slice(-3)
+      .map((turn) => turn.question);
     const referencedYears = [...new Set(question.match(/\b20\d{2}\b/g) ?? [])];
     const scope =
       edition ||

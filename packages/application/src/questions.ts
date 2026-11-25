@@ -131,8 +131,18 @@ function explainPersonalLoanConflict(
 }
 export function maskPolicyQuestion(question: string) {
   return question
-    .replace(/\b\d{14}\b/g, '[MASKED_ID]')
-    .replace(/\b01\d(?:[- ]?\d){8}\b/g, '[MASKED_PHONE]');
+    .replace(
+      /(?:(?<!\d)(?:\+?20|0020)[- ]?0?1[0125]|\b01[0125])(?:[- ]?\d){8}\b/g,
+      '[MASKED_PHONE]',
+    )
+    .replace(/\b\d{14}\b/g, '[MASKED_ID]');
+}
+
+const FOLLOW_UP_PATTERN =
+  /^(?:what|how|and|same|does|do|is|are|can|will)\s+(?:about|for|under|in|if|it|its|that|this|those|they|them)\b|\b(?:it|its|that|this|those|them|they|the same|above|previous)\b/i;
+
+export function isFollowUpQuestion(question: string): boolean {
+  return FOLLOW_UP_PATTERN.test(question.trim());
 }
 
 export async function answerPolicyQuestion(
@@ -151,11 +161,17 @@ export async function answerPolicyQuestion(
   );
   validDate(input.asOfDate);
   const question = maskPolicyQuestion(input.question);
-  const priorQuestions = (input.context ?? [])
+  const sanitizedContext = (input.context ?? [])
     .slice(-3)
     .map((previous) => maskPolicyQuestion(previous.trim()))
     .filter(Boolean);
-  const retrievalQuestion = [...priorQuestions, question].join('\n');
+  // Only carry prior turn context when the current question is an explicit follow-up,
+  // preventing unrelated new questions (especially out-of-corpus ones) from inheriting prior hits.
+  const priorQuestions =
+    sanitizedContext.length > 0 && isFollowUpQuestion(question) ? sanitizedContext : [];
+  const retrievalQuestion = priorQuestions.length
+    ? `${priorQuestions.at(-1)!}\n${question}`
+    : question;
   const hits = (
     await dependencies.search.search(
       retrievalQuestion,

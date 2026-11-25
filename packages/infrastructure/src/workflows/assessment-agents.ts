@@ -7,7 +7,12 @@ import { z } from 'zod';
 import type { Config } from '../../../contracts/src/config.js';
 import {
   ASSESSMENT_AGENT_TOOLS,
+  assessmentAgentInputSchemas,
+  assessmentAgentOutputSchemas,
   type AgentToolCall,
+  type AssessmentAgent,
+  type AssessmentAgentInputMap,
+  type AssessmentAgentOutputMap,
   type AssessmentAgentPort,
 } from '../../../application/src/assessment-agents.js';
 
@@ -17,15 +22,46 @@ const agentPromptSchema = z.strictObject({
 });
 let agentPrompts: z.infer<typeof agentPromptSchema> | undefined;
 
-const toolInput = z.strictObject({});
-const toolReceipt = z.strictObject({ completed: z.boolean() });
 type StreamV2 = Awaited<
   ReturnType<Extract<MastraModelConfig, { specificationVersion: 'v2' }>['doStream']>
 >['stream'];
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function failedReceipt<K extends AssessmentAgent>(agent: K): AssessmentAgentOutputMap[K] {
+  if (agent === 'evidence')
+    return { completed: false, verifiedFieldCount: 0 } as AssessmentAgentOutputMap[K];
+  if (agent === 'policy')
+    return { completed: false, clauseCount: 0 } as AssessmentAgentOutputMap[K];
+  return { completed: false, lineCount: 0 } as AssessmentAgentOutputMap[K];
+}
+
 const mastraAssessmentAgents: AssessmentAgentPort = {
-  async run(agent, operation, planner, record) {
+  async run<K extends AssessmentAgent, T>(
+    agent: K,
+    expectedInput: AssessmentAgentInputMap[K],
+    operation: () => Promise<T> | T,
+    summarizeOutput: (value: T) => AssessmentAgentOutputMap[K],
+    planner: Parameters<AssessmentAgentPort['run']>[4],
+    record: (call: AgentToolCall) => void,
+  ): Promise<T> {
     const toolName = ASSESSMENT_AGENT_TOOLS[agent];
+    const inputSchema = assessmentAgentInputSchemas[agent] as unknown as z.ZodType<
+      AssessmentAgentInputMap[K]
+    >;
+    const outputSchema = assessmentAgentOutputSchemas[agent] as unknown as z.ZodType<
+      AssessmentAgentOutputMap[K]
+    >;
+    const boundInput = inputSchema.parse(expectedInput);
     try {
       agentPrompts ??= agentPromptSchema.parse(
         JSON.parse(await readFile('prompts/assessment-agents.json', 'utf8')),
@@ -36,29 +72,43 @@ const mastraAssessmentAgents: AssessmentAgentPort = {
     }
     const { instructions, tasks } = agentPrompts;
     type Result = Awaited<ReturnType<typeof operation>>;
-    let execution: Promise<{ value: Result } | { error: unknown }> | undefined;
+    let execution:
+      | Promise<{ value: Result; receipt: AssessmentAgentOutputMap[K] } | { error: unknown }>
+      | undefined;
     let toolsOpen = true;
     const tool = createTool({
       id: toolName,
       description: tasks[agent],
-      inputSchema: toolInput,
-      outputSchema: toolReceipt,
-      execute: async () => {
-        if (!toolsOpen || execution) return { completed: false };
+      inputSchema,
+      outputSchema,
+      execute: async (receivedInput): Promise<AssessmentAgentOutputMap[K]> => {
+        if (!toolsOpen || execution || canonicalJson(receivedInput) !== canonicalJson(boundInput)) {
+          return failedReceipt(agent);
+        }
         const pending = Promise.resolve().then(async () => {
           try {
-            return { value: await operation() };
+            const value = await operation();
+            const receipt = outputSchema.parse(summarizeOutput(value));
+            return { value, receipt };
           } catch (error) {
             return { error };
           }
         });
         execution = pending;
-        // Tool data remains on the server. The model runner receives a receipt.
-        return { completed: 'value' in (await pending) };
+        // Raw customer records remain on the server; the runner receives a typed receipt.
+        const outcome = await pending;
+        return 'receipt' in outcome && outcome.receipt !== undefined
+          ? outcome.receipt
+          : failedReceipt(agent);
       },
     });
-    const callSchema = z.strictObject({ tool: z.literal(toolName), arguments: toolInput });
-    const task = JSON.stringify({ assessmentAgent: agent, tool: toolName, task: tasks[agent] });
+    const callSchema = z.strictObject({ tool: z.literal(toolName), arguments: inputSchema });
+    const task = JSON.stringify({
+      assessmentAgent: agent,
+      tool: toolName,
+      task: tasks[agent],
+      expectedArguments: boundInput,
+    });
     let planned = false;
     let reason: AgentToolCall['reason'] = 'tool_not_executed';
     const translate = async () => {
@@ -82,20 +132,27 @@ const mastraAssessmentAgents: AssessmentAgentPort = {
           outputTokens: completion.usage.outputTokens ?? undefined,
           totalTokens: undefined,
         };
-        if (parsed.success)
-          return {
-            content: [
-              {
-                type: 'tool-call' as const,
-                toolCallId: randomUUID(),
-                toolName: parsed.data.tool,
-                input: JSON.stringify(parsed.data.arguments),
-              },
-            ],
-            finishReason: 'tool-calls' as const,
-            usage,
-            warnings: [],
+        if (parsed.success) {
+          const toolCall = parsed.data as {
+            tool: (typeof ASSESSMENT_AGENT_TOOLS)[K];
+            arguments: AssessmentAgentInputMap[K];
           };
+          if (canonicalJson(toolCall.arguments) === canonicalJson(boundInput)) {
+            return {
+              content: [
+                {
+                  type: 'tool-call' as const,
+                  toolCallId: randomUUID(),
+                  toolName: toolCall.tool,
+                  input: JSON.stringify(toolCall.arguments),
+                },
+              ],
+              finishReason: 'tool-calls' as const,
+              usage,
+              warnings: [],
+            };
+          }
+        }
         reason = 'invalid_call';
         return { content: [], finishReason: 'stop' as const, usage, warnings: [] };
       } catch {
@@ -147,7 +204,13 @@ const mastraAssessmentAgents: AssessmentAgentPort = {
     toolsOpen = false;
     const outcome = await execution;
     if (outcome) {
-      record({ agent, tool: toolName, status: 'value' in outcome ? 'executed' : 'failed' });
+      record({
+        agent,
+        tool: toolName,
+        status: 'value' in outcome ? 'executed' : 'failed',
+        input: boundInput,
+        ...('receipt' in outcome ? { output: outcome.receipt } : {}),
+      });
       if ('error' in outcome) throw outcome.error;
       return outcome.value;
     }

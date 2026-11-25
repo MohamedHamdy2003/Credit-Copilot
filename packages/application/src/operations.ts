@@ -281,19 +281,22 @@ export class OperationsService {
       ),
     ];
     const dates = [...new Set(input.question.match(/\b\d{4}-\d{2}-\d{2}\b/g) ?? [])];
-    const years = [
+    const circulars = [
       ...new Set(
-        input.question
-          .replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ')
-          .replace(/\b(?:CP-20(?:24|25)|AUTO-2025)\b/gi, ' ')
-          .match(/\b20\d{2}\b/g) ?? [],
+        [...input.question.matchAll(/\bcircular\s+(20\d{2}\/\d{2})\b/gi)].map((m) => m[1]!),
       ),
     ];
-    const referencedYears = [...new Set([...years, ...dates.map((date) => date.slice(0, 4))])];
+    // Strip document identifiers and full dates before inspecting standalone policy years.
+    const withoutIdentifiers = input.question
+      .replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ')
+      .replace(/\b(?:CP-20(?:24|25)|AUTO-2025|PT-20\d{2}-\d{2}|PM-CC-20\d{2})\b/gi, ' ')
+      .replace(/\bcircular\s+20\d{2}\/\d{2}\b/gi, ' ');
+    const standaloneYears = [...new Set(withoutIdentifiers.match(/\b20\d{2}\b/g) ?? [])];
+    const hasExplicitScope = Boolean(input.asOfDate || input.edition || dates.length > 0);
     invariant(
-      editions.length <= 1 && dates.length <= 1 && referencedYears.length <= 1,
+      editions.length <= 1 && dates.length <= 1,
       'AmbiguousPolicyQuestion',
-      'Specify one policy year, edition, and as-of date',
+      'Specify one policy edition and one as-of date',
     );
     invariant(
       !input.edition || !editions[0] || input.edition === editions[0],
@@ -320,49 +323,41 @@ export class OperationsService {
       'Follow-up context must not exceed 3000 characters',
     );
     const policies = this.deps.policies[product];
+    const circularEffectiveDates: Record<string, string> = {
+      '2024/07': '2024-08-01',
+      '2025/02': '2025-03-01',
+    };
+    const circularDate =
+      !hasExplicitScope && !edition && circulars.length === 1
+        ? circularEffectiveDates[circulars[0]!]
+        : undefined;
     let yearStartDate: string | undefined;
-    const referencedYear = referencedYears[0];
-    if (referencedYear) {
+    if (!hasExplicitScope && !edition && !circularDate && standaloneYears.length === 1) {
+      const referencedYear = standaloneYears[0]!;
       const yearStart = `${referencedYear}-01-01`;
       const yearEnd = `${Number(referencedYear) + 1}-01-01`;
-      invariant(
-        !input.asOfDate || input.asOfDate.slice(0, 4) === referencedYear,
-        'ConflictingYear',
-        'The selected as-of date does not belong to the year in the question',
-      );
       const yearPolicies = policies.filter(
         (policy) =>
           policy.effectiveFrom < yearEnd && (!policy.effectiveTo || policy.effectiveTo > yearStart),
       );
-      invariant(
-        yearPolicies.length > 0,
-        'PolicyEditionNotFound',
-        `No policy edition covers ${referencedYear}`,
-      );
-      const selectedYearPolicy = edition
-        ? yearPolicies.find((policy) => policy.edition === edition)
-        : yearPolicies.length === 1
-          ? yearPolicies[0]
-          : undefined;
-      invariant(
-        selectedYearPolicy || input.asOfDate || dates[0],
-        'AmbiguousPolicyYear',
-        `${referencedYear} includes multiple policy editions. Select an edition or an exact date.`,
-      );
-      invariant(
-        !edition || selectedYearPolicy,
-        'ConflictingEdition',
-        'The selected edition is not effective during the year in the question',
-      );
-      yearStartDate = selectedYearPolicy
-        ? selectedYearPolicy.effectiveFrom > yearStart
-          ? selectedYearPolicy.effectiveFrom
-          : yearStart
-        : undefined;
+      if (yearPolicies.length > 1) {
+        invariant(
+          false,
+          'AmbiguousPolicyYear',
+          `${referencedYear} includes multiple policy editions. Select an edition or an exact date.`,
+        );
+      }
+      yearStartDate =
+        yearPolicies.length === 1
+          ? yearPolicies[0]!.effectiveFrom > yearStart
+            ? yearPolicies[0]!.effectiveFrom
+            : yearStart
+          : yearStart;
     }
     const asOfDate =
       input.asOfDate ??
       dates[0] ??
+      circularDate ??
       yearStartDate ??
       policies.find((p) => p.edition === edition)?.effectiveFrom ??
       new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
