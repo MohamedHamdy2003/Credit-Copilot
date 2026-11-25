@@ -126,6 +126,7 @@ export class CoreEvaluation {
         actor,
         doc,
         await readFile(`data/corpus/evidence/${reference}.pdf`),
+        true,
       ));
     const runId = randomUUID(),
       requestId = randomUUID();

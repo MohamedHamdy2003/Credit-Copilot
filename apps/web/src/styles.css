@@ -430,6 +430,12 @@ tr.selected {
 td button {
   padding: 5px 16px;
 }
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
 .split {
   display: grid;
   grid-template-columns: 1fr 1fr;

@@ -435,7 +435,7 @@ pnpm build
 | Suite | Verified Count | Needs | Notes |
 | --- | --- | --- | --- |
 | `pnpm test` (unit) | **159 tests** (24 suites) | Nothing | Pure domain math, rules, chunker, masking, agents, provider router, parser checks |
-| `pnpm test:integration` | **46 tests** (3 suites) | Postgres (`*_test`) | Real PostgreSQL + NestJS HTTP, SSE, hybrid BM25/pgvector, PM-4/PM-9, custom ingestion, delete & LLM switcher |
+| `pnpm test:integration` | **47 tests** (3 suites) | Postgres (`*_test`) | Real PostgreSQL + NestJS HTTP, SSE, hybrid BM25/pgvector, PM-4/PM-8/PM-9, custom uploads, draft delete & LLM switcher |
 | `pnpm test:e2e` (Playwright) | **11 journeys** | Postgres (`*_test`) + Chromium | Desktop & mobile UI flows on ports 4304 / 5174 |
 | `pnpm evaluate:core:offline` | **15/15 cases** | Postgres (`*_test`) | Deterministic workflow regression (`79/79` security & audit) |
 | `pnpm evaluate --offline-agents` | **15/15 cases** | Postgres (`*_test`) | Deterministic typed-agents regression (`93/93` security & audit) |

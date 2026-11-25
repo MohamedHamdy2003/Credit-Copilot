@@ -50,10 +50,15 @@ salary/bureau evidence) are always rejected from `knowledge.*` with
 `403 UntrustedPolicyDocument`. Customer application packs are verified
 separately against
 [assessment-fixtures.json](../data/config/assessment-fixtures.json). In the
-**Applications** workspace (and `POST /api/v1/applications`), officers either
-select a reviewed synthetic pack or upload an original application PDF; the
-uploaded bytes, extracted form, and evidence remain isolated in `cases.*` and
-are never written to the policy knowledge base.
+**Applications** workspace (and `POST /api/v1/applications`), officers upload an
+application pack PDF directly; any PDF matching the structured application form is
+validated, stored with a canonical PII-free filename in `cases.*`, and never
+written to the policy knowledge base (recognized synthetic packs retain
+`synthetic = true` for opt-in Demo walkthroughs, while custom production uploads
+remain Strict-only). Unassessed draft applications may be deleted by their
+preparer or `head-credit` (`DELETE /api/v1/applications/:id`); once an assessment
+run or job exists, deletion is blocked with `409 RetentionRequired` to preserve
+the 7-year audit trail under `PM-8`.
 
 ## Ingestion, chunking, and cited retrieval
 

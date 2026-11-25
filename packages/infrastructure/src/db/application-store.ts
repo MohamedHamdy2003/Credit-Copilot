@@ -63,7 +63,12 @@ const assessmentProgressQuery = `
 
 export class PostgresApplicationStore implements ApplicationStore {
   constructor(private readonly db: DataSource) {}
-  async register(actor: Actor, document: NormalizedDocument, bytes: Uint8Array) {
+  async register(
+    actor: Actor,
+    document: NormalizedDocument,
+    bytes: Uint8Array,
+    synthetic: boolean,
+  ) {
     const form = parseApplicationForm(document);
     return this.db.transaction(async (manager) => {
       const active = (await manager.query(
@@ -73,27 +78,89 @@ export class PostgresApplicationStore implements ApplicationStore {
       invariant(active.length, 'Unauthenticated', 'Active user required', 401);
       const id = randomUUID();
       const inserted = (await manager.query(
-        'INSERT INTO cases.applications(id,reference,preparer_id,filename,hash,normalized,synthetic) VALUES($1,$2,$3,$4,$5,$6,true) ON CONFLICT(preparer_id,hash) DO NOTHING RETURNING id',
-        [id, form.reference, actor.id, document.filename, document.hash, document],
+        'INSERT INTO cases.applications(id,reference,preparer_id,filename,hash,normalized,synthetic) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(preparer_id,hash) DO NOTHING RETURNING id',
+        [id, form.reference, actor.id, document.filename, document.hash, document, synthetic],
       )) as { id: string }[];
       if (!inserted.length) {
         const existing = (await manager.query(
-          'SELECT id FROM cases.applications WHERE preparer_id=$1 AND hash=$2',
+          'SELECT id, synthetic FROM cases.applications WHERE preparer_id=$1 AND hash=$2',
           [actor.id, document.hash],
-        )) as { id: string }[];
-        return { id: existing[0]!.id, reference: form.reference, synthetic: true, duplicate: true };
+        )) as { id: string; synthetic: boolean }[];
+        return {
+          id: existing[0]!.id,
+          reference: form.reference,
+          synthetic: existing[0]!.synthetic,
+          duplicate: true,
+        };
       }
       await manager.query(
         'INSERT INTO cases.evidence_documents(id,application_id,requirement,original_bytes,hash) VALUES($1,$2,$3,$4,$5)',
         [randomUUID(), id, 'application_pack', Buffer.from(bytes), document.hash],
       );
-      return { id, reference: form.reference, synthetic: true, duplicate: false };
+      return { id, reference: form.reference, synthetic, duplicate: false };
+    });
+  }
+  async deleteDraft(actor: Actor, id: string) {
+    return this.db.transaction(async (manager) => {
+      const active = (await manager.query(
+        'SELECT id, role, tier FROM cases.users WHERE id=$1 AND active FOR SHARE',
+        [actor.id],
+      )) as { id: string; role: Actor['role']; tier: Actor['tier'] }[];
+      invariant(active.length, 'Unauthenticated', 'Active user required', 401);
+      const current = active[0]!;
+      const rows = (await manager.query(
+        'SELECT id, reference, preparer_id, latest_assessment_id FROM cases.applications WHERE id=$1 FOR UPDATE',
+        [id],
+      )) as {
+        id: string;
+        reference: string;
+        preparer_id: string;
+        latest_assessment_id: string | null;
+      }[];
+      const row = rows[0];
+      invariant(row, 'NotFound', 'Application not found', 404);
+      const isHead = current.role === 'credit_officer' && current.tier === 'head';
+      invariant(
+        row.preparer_id === current.id || isHead,
+        'Forbidden',
+        'Only the preparer or Head Credit Officer may delete a draft application',
+        403,
+      );
+      const assessed = (await manager.query(
+        `SELECT 1 FROM cases.assessment_runs WHERE application_id=$1
+         UNION ALL
+         SELECT 1 FROM cases.assessment_jobs WHERE application_id=$1
+         LIMIT 1`,
+        [id],
+      )) as unknown[];
+      invariant(
+        row.latest_assessment_id === null && assessed.length === 0,
+        'RetentionRequired',
+        'Assessed applications must be retained under PM-8 record-keeping rules and cannot be deleted',
+        409,
+      );
+      await manager.query('DELETE FROM cases.evidence_documents WHERE application_id=$1', [id]);
+      await manager.query('DELETE FROM cases.applications WHERE id=$1', [id]);
+      return { deleted: true as const, id: row.id, reference: row.reference };
     });
   }
   list(actor: Actor) {
     return this.db.query(
-      'SELECT a.id,a.reference,a.synthetic,a.created_at,a.latest_assessment_id,r.status FROM cases.applications a LEFT JOIN cases.assessment_runs r ON r.id=a.latest_assessment_id WHERE a.preparer_id=$1 OR $2 ORDER BY a.created_at DESC LIMIT 100',
-      [actor.id, actor.role === 'credit_officer'],
+      `SELECT a.id,a.reference,a.synthetic,a.created_at,a.latest_assessment_id,r.status,
+              (a.latest_assessment_id IS NULL
+               AND NOT EXISTS (SELECT 1 FROM cases.assessment_runs ar WHERE ar.application_id=a.id)
+               AND NOT EXISTS (SELECT 1 FROM cases.assessment_jobs aj WHERE aj.application_id=a.id)
+               AND (a.preparer_id=$1 OR $3)) AS can_delete
+         FROM cases.applications a
+         LEFT JOIN cases.assessment_runs r ON r.id=a.latest_assessment_id
+        WHERE a.preparer_id=$1 OR $2
+        ORDER BY a.created_at DESC
+        LIMIT 100`,
+      [
+        actor.id,
+        actor.role === 'credit_officer',
+        actor.role === 'credit_officer' && actor.tier === 'head',
+      ],
     );
   }
   async read(actor: Actor, id: string) {

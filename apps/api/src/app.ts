@@ -595,6 +595,11 @@ export async function createApi(deps: {
     @Get('applications/:id') read(@Param('id') id: string, @Req() req: AuthRequest) {
       return this.service().read(req.actor, id);
     }
+    @Delete('applications/:id')
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    deleteApplication(@Param('id') id: string, @Req() req: AuthRequest) {
+      return this.service().deleteApplication(req.actor, id);
+    }
     @Post('applications/:id/assessments')
     @ApiHeader({ name: 'x-csrf-token', required: true })
     @ApiHeader({ name: 'Idempotency-Key', required: false })

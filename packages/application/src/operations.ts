@@ -35,7 +35,13 @@ export interface Upload {
   mime?: string;
 }
 export interface ApplicationStore {
-  register(actor: Actor, document: NormalizedDocument, bytes: Uint8Array): Promise<unknown>;
+  register(
+    actor: Actor,
+    document: NormalizedDocument,
+    bytes: Uint8Array,
+    synthetic: boolean,
+  ): Promise<unknown>;
+  deleteDraft(actor: Actor, id: string): Promise<{ deleted: true; id: string; reference: string }>;
   list(actor: Actor): Promise<unknown>;
   read(
     actor: Actor,
@@ -300,19 +306,27 @@ export class OperationsService {
   }
   async upload(actor: Actor, upload: Upload) {
     const document = await this.deps.parse(upload);
-    const fixture = this.deps.fixtures.find((entry) => entry.hash === document.hash);
     invariant(
-      fixture,
-      'UnrecognizedSyntheticPack',
-      'Only reviewed synthetic application packs are accepted',
-      403,
+      document.format === 'pdf',
+      'UnsupportedFileType',
+      'Application packs must be PDF documents',
+      415,
     );
-    parseApplicationForm(document);
+    const form = parseApplicationForm(document);
+    const fixture = this.deps.fixtures.find((entry) => entry.hash === document.hash);
+    const safeReference =
+      form.reference.replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 64) || 'application';
+    const canonicalFilename = fixture ? fixture.filename : `${safeReference}.pdf`;
     return this.deps.store.register(
       actor,
-      { ...document, filename: fixture.filename },
+      { ...document, filename: canonicalFilename },
       upload.bytes,
+      Boolean(fixture),
     );
+  }
+  deleteApplication(actor: Actor, id: string) {
+    z.uuid().parse(id);
+    return this.deps.store.deleteDraft(actor, id);
   }
   async selectFixture(actor: Actor, reference: string) {
     const fixture = this.deps.fixtures.find((f) => f.reference === reference);

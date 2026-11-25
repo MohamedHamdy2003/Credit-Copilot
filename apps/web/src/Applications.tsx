@@ -26,11 +26,6 @@ function AddApplication({
   onAdded: (id: string) => void;
   onCancel: () => void;
 }) {
-  const fixtures = useResource(
-    (signal) =>
-      api.request<{ reference: string; filename: string }[]>('applications/fixtures', { signal }),
-    [],
-  );
   const [busy, setBusy] = useState(false),
     [error, setError] = useState<unknown>();
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -40,16 +35,12 @@ function AddApplication({
     setError(undefined);
     try {
       const file = form.get('file');
-      let result: { id: string };
-      if (file instanceof File && file.size) {
-        if (file.size > 10 * 1024 * 1024) throw new Error('File exceeds the 10 MiB limit.');
-        const data = new FormData();
-        data.set('file', file);
-        result = await api.request('applications', { body: data });
-      } else
-        result = await api.request(`applications/fixtures/${String(form.get('reference'))}`, {
-          body: {},
-        });
+      if (!(file instanceof File) || file.size === 0)
+        throw new Error('Choose an application PDF to upload.');
+      if (file.size > 10 * 1024 * 1024) throw new Error('File exceeds the 10 MiB limit.');
+      const data = new FormData();
+      data.set('file', file);
+      const result = await api.request<{ id: string }>('applications', { body: data });
       onAdded(result.id);
     } catch (e) {
       setError(e);
@@ -60,29 +51,19 @@ function AddApplication({
   return (
     <section className="panel">
       <h2>Add application</h2>
-      <p>
-        Choose a reviewed synthetic pack, or upload its original PDF. Other files are not accepted.
+      <p className="muted">
+        Upload an application pack PDF (up to 10 MiB) containing the application form and supporting
+        documents.
       </p>
       <ErrorNotice error={error} />
-      <ResourceState {...fixtures} retry={fixtures.refresh} />
       <form onSubmit={submit}>
-        <div className="form-grid">
-          <label>
-            Reviewed pack
-            <select name="reference" required>
-              {fixtures.data?.map((f) => (
-                <option key={f.reference}>{f.reference}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Original pack (optional)
-            <input name="file" type="file" accept=".pdf,application/pdf" />
-          </label>
-        </div>
+        <label>
+          Application pack (PDF)
+          <input name="file" type="file" accept=".pdf,application/pdf" required disabled={busy} />
+        </label>
         <div className="actions">
-          <button className="primary" disabled={busy || !fixtures.data?.length}>
-            {busy ? 'Adding…' : 'Add selected pack'}
+          <button className="primary" disabled={busy}>
+            {busy ? 'Uploading…' : 'Upload application'}
           </button>
           <button type="button" disabled={busy} onClick={onCancel}>
             Cancel
@@ -133,7 +114,7 @@ function ApplicationView({
       const { runId } = await api.request<{ runId: string }>(
         `applications/${id}/assessment-streams`,
         {
-          body: { mode },
+          body: { mode: resource.data?.application.synthetic ? mode : 'strict' },
           key: key.current,
           signal: controller.signal,
         },
@@ -175,6 +156,7 @@ function ApplicationView({
     }
   }
   const data = resource.data;
+  const effectiveMode = data?.application.synthetic ? mode : 'strict';
   return (
     <>
       <ResourceState {...resource} retry={resource.refresh} />
@@ -227,8 +209,8 @@ function ApplicationView({
               <label>
                 Assessment mode
                 <select
-                  value={mode}
-                  disabled={busy}
+                  value={effectiveMode}
+                  disabled={busy || !data.application.synthetic}
                   onChange={(e) => {
                     setMode(e.target.value as 'strict' | 'demo');
                     key.current = null;
@@ -238,11 +220,13 @@ function ApplicationView({
                   }}
                 >
                   <option value="strict">Strict</option>
-                  <option value="demo">Demo — ID presence assumed</option>
+                  {data.application.synthetic && (
+                    <option value="demo">Demo — ID presence assumed</option>
+                  )}
                 </select>
               </label>
               <p className="muted">
-                {mode === 'strict'
+                {effectiveMode === 'strict'
                   ? 'Missing evidence requires human review.'
                   : 'Synthetic demo only. ID copy is assumed present, never verified. Other evidence requirements still apply; the server must enable Demo.'}
               </p>
@@ -343,7 +327,32 @@ export function Applications({ actor }: { actor: Actor }) {
     [],
   );
   const [selected, setSelected] = useState<string | null>(null),
-    [adding, setAdding] = useState(false);
+    [adding, setAdding] = useState(false),
+    [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null),
+    [deletingId, setDeletingId] = useState<string | null>(null),
+    [deleteError, setDeleteError] = useState<unknown>(),
+    [deleteNotice, setDeleteNotice] = useState<string | null>(null);
+
+  async function removeDraft(row: ApplicationRow) {
+    setDeleteError(undefined);
+    setDeleteNotice(null);
+    setDeletingId(row.id);
+    try {
+      await api.request<{ deleted: true; id: string; reference: string }>(
+        `applications/${encodeURIComponent(row.id)}`,
+        { method: 'DELETE' },
+      );
+      setConfirmDeleteId(null);
+      if (selected === row.id) setSelected(null);
+      setDeleteNotice(`Deleted draft application ${row.reference}.`);
+      applications.refresh();
+    } catch (e) {
+      setDeleteError(e);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <>
       <header className="page-heading">
@@ -365,6 +374,8 @@ export function Applications({ actor }: { actor: Actor }) {
           onCancel={() => setAdding(false)}
         />
       )}
+      {deleteNotice && <Toast message={deleteNotice} onDone={() => setDeleteNotice(null)} />}
+      <ErrorNotice error={deleteError} />
       <ResourceState {...applications} retry={applications.refresh} />
       {applications.data && (
         <section className="table-wrap">
@@ -384,21 +395,56 @@ export function Applications({ actor }: { actor: Actor }) {
                   <td>
                     <Status value={row.status} />
                   </td>
-                  <td>Synthetic pack</td>
+                  <td>{row.synthetic ? 'Synthetic pack' : 'Uploaded PDF'}</td>
                   <td>
-                    <button
-                      aria-label={`Open ${row.reference}`}
-                      onClick={() => setSelected(row.id)}
-                    >
-                      Open
-                    </button>
+                    <div className="table-actions">
+                      <button
+                        aria-label={`Open ${row.reference}`}
+                        onClick={() => setSelected(row.id)}
+                      >
+                        Open
+                      </button>
+                      {row.can_delete &&
+                        (confirmDeleteId === row.id ? (
+                          <div className="inline-confirm">
+                            <button
+                              type="button"
+                              className="danger-button"
+                              disabled={deletingId === row.id}
+                              onClick={() => void removeDraft(row)}
+                            >
+                              {deletingId === row.id ? 'Deleting…' : 'Confirm delete'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={deletingId === row.id}
+                              onClick={() => setConfirmDeleteId(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="danger-outline"
+                            aria-label={`Delete ${row.reference}`}
+                            disabled={deletingId !== null}
+                            onClick={() => {
+                              setConfirmDeleteId(row.id);
+                              setDeleteError(undefined);
+                            }}
+                          >
+                            Delete
+                          </button>
+                        ))}
+                    </div>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
           {!applications.data.length && (
-            <Empty>No applications yet. Add a reviewed pack to begin.</Empty>
+            <Empty>No applications yet. Upload an application PDF to begin.</Empty>
           )}
         </section>
       )}

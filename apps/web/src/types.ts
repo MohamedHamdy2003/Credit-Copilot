@@ -9,8 +9,10 @@ export interface Session {
 export interface ApplicationRow {
   id: string;
   reference: string;
+  synthetic: boolean;
   status: string | null;
   latest_assessment_id: string | null;
+  can_delete: boolean;
 }
 export interface ApplicationDetail {
   canAssess: boolean;

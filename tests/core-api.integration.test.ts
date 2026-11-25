@@ -572,7 +572,7 @@ it('uploads original synthetic bytes idempotently and enforces evidence ownershi
     .expect(403);
   await post(`applications/${first.body.id}/assessments`, other).send({}).expect(403);
 });
-it('rejects unsupported, unrecognized, oversized or client-asserted synthetic uploads', async () => {
+it('rejects unsupported, malformed, oversized or client-asserted synthetic uploads', async () => {
   const s = await account();
   const bytes = await readFile('data/corpus/evidence/APP-001.pdf');
   await post('applications', s).attach('file', bytes, 'application.docx').expect(415);
@@ -581,7 +581,10 @@ it('rejects unsupported, unrecognized, oversized or client-asserted synthetic up
     .expect(415);
   await post('applications', s)
     .attach('file', Buffer.from('not reviewed synthetic data'), 'application.md')
-    .expect(403);
+    .expect(415);
+  await post('applications', s)
+    .attach('file', await readFile('data/corpus/policy/credit-policy-2025.pdf'), 'policy.pdf')
+    .expect(422);
   await post('applications', s).attach('file', Buffer.alloc(100001), 'large.pdf').expect(413);
   await post('applications', s)
     .field('synthetic', 'true')
@@ -1453,4 +1456,107 @@ it('restricts runtime Gemini/Auto/Ollama generation switching to head-credit and
 
   // Switch cleanly back to auto so other tests observe the initial fallback mode.
   await post('llm/provider', head).send({ mode: 'auto' }).expect(201);
+});
+
+function buildMinimalApplicationPdf(lines: string[]): Buffer {
+  const escaped = lines.map((line) => line.replace(/[\\()]/g, (char) => `\\${char}`));
+  const stream = [
+    'BT',
+    '/F1 11 Tf',
+    ...escaped.map((line, i) => `1 0 0 1 40 ${760 - i * 16} Tm (${line}) Tj`),
+    'ET',
+  ].join('\n');
+  const objects = [
+    '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
+    '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
+    '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj',
+    '4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
+    `5 0 obj << /Length ${Buffer.byteLength(stream, 'utf8')} >> stream\n${stream}\nendstream endobj`,
+  ];
+  let body = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  for (const obj of objects) {
+    offsets.push(Buffer.byteLength(body, 'utf8'));
+    body += `${obj}\n`;
+  }
+  const xref = Buffer.byteLength(body, 'utf8');
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const off of offsets) body += `${String(off).padStart(10, '0')} 00000 n \n`;
+  body += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(body, 'utf8');
+}
+
+it('accepts custom production application PDFs as non-synthetic and enforces PM-8 draft-only deletion', async () => {
+  const owner = await account();
+  const other = await account();
+  const head = await account('head', true);
+  const customPdf = buildMinimalApplicationPdf([
+    'Delta Commercial Bank — Personal Loan Application',
+    'Application reference APP-PROD-900',
+    'Application date 15 April 2025',
+    'Date of birth 10 May 1990',
+    'Requested amount EGP 150,000.00',
+    'Requested tenor 36 months',
+    'Salary transferred to Delta No',
+  ]);
+
+  // Custom production PDF is accepted with synthetic=false and canonical PII-free filename.
+  const uploaded = await post('applications', owner)
+    .attach('file', customPdf, 'customer-28704121234567.pdf')
+    .expect(201);
+  expect(uploaded.body).toMatchObject({
+    reference: 'APP-PROD-900',
+    synthetic: false,
+    duplicate: false,
+  });
+  const evidence = await request(app.getHttpServer())
+    .get(`/api/v1/applications/${uploaded.body.id}/evidence`)
+    .set('Cookie', owner.cookie)
+    .expect(200);
+  expect(evidence.headers['content-disposition']).toContain('APP-PROD-900.pdf');
+  expect(evidence.headers['content-disposition']).not.toContain('28704121234567');
+
+  // Demo mode remains blocked on non-synthetic production uploads.
+  await post(`applications/${uploaded.body.id}/assessments`, owner)
+    .send({ mode: 'demo' })
+    .expect(403)
+    .expect(({ body }) => expect(body.error.code).toBe('DemoModeDisabled'));
+
+  // Another loan officer cannot delete someone else's draft.
+  await del(`applications/${uploaded.body.id}`, other).expect(403);
+
+  // Preparer sees can_delete=true on an unassessed draft and can delete it cleanly.
+  const listBefore = await readStream('applications', owner).expect(200);
+  expect(listBefore.body).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ id: uploaded.body.id, synthetic: false, can_delete: true }),
+    ]),
+  );
+  const removed = await del(`applications/${uploaded.body.id}`, owner).expect(200);
+  expect(removed.body).toEqual({
+    deleted: true,
+    id: uploaded.body.id,
+    reference: 'APP-PROD-900',
+  });
+  await del(`applications/${uploaded.body.id}`, owner).expect(404);
+
+  // Head Credit can also delete another officer's unassessed draft.
+  const secondDraft = await post('applications', owner)
+    .attach('file', customPdf, 'APP-PROD-900.pdf')
+    .expect(201);
+  await del(`applications/${secondDraft.body.id}`, head).expect(200);
+
+  // Once assessed, PM-8 record-keeping blocks deletion for both preparer and Head Credit.
+  const assessedId = await select(owner, 'APP-001');
+  await post(`applications/${assessedId}/assessments`, owner).send({}).expect(201);
+  const listAfter = await readStream('applications', owner).expect(200);
+  expect(listAfter.body).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: assessedId, can_delete: false })]),
+  );
+  await del(`applications/${assessedId}`, owner)
+    .expect(409)
+    .expect(({ body }) => expect(body.error.code).toBe('RetentionRequired'));
+  await del(`applications/${assessedId}`, head)
+    .expect(409)
+    .expect(({ body }) => expect(body.error.code).toBe('RetentionRequired'));
 });

@@ -26,11 +26,13 @@ async function login(page: Page, username: string) {
 }
 async function add(page: Page, reference = 'APP-001') {
   await page.getByRole('button', { name: 'Add application', exact: true }).click();
-  await page.getByLabel('Reviewed pack').selectOption(reference);
+  await page
+    .getByLabel('Application pack (PDF)', { exact: true })
+    .setInputFiles(`data/corpus/evidence/${reference}.pdf`);
   const added = page.waitForResponse(
-    (r) => r.url().includes('/applications/fixtures/') && r.request().method() === 'POST',
+    (r) => r.url().endsWith('/applications') && r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Add selected pack' }).click();
+  await page.getByRole('button', { name: 'Upload application', exact: true }).click();
   expect((await added).ok()).toBe(true);
   await expect(page.getByRole('heading', { name: reference, exact: true }).first()).toBeVisible();
   await expect(page.getByLabel('Assessment mode')).toBeVisible();
@@ -283,18 +285,24 @@ test('grounded questions, refusal, conflicts and edition-specific code calculati
   await expect(page.getByLabel('Your question', { exact: true })).toBeEnabled();
   expect(errors).toEqual([]);
 });
-test('real multipart upload, duplicate registration and mixed knowledge batch results', async ({
+test('real multipart upload, duplicate registration, draft delete and mixed knowledge batch results', async ({
   page,
 }) => {
   await login(page, 'upload');
-  await page.getByRole('button', { name: 'Add application', exact: true }).click();
-  await page
-    .getByLabel('Original pack (optional)')
-    .setInputFiles('data/corpus/evidence/APP-001.pdf');
-  await page.getByRole('button', { name: 'Add selected pack' }).click();
-  await expect(page.getByLabel('Assessment mode')).toBeVisible();
-  await add(page);
+  await add(page, 'APP-001');
+  await add(page, 'APP-001');
   await expect(page.getByRole('row').filter({ hasText: 'Synthetic pack' })).toHaveCount(1);
+  // Upload a second draft pack and delete it before assessment; once assessed, PM-8 blocks deletion.
+  await add(page, 'APP-002');
+  const draftRow = page.getByRole('row').filter({ hasText: 'APP-002' });
+  await draftRow.getByRole('button', { name: 'Delete APP-002', exact: true }).click();
+  await draftRow.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+  await expect(page.getByText('Deleted draft application APP-002.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'APP-002' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Open APP-001', exact: true }).click();
+  await page.getByRole('button', { name: 'Run assessment', exact: true }).click();
+  await expect(page.getByText('Missing evidence: national id copy')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Delete APP-001', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Policy library', exact: true }).click();
   await expect(
     page.getByText('Ingestion requires separate permission.', { exact: false }),
