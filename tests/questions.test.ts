@@ -1,4 +1,8 @@
-import { answerPolicyQuestion, REFUSAL } from '../packages/application/src/questions.js';
+import {
+  answerPolicyQuestion,
+  maskPolicyQuestion,
+  REFUSAL,
+} from '../packages/application/src/questions.js';
 import { FakeGeneration } from './helpers/fake-provider.js';
 import type { Chunk } from '../packages/contracts/src/documents.js';
 import { QuestionStreams } from '../packages/application/src/question-streams.js';
@@ -324,4 +328,48 @@ it('pairs allowed local citation IDs with their exact source text and refuses a 
     citations: [],
     generation: { model: 'ollama:test-local', fallbackFrom: 'gemini-test' },
   });
+});
+
+it('isolates self-contained out-of-corpus questions from prior chat turns while supporting follow-ups', async () => {
+  const queries: string[] = [];
+  const search = {
+    search: async (query: string) => {
+      queries.push(query);
+      return query.toLowerCase().includes('income') ? [{ chunk, similarity: 0.9 }] : [];
+    },
+  };
+  const refused = await answerPolicyQuestion(
+    {
+      question: 'What are the terms for a crypto-backed loan?',
+      asOfDate: '2025-04-03',
+      context: ['What is the minimum net monthly income for PL-100?'],
+    },
+    {
+      provider: new FakeGeneration({ citations: [{ chunkId: chunk.id, quote: chunk.text }] }),
+      search,
+      prompt: 'test',
+      minimumSimilarity: 0.65,
+    },
+  );
+  expect(refused.refused).toBe(true);
+  expect(queries[0]).toBe('What are the terms for a crypto-backed loan?');
+
+  const followup = await answerPolicyQuestion(
+    {
+      question: 'What about under CP-2025?',
+      asOfDate: '2025-04-03',
+      context: ['What is the minimum net monthly income for PL-100?'],
+    },
+    {
+      provider: new FakeGeneration({ citations: [{ chunkId: chunk.id, quote: chunk.text }] }),
+      search,
+      prompt: 'test',
+      minimumSimilarity: 0.65,
+    },
+  );
+  expect(followup.refused).toBe(false);
+  expect(queries[1]).toContain('minimum net monthly income');
+  expect(maskPolicyQuestion('Call +20 10-0000-0001 or 00201000000001 for 28704121234567')).toBe(
+    'Call [MASKED_PHONE] or [MASKED_PHONE] for [MASKED_ID]',
+  );
 });

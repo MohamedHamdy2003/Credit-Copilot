@@ -144,12 +144,34 @@ it('defaults all five original packs to strict referral because no ID copy exist
   for (const id of ['APP-001', 'APP-002', 'APP-003', 'APP-004', 'APP-005'])
     expect((await run(id, {}, true)).result?.recommendation).toBe('REFER_TO_HUMAN');
 });
-it('never assumes probation in Demo and does not run affordability for incomplete eligibility', async () => {
-  for (const id of ['APP-002', 'APP-003', 'APP-005']) {
-    const result = (await run(id)).result;
-    expect(result?.recommendation).toBe('REFER_TO_HUMAN');
-    expect(result?.calculation).toBeNull();
-  }
+it('assesses APP-002 (S1 alternative), APP-003 (over-age decline), and APP-005 (CP-6 referral) in Demo', async () => {
+  const app002 = (await run('APP-002')).result!;
+  expect(app002.recommendation).toBe('OFFER_ALTERNATIVE');
+  expect(app002.recommendedAmount).toBe('330000.00');
+  expect(app002.calculation).toMatchObject({
+    monthlyInstallment: '10068.79',
+    dbrPercent: '46.90',
+    maximumEligibleAmount: '330000.00',
+    passes: false,
+  });
+  expect(app002.results).toEqual(
+    expect.arrayContaining([expect.objectContaining({ rule: 'CP-4.1', result: 'fail' })]),
+  );
+
+  const app003 = (await run('APP-003')).result!;
+  expect(app003.recommendation).toBe('DECLINE');
+  expect(app003.calculation).toBeNull();
+  expect(app003.results).toEqual(
+    expect.arrayContaining([expect.objectContaining({ rule: 'CP-3.5', result: 'fail' })]),
+  );
+
+  const app005 = (await run('APP-005')).result!;
+  expect(app005.recommendation).toBe('REFER_TO_HUMAN');
+  expect(app005.calculation).toBeNull();
+  expect(app005.approvalRequiredFrom).toBe('senior_credit_officer');
+  expect(app005.results).toEqual(
+    expect.arrayContaining([expect.objectContaining({ rule: 'CP-6', result: 'refer' })]),
+  );
 });
 it('records a fraud referral without calling the model for APP-004', async () => {
   const fake = new FakeGeneration({});
@@ -217,8 +239,22 @@ it('rejects client verification flags and does not trust caller-supplied evidenc
 });
 it('derives real local facts rather than using requested values', async () => {
   expect(deriveEvidenceFacts(await load('APP-001')).facts.confirmed).toBe(true);
-  expect(deriveEvidenceFacts(await load('APP-002')).facts.confirmed).toBeNull();
+  expect(deriveEvidenceFacts(await load('APP-002')).facts.confirmed).toBe(true);
+  expect(deriveEvidenceFacts(await load('APP-002')).provenance.employmentConfirmation).toBe(
+    'permanent_employment_statement',
+  );
   const doc = await load('APP-001');
+  const unstatedEmployment = {
+    ...doc,
+    blocks: doc.blocks.map((b) => ({
+      ...b,
+      text: b.text.replace(
+        'His employment is permanent and he has completed his probation',
+        'His employment status is salaried',
+      ),
+    })),
+  };
+  expect(deriveEvidenceFacts(unstatedEmployment).facts.confirmed).toBeNull();
   expect(() =>
     deriveEvidenceFacts({
       ...doc,
@@ -299,10 +335,18 @@ it('changing only protected fields leaves the recommendation and canonical memo 
       text: b.text
         .replace('Gender Male', 'Gender Female')
         .replace('Marital status Married', 'Marital status Single')
-        .replace('Muslim', 'Christian')
+        .replace(
+          'Religion (declared for statistics only) Muslim',
+          'Religion (declared for statistics only) Christian',
+        )
         .replace('Nationality Egyptian', 'Nationality Other'),
     })),
   };
+  const alteredText = altered.blocks.map((b) => b.text).join('\n');
+  expect(alteredText).toContain('Gender Female');
+  expect(alteredText).toContain('Marital status Single');
+  expect(alteredText).toContain('Religion (declared for statistics only) Christian');
+  expect(alteredText).toContain('Nationality Other');
   const original = (await run('APP-001')).result;
   const r = await (
     await createDocumentAssessmentWorkflow(deps).createRun()
@@ -348,11 +392,15 @@ it('keeps Strict and Demo assessment outcomes identical for all five original pa
   const plannerInputs: string[] = [];
   const routed: GenerationPort = {
     completeStructured: async (system, data, schema) => {
-      const request = JSON.parse(data) as { assessmentAgent?: string; tool?: string };
+      const request = JSON.parse(data) as {
+        assessmentAgent?: string;
+        tool?: string;
+        expectedArguments?: Record<string, unknown>;
+      };
       if (!request.assessmentAgent) return deps.provider.completeStructured(system, data, schema);
       plannerInputs.push(data);
       return {
-        value: { tool: request.tool, arguments: {} },
+        value: { tool: request.tool, arguments: request.expectedArguments ?? {} },
         model: 'fixture-planner',
         usage: { inputTokens: 10, outputTokens: 3 },
       };
@@ -373,11 +421,14 @@ it('keeps Strict and Demo assessment outcomes identical for all five original pa
         expect(agentToolCalls).toBeUndefined();
         expect(usageRecords).toEqual([]);
       } else {
-        expect(agentToolCalls).toEqual([
-          { agent: 'evidence', tool: 'extract_verified_evidence', status: 'executed' },
-          { agent: 'policy', tool: 'read_operative_policy_clauses', status: 'executed' },
-          { agent: 'memo', tool: 'render_credit_memo', status: 'executed' },
-        ]);
+        expect(agentToolCalls?.map(({ agent, tool, status }) => ({ agent, tool, status }))).toEqual(
+          [
+            { agent: 'evidence', tool: 'extract_verified_evidence', status: 'executed' },
+            { agent: 'policy', tool: 'read_operative_policy_clauses', status: 'executed' },
+            { agent: 'memo', tool: 'render_credit_memo', status: 'executed' },
+          ],
+        );
+        expect(agentToolCalls?.every((call) => call.input && call.output?.completed)).toBe(true);
         expect(
           usageRecords?.filter((record) => record.operation === 'assessment_agent_planning'),
         ).toHaveLength(3);
@@ -386,5 +437,10 @@ it('keeps Strict and Demo assessment outcomes identical for all five original pa
   }
   expect(plannerInputs).toHaveLength(12);
   for (const input of plannerInputs)
-    expect(Object.keys(JSON.parse(input)).sort()).toEqual(['assessmentAgent', 'task', 'tool']);
+    expect(Object.keys(JSON.parse(input)).sort()).toEqual([
+      'assessmentAgent',
+      'expectedArguments',
+      'task',
+      'tool',
+    ]);
 }, 30000);

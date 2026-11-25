@@ -60,7 +60,7 @@ beforeAll(async () => {
   });
   app = await createApi({
     auth: new AuthService(new PostgresAuthStore(db), new ScryptCredentials(), 8),
-    decisions: new DecisionService(new PostgresDecisionStore(db, policies)),
+    decisions: new DecisionService(new PostgresDecisionStore(db, policies, catalog)),
     operations: await createOperations(
       db,
       new GenerationFallback(
@@ -444,10 +444,11 @@ it('streams only verified policy citations and emits refusal or failure as termi
   const answer = await readStream(path, owner).expect(200);
   const frames = readFrames<{ kind: string; citation?: { quote: string } }>(answer.text);
   expect(frames[0]?.data.citation?.quote).toMatch(/45/);
-  expect(frames.at(-1)?.data).toEqual({
+  expect(frames.at(-1)?.data).toMatchObject({
     kind: 'completed',
     asOfDate: '2025-04-03',
     refused: false,
+    answer: expect.stringMatching(/45/),
   });
   const reconnected = await readStream(path, owner).set('Last-Event-ID', '1').expect(200);
   expect(readFrames(reconnected.text)).toEqual(frames.slice(1));
@@ -458,7 +459,15 @@ it('streams only verified policy citations and emits refusal or failure as termi
   const refusal = await readStream(`question-streams/${forged.body.streamId}`, owner).expect(200);
   expect(refusal.text).not.toContain('UNVERIFIED_TEXT');
   expect(readFrames(refusal.text)).toEqual([
-    { id: 1, data: { kind: 'completed', asOfDate: '2025-04-03', refused: true } },
+    {
+      id: 1,
+      data: {
+        kind: 'completed',
+        asOfDate: '2025-04-03',
+        refused: true,
+        answer: 'The documents do not contain enough information to answer this question.',
+      },
+    },
   ]);
   primaryUnavailable = true;
   localUnavailable = true;
@@ -1057,4 +1066,113 @@ it('persists fallback usage and audit data from a sanitized authenticated assess
   });
   expect(localProvider.texts.at(-1)).toContain('[MASKED_ID]');
   expect(localProvider.texts.at(-1)).not.toContain('28704121234567');
+});
+
+it('resolves document identifiers, years, source downloads and out-of-corpus refusals cleanly', async () => {
+  const s = await account();
+  const circular = await post('questions', s)
+    .send({ question: 'What does Circular 2025/02 say about maximum tenor?' })
+    .expect(201);
+  expect(circular.body.asOfDate).toBe('2025-03-01');
+  expect(circular.body.refused).toBe(false);
+
+  const pricing = await post('questions', s)
+    .send({ question: 'What is the interest rate in PT-2025-01?' })
+    .expect(201);
+  expect(pricing.body.refused).toBe(false);
+
+  const q09 = await post('questions', s)
+    .send({
+      question:
+        "Show the bank's 2027 personal loan interest table, not the supplied 2025 pricing rows.",
+      asOfDate: '2025-04-03',
+    })
+    .expect(201);
+  expect(q09.body.refused).toBe(true);
+
+  const year2024 = await post('questions', s)
+    .send({ question: 'What is the maximum DBR in 2024?' })
+    .expect(201);
+  expect(year2024.body.asOfDate).toBe('2024-01-01');
+
+  const ambiguous2025 = await post('questions', s)
+    .send({ question: 'What is the maximum DBR in 2025?' })
+    .expect(422);
+  expect(ambiguous2025.body.error.code).toBe('AmbiguousPolicyYear');
+
+  const source = await readStream('knowledge/source?filename=credit-policy-2025.pdf', s)
+    .expect('Content-Type', /application\/pdf/)
+    .expect('Cache-Control', 'private, no-store')
+    .expect(200);
+  expect(source.body.length).toBeGreaterThan(1000);
+  await readStream('knowledge/source?filename=APP-001.pdf', s).expect(404);
+});
+
+it('allows Senior Credit Officer to approve or reject a CP-6 low-score referral (APP-005) under PM-4', async () => {
+  const preparer = await account();
+  const credit = await account('credit');
+  const senior = await account('senior');
+
+  const appApproveId = await select(preparer, 'APP-005');
+  const runApprove = await post(`applications/${appApproveId}/assessments`, preparer)
+    .send({ mode: 'demo' })
+    .expect(201);
+  expect(runApprove.body.result).toMatchObject({
+    recommendation: 'REFER_TO_HUMAN',
+    status: 'pending_review',
+    approvalRequiredFrom: 'senior_credit_officer',
+    calculation: null,
+  });
+
+  // Regular Credit Officer cannot approve or reject a referred application (PM-2 / PM-4).
+  await post(`assessments/${runApprove.body.runId}/decisions`, credit)
+    .send({ action: 'approve', expectedVersion: 1, comment: 'Attempting over tier' })
+    .expect(403);
+  await post(`assessments/${runApprove.body.runId}/decisions`, credit)
+    .send({ action: 'reject', expectedVersion: 1, clause: 'CP-6', comment: 'Attempting over tier' })
+    .expect(403);
+
+  // Senior Credit Officer approves with written justification; code computes exact affordability and issues PDF.
+  await post(`assessments/${runApprove.body.runId}/decisions`, senior)
+    .send({
+      action: 'approve',
+      expectedVersion: 1,
+      comment:
+        'PM-4 Senior review: all four past late payments cured and income covers instalments.',
+    })
+    .expect(201);
+  await post(`assessments/${runApprove.body.runId}/decisions`, senior)
+    .send({
+      action: 'issue',
+      expectedVersion: 2,
+      comment: 'Issued following Senior referral approval.',
+      disbursementDate: '2025-04-28',
+    })
+    .expect(201);
+  const [offer] = (await db.query('SELECT id FROM cases.offers WHERE run_id=$1', [
+    runApprove.body.runId,
+  ])) as { id: string }[];
+  await readStream(`offers/${offer!.id}/document`, senior)
+    .expect('Content-Type', /application\/pdf/)
+    .expect(200);
+
+  // Separate Senior rejection path on a fresh APP-005 run citing CP-6.
+  const preparer2 = await account();
+  const appRejectId = await select(preparer2, 'APP-005');
+  const runReject = await post(`applications/${appRejectId}/assessments`, preparer2)
+    .send({ mode: 'demo' })
+    .expect(201);
+  await post(`assessments/${runReject.body.runId}/decisions`, senior)
+    .send({
+      action: 'reject',
+      expectedVersion: 1,
+      clause: 'CP-6',
+      comment: 'Bureau score 580 with four cured late payments declined after Senior review.',
+    })
+    .expect(201);
+  const [notice] = await db.query(
+    'SELECT clause, policy_edition FROM cases.rejection_notices WHERE run_id=$1',
+    [runReject.body.runId],
+  );
+  expect(notice).toEqual({ clause: 'CP-6', policy_edition: 'CP-2025' });
 });

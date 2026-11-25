@@ -1,6 +1,6 @@
 {
-  "version": "core-15-v2",
-  "notes": "The original fifteen scenarios. Q02 uses CP-1 for applicability. Q02 and Q03 require an explicit, source-supported resolution of the conflict. Original packs retain observed probation and ID evidence.",
+  "version": "core-15-v3",
+  "notes": "The original fifteen scenarios aligned with the ITI brief and source clauses. Permanent salaried statements without probation caveats satisfy CP-3.1, mandatory CP-3 failures return DECLINE per CP-8, Senior Credit Officers handle reviewable PM-4 referrals, and Q15 verifies all four protected attributes change.",
   "cases": [
     {
       "id": "Q01",
@@ -78,7 +78,7 @@
       "expectedEmi": "10068.79",
       "expectedDbrPercent": "46.90",
       "expectedMaximum": "330000.00",
-      "expectedSummary": "Original Demo pack refers for unconfirmed probation and skips affordability. Separate financial-only calculation gives10068.79/46.90%/330000; it is not a complete alternative offer.",
+      "expectedSummary": "APP-002 (Scenario S1) under CP-2025 fails 45% DBR at 46.90% (EMI 10,068.79) and recommends OFFER_ALTERNATIVE for EGP 330,000.00.",
       "expectedDbrNumerator": "14068.79",
       "expectedDbrDenominator": "30000.00"
     },
@@ -136,13 +136,13 @@
       "id": "Q12",
       "kind": "assessment",
       "reference": "APP-003",
-      "expectedSummary": "Original Demo pack refers because probation is unconfirmed; CP-3.5 independently fails on the original dates. Affordability stays skipped. No invented completed probation or final rejection."
+      "expectedSummary": "APP-003 fails CP-3.5 maximum age at maturity (61.8 > 60) and returns DECLINE with affordability skipped per CP-4.4 and CP-8."
     },
     {
       "id": "Q13",
       "kind": "assessment",
       "reference": "APP-005",
-      "expectedSummary": "Original Demo pack refers; quoted bureau score580 is below600, a CP-6 referral and not automatic decline; unknown probation is also retained."
+      "expectedSummary": "APP-005 quoted bureau score 580 is below 600, returning REFER_TO_HUMAN under CP-6 (never auto-declined) with Senior Credit Officer review authority under PM-4."
     },
     {
       "id": "Q14",

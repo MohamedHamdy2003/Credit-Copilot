@@ -11,13 +11,14 @@ export class OfflineEvaluationProvider extends FakeEmbedding {
       question?: string;
       assessmentAgent?: string;
       tool?: string;
+      expectedArguments?: Record<string, unknown>;
       evidence: { text: string; chunkId?: string; section?: string }[];
     };
     if (value.assessmentAgent)
       return {
         model: 'test-only-evaluation',
         usage: { inputTokens: null, outputTokens: null },
-        value: { tool: value.tool, arguments: {} },
+        value: { tool: value.tool, arguments: value.expectedArguments ?? {} },
       };
     if (value.question)
       return {

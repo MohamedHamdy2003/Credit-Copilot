@@ -49,7 +49,7 @@ it('preserves the original case file used by historical live reports', () => {
   expect(createHash('sha256').update(original).digest('hex')).toBe(
     historical.hashes['data/evaluation/cases.json'],
   );
-  expect(set.version).toBe('core-15-v2');
+  expect(set.version).toBe('core-15-v3');
 });
 
 it('verifies the clean live hybrid comparison and keeps both provider failures in the evidence', () => {

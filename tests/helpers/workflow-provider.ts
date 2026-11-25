@@ -1,5 +1,7 @@
 import { FakeEmbedding } from './fake-provider.js';
 import type { Completion } from '../../packages/application/src/ports.js';
+import { parseEnglishDate } from '../../packages/application/src/extraction.js';
+
 export class WorkflowTestProvider extends FakeEmbedding {
   gate?: Promise<void>;
   onGeneration?: () => void;
@@ -12,33 +14,35 @@ export class WorkflowTestProvider extends FakeEmbedding {
     this.onGeneration?.();
     await this.gate;
     this.texts.push(data);
-    const input = JSON.parse(data);
+    const input = JSON.parse(data) as {
+      question?: string;
+      evidence: { text: string; chunkId?: string; section?: 'salary' | 'bureau' }[];
+    };
     if (input.question)
       return {
         model: 'fake',
         usage: { inputTokens: 1, outputTokens: 1 },
         value: {
-          citations: input.question.includes('crypto')
+          citations: /crypto|2027/i.test(input.question)
             ? []
-            : [{ chunkId: input.evidence[0].chunkId, quote: input.evidence[0].text }],
+            : [{ chunkId: input.evidence[0]!.chunkId, quote: input.evidence[0]!.text }],
         },
       };
+    const field = (label: string) => {
+      const entry = input.evidence.find((e) => e.text.startsWith(`${label} `))!;
+      const raw = entry.text.slice(label.length + 1);
+      return { value: raw.replace(/,/g, ''), quote: entry.text, section: entry.section };
+    };
+    const employment = field('Employment start');
+    const score = field('Bureau score');
     return {
       model: 'fake',
       usage: { inputTokens: 12, outputTokens: 8 },
       value: {
-        income: { value: '30000.00', quote: 'Net monthly income 30,000.00', section: 'salary' },
-        obligations: {
-          value: '4000.00',
-          quote: 'Total monthly instalments 4,000.00',
-          section: 'bureau',
-        },
-        employmentStart: {
-          value: '2019-09-01',
-          quote: 'Employment start 1 September 2019',
-          section: 'salary',
-        },
-        bureauScore: { value: 712, quote: 'Bureau score 712', section: 'bureau' },
+        income: field('Net monthly income'),
+        obligations: field('Total monthly instalments'),
+        employmentStart: { ...employment, value: parseEnglishDate(employment.value) },
+        bureauScore: { ...score, value: Number(score.value) },
       },
     };
   }

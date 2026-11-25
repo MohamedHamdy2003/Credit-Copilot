@@ -10,7 +10,7 @@ import { FakeEmbedding } from './helpers/fake-provider.js';
 import { FakeGeneration } from './helpers/fake-provider.js';
 import { randomUUID } from 'node:crypto';
 import { PostgresAssessmentRepository } from '../packages/infrastructure/src/db/assessment-repository.js';
-import { assessAndRecord } from '../packages/application/src/assessment-record.js';
+import { createDocumentAssessmentWorkflow } from '../packages/infrastructure/src/workflows/document-assessment.js';
 import { ParserRegistry } from '../packages/infrastructure/src/parsers/registry.js';
 
 const url =
@@ -198,30 +198,26 @@ it('atomically preserves immutable assessment, demo assumptions and fraud referr
     at: '2026-11-17T12:00:00Z',
     synthetic: true,
     requestedMode: 'demo' as const,
-    evidence: [{ requirement: 'national_id_copy', present: false, verified: false }],
-    verifiedFacts: {
-      certificateDate: '2025-04-15',
-      confirmed: true,
-      hasDefault: false,
-      bankEmployee: false,
-      purposeAllowed: true,
-      plannedDisbursement: '2025-04-22',
-    },
-  };
-  const dependencies = {
-    provider: new FakeGeneration({}),
-    prompt: 'test',
-    policies: JSON.parse(await readFile('data/config/policies.json', 'utf8')),
-    product: JSON.parse(await readFile('data/config/personal-loan.json', 'utf8')),
-    pricing: [],
-    settings: { allowDemo: true },
   };
   const repository = new PostgresAssessmentRepository(db);
-  const result = await assessAndRecord(input, dependencies, repository, {
-    runId,
-    applicationId,
-    requestId: 'integration-request',
-  });
+  const runWorkflow = async (requestId: string) => {
+    const workflow = createDocumentAssessmentWorkflow({
+      provider: new FakeGeneration({}),
+      prompt: 'test',
+      policies: JSON.parse(await readFile('data/config/policies.json', 'utf8')),
+      product: JSON.parse(await readFile('data/config/personal-loan.json', 'utf8')),
+      pricing: [],
+      settings: { allowDemo: true },
+      clauses: { loadRequired: async () => [] },
+      persistence: { runId, applicationId, requestId, repository },
+    });
+    const outcome = await (await workflow.createRun()).start({ inputData: input });
+    return outcome;
+  };
+  const firstOutcome = await runWorkflow('integration-request');
+  expect(firstOutcome.status).toBe('success');
+  if (firstOutcome.status !== 'success') throw new Error('Expected success');
+  const result = firstOutcome.result.result!;
   expect(result.recommendation).toBe('REFER_TO_HUMAN');
   const rows = (await db.query('SELECT event,details FROM cases.audit_events WHERE run_id=$1', [
     runId,
@@ -229,13 +225,7 @@ it('atomically preserves immutable assessment, demo assumptions and fraud referr
   expect(rows.some((r) => r.event === 'FRAUD_UNIT_REFERRAL')).toBe(true);
   expect(rows.find((r) => r.event === 'DEMO_EVIDENCE_ASSUMPTION')?.details.verified).toBe(false);
   const count = rows.length;
-  await expect(
-    assessAndRecord(input, dependencies, repository, {
-      runId,
-      applicationId,
-      requestId: 'duplicate',
-    }),
-  ).rejects.toThrow();
+  expect((await runWorkflow('duplicate')).status).toBe('failed');
   expect(
     (await db.query('SELECT id FROM cases.audit_events WHERE run_id=$1', [runId])).length,
   ).toBe(count);
