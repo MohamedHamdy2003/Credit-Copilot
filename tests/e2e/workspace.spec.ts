@@ -25,14 +25,14 @@ async function login(page: Page, username: string) {
   await expect(page.getByRole('heading', { name: 'Applications', exact: true })).toBeVisible();
 }
 async function add(page: Page, reference = 'APP-001') {
-  await page.getByRole('button', { name: 'Add application', exact: true }).click();
+  await page.getByRole('button', { name: 'New application', exact: true }).click();
   await page
     .getByLabel('Application pack (PDF)', { exact: true })
     .setInputFiles(`data/corpus/evidence/${reference}.pdf`);
   const added = page.waitForResponse(
     (r) => r.url().endsWith('/applications') && r.request().method() === 'POST',
   );
-  await page.getByRole('button', { name: 'Upload application', exact: true }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).click();
   expect((await added).ok()).toBe(true);
   await expect(page.getByRole('heading', { name: reference, exact: true }).first()).toBeVisible();
   await expect(page.getByLabel('Assessment mode')).toBeVisible();
@@ -49,7 +49,7 @@ test('login errors, restored cookie session, logout and mobile layout', async ({
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Applications', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByRole('button', { name: 'Add application', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'New application', exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: shot('mobile'), fullPage: true });
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();

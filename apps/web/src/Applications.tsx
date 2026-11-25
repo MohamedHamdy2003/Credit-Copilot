@@ -50,7 +50,7 @@ function AddApplication({
   }
   return (
     <section className="panel">
-      <h2>Add application</h2>
+      <h2>New application</h2>
       <p className="muted">
         Upload an application pack PDF (up to 10 MiB) containing the application form and supporting
         documents.
@@ -63,7 +63,7 @@ function AddApplication({
         </label>
         <div className="actions">
           <button className="primary" disabled={busy}>
-            {busy ? 'Uploading…' : 'Upload application'}
+            {busy ? 'Adding…' : 'Add'}
           </button>
           <button type="button" disabled={busy} onClick={onCancel}>
             Cancel
@@ -361,7 +361,7 @@ export function Applications({ actor }: { actor: Actor }) {
           <p>Review evidence. Assess consistently.</p>
         </div>
         <button className="primary" onClick={() => setAdding(true)}>
-          Add application
+          New application
         </button>
       </header>
       {adding && (
