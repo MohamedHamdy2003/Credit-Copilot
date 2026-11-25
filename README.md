@@ -4,7 +4,21 @@ Credit Copilot is a synthetic underwriting workspace for Delta Commercial Bank�
 
 ## Quick start
 
-Use Node.js 24, pnpm 11.25.0, Docker with Compose v2, and Git. Run commands from the repository root.
+Run commands from the repository root. The Docker Compose option needs Docker with Compose v2. The local Node option needs Node.js 24, pnpm 11.25.0, Docker with Compose v2, and Git.
+
+### Run the full workspace with Docker Compose
+
+Copy `.env.example` to `.env`, then set `GEMINI_API_KEY` and a unique `DEMO_PASSWORD` of 12–256 characters. The Compose app container uses the database service address internally, regardless of the `localhost` database address in the local template.
+
+```sh
+docker compose up --build
+```
+
+Compose waits for PostgreSQL, runs migrations, indexes the eleven reviewed policy sources, seeds the four demo accounts, and starts the API and web interface. Open `http://localhost:5173`. The API documentation is at `http://localhost:3000/api/docs`. On each app-container start, the seed step reuses fully indexed sources and resets the demo accounts to `DEMO_PASSWORD`, revoking their existing sessions. Press Ctrl+C to stop, then run `docker compose down` to remove the containers while keeping database data.
+
+The Compose app container runs the API and Vite development server together for local review. Keep `PORT` matched to the API address and set `WEB_PORT` to the same port used in `WEB_ORIGIN` if you change the web port.
+
+The existing host-based setup remains available with Node.js:
 
 ```powershell
 pnpm install --frozen-lockfile
@@ -21,12 +35,12 @@ On a fresh local database, this command starts PostgreSQL, runs the migration CL
 
 All four demo accounts use the password you set locally. Use separate accounts for assessment preparation and review.
 
-| Account | Role and authority |
-| --- | --- |
-| `loan-officer` | Loan Officer. Prepares cases and asks policy questions. |
-| `credit-officer` | Credit Officer. Up to EGP 250,000. |
-| `senior-credit-officer` | Senior Credit Officer. Up to EGP 500,000 and referral review. |
-| `head-credit` | Head Credit Officer. Up to EGP 1,000,000 with reviewed knowledge ingestion permission. |
+| Account                 | Role and authority                                                                     |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| `loan-officer`          | Loan Officer. Prepares cases and asks policy questions.                                |
+| `credit-officer`        | Credit Officer. Up to EGP 250,000.                                                     |
+| `senior-credit-officer` | Senior Credit Officer. Up to EGP 500,000 and referral review.                          |
+| `head-credit`           | Head Credit Officer. Up to EGP 1,000,000 with reviewed knowledge ingestion permission. |
 
 ## 5-Minute Demo Path
 
@@ -66,32 +80,32 @@ Run `pnpm evaluate --vector`, `pnpm evaluate --hybrid`, `pnpm evaluate --rewrite
 
 Use [.env.example](.env.example) as the local template. Restart services after changing runtime settings. Set test or Compose overrides in the shell when launching their commands.
 
-| Variable | Default and purpose |
-| --- | --- |
-| `DATABASE_URL` | Local PostgreSQL on port 54329, database `credit_copilot`. Match the Compose credentials and port. |
-| `POSTGRES_PORT` / `POSTGRES_PASSWORD` | Compose host port 54329 and local-only default password `copilot_local`. |
-| `COMPOSE_PROJECT_NAME` | Optional Docker Compose namespace for an isolated container and volume. Use a distinct `POSTGRES_PORT` for simultaneous instances. |
-| `PORT` / `WEB_ORIGIN` | API port 3000 and web origin `http://localhost:5173`. Open the exact origin configured. |
-| `GEMINI_API_KEY` / `LLM_PROVIDER` | Local AI Studio key and primary provider `gemini`. |
-| `GENERATION_MODEL` | `gemini-3.5-flash-lite`. Choose a model available to your project. |
-| `GEMINI_BILLING_TIER` | `unknown`. Use `confirmed_free` only after verifying your key’s project is on Gemini Free Tier. |
-| `EMBEDDING_MODEL` / `EMBEDDING_DIMENSIONS` | `gemini-embedding-001` / 768. Reindex trusted sources after changing either. |
-| `SEED_EMBEDDING_INTERVAL_MS` | 750 ms. Minimum spacing between logical embedding calls when seeding policies with the CLI. |
-| `RETRIEVAL_STRATEGY` / `RETRIEVAL_MIN_SIMILARITY` | `hybrid` / 0.65. Choose `vector` for cosine-only retrieval. |
-| `QUERY_REWRITE_MAX_EXPANSIONS` | 2 additional glossary phrases. Accepts 0–4, where 0 disables rewriting. |
-| `ASSESSMENT_MODE` / `ALLOW_DEMO_MODE` | `strict` / `false`. Set the second to `true` to allow explicit synthetic Demo assessment. |
-| `ASSESSMENT_ORCHESTRATION` | `workflow`. Choose `agents` for three bounded Mastra tool planners. |
-| `OLLAMA_FALLBACK_ENABLED` | `false`. Allows generation fallback after transient Gemini failures when enabled. |
-| `OLLAMA_BASE_URL` | `http://127.0.0.1:11434`. Accepts a loopback HTTP origin. |
-| `OLLAMA_MODEL` | `qwen3:4b-instruct-2507-q4_K_M`. Download it before use. |
-| `OLLAMA_TIMEOUT_MS` | 120000 ms. Timeout for the local generation attempt. |
-| `UPLOAD_MAX_BYTES` | 10485760. Maximum per upload. The PDF parser also limits documents to 100 text pages. |
-| `DEMO_PASSWORD` | Required for account seeding. Choose a unique local password of 12–256 characters. |
-| `SESSION_TTL_HOURS` / `COOKIE_SECURE` | 8 / `false` for local HTTP. Enable secure cookies with HTTPS. |
-| `EVALUATION_DATABASE_URL` | Optional isolated live database. By default derive an `_eval` database from `DATABASE_URL`. |
-| `EVALUATION_GENERATION_INTERVAL_MS` | 0. Optional pacing between logical generation calls in evaluation. |
-| `TEST_DATABASE_URL` | Optional dedicated database ending in `_test`. |
-| `API_PROXY_TARGET` | Optional API origin when running Vite separately. `pnpm dev` sets the proxy using `PORT`. |
+| Variable                                          | Default and purpose                                                                                                                |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                    | Local PostgreSQL on port 54329, database `credit_copilot`. Match the Compose credentials and port.                                 |
+| `POSTGRES_PORT` / `POSTGRES_PASSWORD`             | Compose host port 54329 and local-only default password `copilot_local`.                                                           |
+| `COMPOSE_PROJECT_NAME`                            | Optional Docker Compose namespace for an isolated container and volume. Use a distinct `POSTGRES_PORT` for simultaneous instances. |
+| `PORT` / `WEB_ORIGIN`                             | API port 3000 and web origin `http://localhost:5173`. Open the exact origin configured.                                            |
+| `GEMINI_API_KEY` / `LLM_PROVIDER`                 | Local AI Studio key and primary provider `gemini`.                                                                                 |
+| `GENERATION_MODEL`                                | `gemini-3.5-flash-lite`. Choose a model available to your project.                                                                 |
+| `GEMINI_BILLING_TIER`                             | `unknown`. Use `confirmed_free` only after verifying your key’s project is on Gemini Free Tier.                                    |
+| `EMBEDDING_MODEL` / `EMBEDDING_DIMENSIONS`        | `gemini-embedding-001` / 768. Reindex trusted sources after changing either.                                                       |
+| `SEED_EMBEDDING_INTERVAL_MS`                      | 750 ms. Minimum spacing between logical embedding calls when seeding policies with the CLI.                                        |
+| `RETRIEVAL_STRATEGY` / `RETRIEVAL_MIN_SIMILARITY` | `hybrid` / 0.65. Choose `vector` for cosine-only retrieval.                                                                        |
+| `QUERY_REWRITE_MAX_EXPANSIONS`                    | 2 additional glossary phrases. Accepts 0–4, where 0 disables rewriting.                                                            |
+| `ASSESSMENT_MODE` / `ALLOW_DEMO_MODE`             | `strict` / `false`. Set the second to `true` to allow explicit synthetic Demo assessment.                                          |
+| `ASSESSMENT_ORCHESTRATION`                        | `workflow`. Choose `agents` for three bounded Mastra tool planners.                                                                |
+| `OLLAMA_FALLBACK_ENABLED`                         | `false`. Allows generation fallback after transient Gemini failures when enabled.                                                  |
+| `OLLAMA_BASE_URL`                                 | `http://127.0.0.1:11434`. Accepts a loopback HTTP origin.                                                                          |
+| `OLLAMA_MODEL`                                    | `qwen3:4b-instruct-2507-q4_K_M`. Download it before use.                                                                           |
+| `OLLAMA_TIMEOUT_MS`                               | 120000 ms. Timeout for the local generation attempt.                                                                               |
+| `UPLOAD_MAX_BYTES`                                | 10485760. Maximum per upload. The PDF parser also limits documents to 100 text pages.                                              |
+| `DEMO_PASSWORD`                                   | Required for account seeding. Choose a unique local password of 12–256 characters.                                                 |
+| `SESSION_TTL_HOURS` / `COOKIE_SECURE`             | 8 / `false` for local HTTP. Enable secure cookies with HTTPS.                                                                      |
+| `EVALUATION_DATABASE_URL`                         | Optional isolated live database. By default derive an `_eval` database from `DATABASE_URL`.                                        |
+| `EVALUATION_GENERATION_INTERVAL_MS`               | 0. Optional pacing between logical generation calls in evaluation.                                                                 |
+| `TEST_DATABASE_URL`                               | Optional dedicated database ending in `_test`.                                                                                     |
+| `API_PROXY_TARGET`                                | Optional API origin when running Vite separately. `pnpm dev` sets the proxy using `PORT`.                                          |
 
 For local fallback, start `docker compose --profile local-llm up -d ollama`, download the model with `docker compose exec -T ollama ollama pull qwen3:4b-instruct-2507-q4_K_M`, then enable `OLLAMA_FALLBACK_ENABLED`. Gemini continues to supply embeddings. Use `pnpm evaluate:fallback` to test local generation with an injected primary outage. [Ollama setup and behavior](https://docs.ollama.com/faq)
 

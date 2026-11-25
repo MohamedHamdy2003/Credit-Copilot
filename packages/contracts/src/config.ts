@@ -33,6 +33,7 @@ export const configSchema = z
     DATABASE_URL: z.string().url(),
     EVALUATION_DATABASE_URL: z.string().url().optional(),
     PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+    API_HOST: z.string().min(1).default('127.0.0.1'),
     WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
     ASSESSMENT_MODE: z.enum(['strict', 'demo']).default('strict'),
     ASSESSMENT_ORCHESTRATION: z.enum(['workflow', 'agents']).default('workflow'),

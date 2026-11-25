@@ -35,7 +35,7 @@ const app = await createApi({
   secureCookies: config.COOKIE_SECURE,
   sessionHours: config.SESSION_TTL_HOURS,
 });
-await app.listen(config.PORT, '127.0.0.1');
+await app.listen(config.PORT, config.API_HOST);
 console.log(`Credit Copilot API: http://127.0.0.1:${config.PORT}/api/docs`);
 const shutdown = async () => {
   await app.close();
