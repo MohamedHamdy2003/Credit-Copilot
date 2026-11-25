@@ -263,3 +263,48 @@ written reasons, not an appeal override; Cairo inclusive30 calendar days from re
 rejection. PM-4 target is indicative with configured Fri/Sat/holidays. Fraud routing
 internal only. Secrets are kept in the ignored .env file. Tests *_test, live eval *_eval;
 no concurrent suites against shared test DB. DB54329; web origin must match browser.
+
+## Policy Q&A chat and source links — feature/policy-chat-citations
+
+The policy question tool now presents a local chat transcript. The product and
+as-of date or edition stay explicit for each turn; selectors prevent conflicting
+date and edition inputs. Up to three recent questions can clarify follow-ups,
+with the selected product/date controlling retrieval. Chat history stays in the
+browser and is not saved as a durable record. The UI warns users not to enter
+applicant information.
+
+The question stream now returns its canonical response separately from verified
+citations. The chat shows an answer block and a separate source list, with exact
+quotes available on demand. Source links open the original PDF or text file in a
+new tab through an authenticated endpoint. The endpoint accepts only exact
+reviewed-manifest filenames, verifies each source hash, serves files inline, and
+disables caching. The affordability tool remains a structured form with its
+numeric result and linked source list separated.
+
+README's five-minute path uses the original PL-100 application packs and no
+vehicle example. `pnpm typecheck`, `pnpm build`, `pnpm lint`, `pnpm format:check`
+and `git diff --check` passed. `docker compose up --build -d` rebuilt the app;
+the API and web returned HTTP 200 and both Compose services became healthy. The
+browser reached the login screen. Authenticated chat and source-link interaction
+was not reviewed in the browser, and automated test suites were not run in this
+turn.
+
+## Year-only policy scope and citation labels — feature/policy-chat-citations
+
+Policy questions that mention one calendar year now resolve against policy
+effective dates only when that year maps to exactly one edition. If the policy
+changed during the year, the request asks for an edition or exact date rather
+than silently using the current policy. The source search remains restricted by
+product and effective date before vector/BM25 ranking.
+
+The workspace page formerly labeled Knowledge is now Policy library, which
+describes its document-ingestion and indexed-policy functions. Answer evidence
+is labeled Citations. `pnpm typecheck`, `pnpm lint`, `pnpm format:check`,
+`pnpm build`, and `git diff --check` passed. Jest, live Gemini evaluation, and
+authenticated browser interaction were not run.
+
+The Compose rebuild was attempted, but `pnpm install --frozen-lockfile` failed
+inside Docker after registry fetch errors for `ignore`. The existing app and DB
+containers remain healthy, and the DB volume is intact. The running app still
+uses the previous image until a rebuild succeeds. Since startup did not occur,
+demo passwords and sessions were not reset.

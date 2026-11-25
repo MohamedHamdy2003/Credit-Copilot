@@ -35,23 +35,23 @@ On a fresh local database, this command starts PostgreSQL, runs the migration CL
 
 All four demo accounts use the password you set locally. Use separate accounts for assessment preparation and review.
 
-| Account                 | Role and authority                                                                     |
-| ----------------------- | -------------------------------------------------------------------------------------- |
-| `loan-officer`          | Loan Officer. Prepares cases and asks policy questions.                                |
-| `credit-officer`        | Credit Officer. Up to EGP 250,000.                                                     |
-| `senior-credit-officer` | Senior Credit Officer. Up to EGP 500,000 and referral review.                          |
-| `head-credit`           | Head Credit Officer. Up to EGP 1,000,000 with reviewed knowledge ingestion permission. |
+| Account                 | Role and authority                                                                  |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| `loan-officer`          | Loan Officer. Prepares cases and asks policy questions.                             |
+| `credit-officer`        | Credit Officer. Up to EGP 250,000.                                                  |
+| `senior-credit-officer` | Senior Credit Officer. Up to EGP 500,000 and referral review.                       |
+| `head-credit`           | Head Credit Officer. Up to EGP 1,000,000 with reviewed policy ingestion permission. |
 
 ## 5-Minute Demo Path
 
 For a filmed walkthrough, use a fresh synthetic database and set `ALLOW_DEMO_MODE=true` before starting. Keep `ASSESSMENT_MODE=strict` and select Demo explicitly for the approval example. Capture the first successful ingestion before recording Q&A. A seeded workspace can demonstrate idempotency by uploading the same source again.
 
-1. **0:00–0:35 · Ingest.** Show `pnpm seed` indexing trusted sources on a fresh database, or use **Knowledge → Ingest documents** as `head-credit`. Show a successful source, then repeat it and observe **skipped**. Use files from `data/corpus/policy/`.
-2. **0:35–1:15 · Cite, refuse and compare editions.** Sign in as `loan-officer`. In **Policy questions**, ask “What is the minimum net monthly income for PL-100?” for CP-2024, then CP-2025. Show the source and the change from EGP 8,000 to EGP 10,000. Ask “What are the terms for a crypto-backed loan?” and show the insufficient-evidence refusal.
+1. **0:00–0:35 · Ingest.** Show `pnpm seed` indexing trusted sources on a fresh database, or use **Policy library → Ingest documents** as `head-credit`. Show a successful source, then repeat it and observe **skipped**. Use files from `data/corpus/policy/`.
+2. **0:35–1:15 · Cite, refuse and compare editions.** Sign in as `loan-officer`. In the **Policy questions** chat, select PL-100 and ask “What is the minimum net monthly income for PL-100?” for CP-2024, then CP-2025. Show the answer and source sections, open a citation in a new tab, and explain the change from EGP 8,000 to EGP 10,000. Ask “What are the terms for a crypto-backed loan?” and show the insufficient-evidence refusal.
 3. **1:15–2:25 · Assess and show the numbers.** In **Applications**, add `APP-001` and run Strict. Explain the missing national ID copy referral under CP-8 and PS-7. Select Demo and rerun. Show the explicit ID-copy assumption, the dated 24% CSV rate, EGP 8,630.39 instalment, 42.10% DBR and EGP 330,000 maximum under CP-2025. Open **Rules & sources** or **Workflow** to show provenance and stage history.
 4. **2:25–3:00 · Show the failed injection.** Add and assess `APP-004`. Open the case result and show the internal suspected-tampering referral and skipped extraction and rule stages. The supplied salary certificate contains the malicious EGP 200,000 instruction alongside the actual EGP 18,000 field.
 5. **3:00–4:15 · Show independent approval.** Sign in as `credit-officer` and open the Demo APP-001 run in **Review queue**. Attempt approval with a justification and show `AuthorityLimitExceeded` on EGP 300,000. Then sign in as `senior-credit-officer`, approve with a justification, and issue with the synthetic disbursement date `2025-04-03`. Open **View issued offer** and download the PDF.
-6. **4:15–5:00 · Sample the extensions.** Show the PDF’s source-cited conditions and repayment table. Show **Usage** and its known and missing counters. If time permits, assess `AUTO-001` in Demo and point out the EGP 100,000 documented down payment and EGP 250,000 financed principal.
+6. **4:15–5:00 · Close with traceability.** Open a policy citation in a new tab, show the source clause and page, then show **Usage** with its known and missing counters. Summarize the path from dated evidence to calculation and independent human approval. Keep the walkthrough on the five original PL-100 application packs.
 
 ## Tests and evaluation
 

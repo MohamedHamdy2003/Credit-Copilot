@@ -136,7 +136,7 @@ export function maskPolicyQuestion(question: string) {
 }
 
 export async function answerPolicyQuestion(
-  input: { question: string; asOfDate: string; product?: string },
+  input: { question: string; asOfDate: string; product?: string; context?: string[] },
   dependencies: {
     search: PolicySearch;
     provider: GenerationPort;
@@ -151,8 +151,18 @@ export async function answerPolicyQuestion(
   );
   validDate(input.asOfDate);
   const question = maskPolicyQuestion(input.question);
+  const priorQuestions = (input.context ?? [])
+    .slice(-3)
+    .map((previous) => maskPolicyQuestion(previous.trim()))
+    .filter(Boolean);
+  const retrievalQuestion = [...priorQuestions, question].join('\n');
   const hits = (
-    await dependencies.search.search(question, input.asOfDate, input.product ?? 'PL-100', 5)
+    await dependencies.search.search(
+      retrievalQuestion,
+      input.asOfDate,
+      input.product ?? 'PL-100',
+      5,
+    )
   ).filter(
     (hit) => Number.isFinite(hit.similarity) && hit.similarity >= dependencies.minimumSimilarity,
   );
@@ -167,7 +177,7 @@ export async function answerPolicyQuestion(
   // Source-reference context is separate from the vector top5. It never creates
   // an answer when the primary search is below threshold or the model refuses.
   const related = await dependencies.search.related?.(
-    question,
+    retrievalQuestion,
     input.asOfDate,
     input.product ?? 'PL-100',
     hits,
@@ -217,6 +227,8 @@ export async function answerPolicyQuestion(
     dependencies.prompt,
     JSON.stringify({
       question,
+      priorQuestions,
+      product: input.product ?? 'PL-100',
       asOfDate: input.asOfDate,
       evidence: candidates.map((chunk) => ({
         chunkId: chunk.id,

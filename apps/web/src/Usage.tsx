@@ -17,7 +17,7 @@ const recordedDate = new Intl.DateTimeFormat('en-GB', {
 const operations = {
   assessment: 'Assessment',
   policy_question: 'Policy question',
-  knowledge_ingestion: 'Knowledge ingestion',
+  knowledge_ingestion: 'Policy source ingestion',
 };
 const steps = {
   assessment: 'Run',

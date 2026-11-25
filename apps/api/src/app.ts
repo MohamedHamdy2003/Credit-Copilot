@@ -68,6 +68,11 @@ const questionRequestBody: SchemaObject = {
     asOfDate: { type: 'string', format: 'date' },
     product: { type: 'string', enum: [...productIds] },
     edition: { type: 'string', enum: ['CP-2024', 'CP-2025', 'AUTO-2025'] },
+    context: {
+      type: 'array',
+      maxItems: 3,
+      items: { type: 'string', minLength: 1, maxLength: 2000 },
+    },
   },
 };
 const assessmentRequestBody: SchemaObject = {
@@ -326,6 +331,25 @@ export async function createApi(deps: {
       invariant(this.operations, 'ServiceUnavailable', 'Core operations not configured', 503);
       return this.operations;
     }
+    @Get('knowledge/source')
+    @ApiProduces('application/pdf', 'text/plain')
+    @ApiQuery({ name: 'filename', required: true, schema: { type: 'string' } })
+    async source(@Query('filename') filename: string, @Res() res: Response) {
+      const file = await this.service().source(filename);
+      const safeFilename = file.filename.replace(/["\\\r\n]/g, '_');
+      const encodedFilename = encodeURIComponent(safeFilename).replace(
+        /['()]/g,
+        (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+      );
+      res.setHeader('Content-Type', file.contentType);
+      res.setHeader(
+        'Content-Disposition',
+        `inline; filename="${safeFilename}"; filename*=UTF-8''${encodedFilename}`,
+      );
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      return res.send(Buffer.from(file.bytes));
+    }
     @Get('knowledge/documents') documents() {
       return this.service().documents();
     }
@@ -386,7 +410,7 @@ export async function createApi(deps: {
     @ApiProduces('text/event-stream')
     @ApiHeader({ name: 'Last-Event-ID', required: false })
     @ApiOkResponse({
-      description: 'Verified citation excerpts followed by a terminal event',
+      description: 'Verified citations followed by an answer event',
       schema: { type: 'string' },
     })
     questionStream(
