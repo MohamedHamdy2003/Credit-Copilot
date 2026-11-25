@@ -64,8 +64,16 @@ export interface Answer {
 export interface KnowledgeDocument {
   id: string;
   filename: string;
-  metadata: { edition?: string };
+  metadata: {
+    edition?: string;
+    product?: string;
+    kind?: string;
+    effectiveFrom?: string;
+    effectiveTo?: string | null;
+    sourceOrigin?: 'manifest' | 'custom';
+  };
   pipeline_version: string;
+  chunk_count?: number;
 }
 export interface IngestionAttempt {
   id: string;
