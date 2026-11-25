@@ -1,8 +1,100 @@
 import { useState, type FormEvent } from 'react';
 import { api } from './api';
-import type { Actor, Offer, Run } from './types';
+import type { Actor, AssessmentResult, Offer, Run } from './types';
 import { Empty, ErrorNotice, Money, Status } from './components';
 import { WrittenReasonPanel, ReferralReviewPanel } from './CaseReview';
+
+type MemoRuleItem = {
+  code: string;
+  status: 'pass' | 'fail' | 'refer';
+  reason?: string;
+};
+
+function extractMemoRules(result: AssessmentResult): MemoRuleItem[] {
+  if (result.results?.length) {
+    return result.results.map((r) => ({
+      code: r.rule,
+      status: r.result,
+      reason: r.reason,
+    }));
+  }
+  if (!result.memo) return [];
+  const items: MemoRuleItem[] = [];
+  for (const part of result.memo.split(/[;\n]/)) {
+    const match = /^\s*([A-Z]{2,3}-\d+(?:\.\d+)?(?:\s+[a-z]+)?)\s*:\s*(pass|fail|refer)\b/i.exec(
+      part,
+    );
+    if (match) {
+      items.push({
+        code: match[1]!.trim(),
+        status: match[2]!.toLowerCase() as 'pass' | 'fail' | 'refer',
+      });
+    }
+  }
+  return items;
+}
+
+function CreditMemoCard({ result }: { result: AssessmentResult }) {
+  if (!result.memo) return null;
+  const rules = extractMemoRules(result);
+  const passCount = rules.filter((r) => r.status === 'pass').length;
+  const failCount = rules.filter((r) => r.status === 'fail').length;
+  const referCount = rules.filter((r) => r.status === 'refer').length;
+  const recTone =
+    result.recommendation === 'APPROVE'
+      ? 'pass'
+      : result.recommendation === 'DECLINE'
+        ? 'fail'
+        : 'refer';
+  return (
+    <section className="memo-card" aria-label="Credit memo">
+      <div className="memo-card-head">
+        <div className="memo-card-title">
+          <h3>Credit memo</h3>
+          <span className={`memo-pill memo-tone-${recTone}`}>
+            {result.recommendation.replaceAll('_', ' ')}
+          </span>
+          {result.policyEdition && (
+            <span className="memo-pill memo-neutral">{result.policyEdition}</span>
+          )}
+          {result.pricing && (
+            <span className="memo-pill memo-neutral">
+              {result.pricing.annualRatePercent}% · row {result.pricing.row}
+            </span>
+          )}
+        </div>
+        {rules.length > 0 && (
+          <span className="memo-tally">
+            {passCount}/{rules.length} passed
+            {failCount > 0 ? ` · ${failCount} failed` : ''}
+            {referCount > 0 ? ` · ${referCount} referred` : ''}
+          </span>
+        )}
+      </div>
+      {rules.length > 0 && (
+        <ul className="memo-rules">
+          {rules.map((r) => (
+            <li key={r.code} className={`memo-rule memo-tone-${r.status}`} title={r.reason}>
+              <span>{r.code}</span>
+              <b>{r.status}</b>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="memo-card-foot">
+        <small>
+          {result.calculation
+            ? `EMI: EGP ${result.calculation.monthlyInstallment} · DBR: ${result.calculation.dbrPercent}% · Human decision required.`
+            : 'Human decision required. This recommendation is not an issued offer.'}
+        </small>
+        <details className="memo-raw">
+          <summary>Full memo text</summary>
+          <pre className="memo">{result.memo}</pre>
+        </details>
+      </div>
+    </section>
+  );
+}
 function DecisionForm({
   run,
   actor,
@@ -271,7 +363,7 @@ export function Assessment({
                   </div>
                 </dl>
               )}
-              {result.memo && <pre className="memo">{result.memo}</pre>}
+              <CreditMemoCard result={result} />
             </>
           )}
           {tab === 'Rules & sources' && (

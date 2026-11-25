@@ -426,10 +426,122 @@ dd {
 }
 .memo {
   font: inherit;
+  font-size: 12px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   background: #f6f8f9;
-  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin: 8px 0 0;
+}
+.memo-card {
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fbfcfd;
+  padding: 14px 16px;
+  display: grid;
+  gap: 10px;
+}
+.memo-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.memo-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.memo-card-title h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+.memo-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.25px;
+  border: 1px solid transparent;
+}
+.memo-neutral {
+  background: #eef3f5;
+  border-color: #d6e1e5;
+  color: #355059;
+}
+.memo-tally {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.memo-rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.memo-rule {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 5px;
+  font-size: 12px;
+  line-height: 1.3;
+  border: 1px solid var(--border);
+}
+.memo-rule b {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.memo-tone-pass {
+  background: #edf7f2;
+  border-color: #bfe0d1;
+  color: #145b47;
+}
+.memo-tone-refer {
+  background: #fff8e8;
+  border-color: #e6c67c;
+  color: #875a0e;
+}
+.memo-tone-fail {
+  background: #fff2f0;
+  border-color: #e0aea8;
+  color: #8f2d23;
+}
+.memo-card-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.memo-card-foot > small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+.memo-raw {
+  width: 100%;
+}
+.memo-raw summary {
+  padding: 2px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
 }
 .answer {
   margin-top: 24px;
