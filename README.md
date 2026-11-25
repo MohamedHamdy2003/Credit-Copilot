@@ -205,14 +205,15 @@ are listed. To watch the **live 4-stage ingestion pipeline**
 **② Edition comparison & inline source citations** — sign in as `loan-officer`,
 open **Policy questions**, select product **`PL-100`**, and ask:
 
-> *What is the minimum net monthly income for PL-100?*
+> *What is the minimum net monthly income for PL-100 in CP-2024?*
 
-Run it under **`CP-2024`** (**EGP 8,000**) and then under **`CP-2025`**
-(**EGP 10,000**, explaining `CP-1` policy precedence over `PS-2`). Click any
-citation link to open the original PDF/Markdown inline in a new tab via
-`/api/v1/knowledge/source?filename=...`. Try *"What is the maximum tenor under Circular
-2025/02?"* to see the 60-month product cap (`CP-14`/`PS-3`) explained alongside
-the 72-month conditional circular (`C-1`).
+Then ask the same question for **`CP-2025`** (or change **As-of date**) to
+compare **EGP 8,000** vs **EGP 10,000** (explaining `CP-1` policy precedence
+over `PS-2`). Leaving **As-of date** empty searches all currently active
+policies automatically. Click any citation link to open the original PDF/Markdown
+inline in a new tab via `/api/v1/knowledge/source?filename=...`. Try *"What is
+the maximum tenor under Circular 2025/02?"* to see the 60-month product cap
+(`CP-14`/`PS-3`) explained alongside the 72-month conditional circular (`C-1`).
 
 **③ Anti-hallucination refusal (out-of-corpus)** — in the same Policy questions
 chat, ask:

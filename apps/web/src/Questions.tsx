@@ -44,11 +44,14 @@ function sourceLocation(citation: Citation) {
   return `${location}${pages}${row}`;
 }
 
+function todayCairo() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
+}
+
 export function Questions() {
   const [tool, setTool] = useState<Tool>('chat');
   const [product, setProduct] = useState<ProductId>('PL-100');
   const [asOfDate, setAsOfDate] = useState('');
-  const [edition, setEdition] = useState('');
   const [draft, setDraft] = useState('');
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [busy, setBusy] = useState(false);
@@ -84,16 +87,18 @@ export function Questions() {
       .filter((turn) => !turn.error && turn.answer && !turn.answer.refused)
       .slice(-3)
       .map((turn) => turn.question);
+    const mentionedEdition = question
+      .match(/\b(?:CP-20(?:24|25)|AUTO-2025)\b/i)?.[0]
+      ?.toUpperCase();
     const referencedYears = [...new Set(question.match(/\b20\d{2}\b/g) ?? [])];
     const scope =
-      edition ||
       asOfDate ||
-      (referencedYears.length ? `Year ${referencedYears.join(', ')}` : 'Current policy date');
+      mentionedEdition ||
+      (referencedYears.length ? `Year ${referencedYears.join(', ')}` : 'Active policies today');
     const body = {
       question,
       product,
       ...(asOfDate ? { asOfDate } : {}),
-      ...(edition ? { edition } : {}),
       ...(context.length ? { context } : {}),
     };
     const signature = JSON.stringify(body);
@@ -256,7 +261,6 @@ export function Questions() {
                 onChange={(event) => {
                   setProduct(event.target.value as ProductId);
                   setAsOfDate('');
-                  setEdition('');
                 }}
               >
                 <option value="PL-100">Personal loan (PL-100)</option>
@@ -264,37 +268,13 @@ export function Questions() {
               </select>
             </label>
             <label>
-              As-of date
+              As-of date (optional)
               <input
                 type="date"
                 value={asOfDate}
-                disabled={busy || !!edition}
-                onChange={(event) => {
-                  setAsOfDate(event.target.value);
-                  if (event.target.value) setEdition('');
-                }}
+                disabled={busy}
+                onChange={(event) => setAsOfDate(event.target.value)}
               />
-            </label>
-            <label>
-              Policy edition
-              <select
-                value={edition}
-                disabled={busy || !!asOfDate}
-                onChange={(event) => {
-                  setEdition(event.target.value);
-                  if (event.target.value) setAsOfDate('');
-                }}
-              >
-                <option value="">Use the current policy date</option>
-                {product === 'PL-100' ? (
-                  <>
-                    <option value="CP-2024">CP-2024</option>
-                    <option value="CP-2025">CP-2025</option>
-                  </>
-                ) : (
-                  <option value="AUTO-2025">AUTO-2025</option>
-                )}
-              </select>
             </label>
           </div>
 
@@ -458,11 +438,14 @@ export function Questions() {
               </label>
               <label>
                 Calculation date
-                <input name="date" type="date" required />
+                <input name="date" type="date" defaultValue={todayCairo()} required />
               </label>
-              <label className="check">
+              <label className="check check-card">
                 <input type="checkbox" name="payroll" />
-                Salary transferred to bank
+                <span className="check-copy">
+                  <strong>Salary transferred to bank</strong>
+                  <small>Applies the 2% lower payroll-transfer rate from pricing</small>
+                </span>
               </label>
             </div>
             <button className="primary" disabled={calcBusy}>

@@ -197,7 +197,6 @@ test('auto application shows documented funding and cites its own product rules'
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Policy questions', exact: true }).click();
   await page.getByRole('combobox', { name: 'Product', exact: true }).selectOption('AL-200');
-  await page.getByRole('combobox', { name: 'Policy edition' }).selectOption('AUTO-2025');
   await page
     .getByLabel('Your question', { exact: true })
     .fill('What is the minimum down payment for the vehicle loan?');
@@ -245,7 +244,7 @@ test('grounded questions, refusal, conflicts and edition-specific code calculati
   await expect(page.locator('.citation-card a').first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: shot('stream-mobile'), fullPage: true });
-  await page.getByLabel('As-of date', { exact: true }).fill('2025-04-03');
+  await page.getByLabel('As-of date (optional)', { exact: true }).fill('2025-04-03');
   await page.getByLabel('Your question', { exact: true }).fill('Maximum DBR in CP-2024?');
   await page.getByRole('button', { name: 'Send question', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('ConflictingEdition');
