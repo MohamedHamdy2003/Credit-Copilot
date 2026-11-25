@@ -70,13 +70,16 @@ approved a targeted remediation pass on `feature/policy-chat-citations`:
   dependency caching; removed internal non-deliverable working files
   (`docs/PR-PLAN.md`, `FEATURES.md`, `agent.md`, `AGENTS.md`, `status.md`,
   `scripts/evaluate-smoke.ts`); verified the `AL-200` auto-loan extension end to
-  end; and reorganized `README.md`, `DESIGN.md`, and `EVALUATION.md`.
+  end; added live 4-stage SSE ingestion (`extract → chunk → embed → index`),
+  custom policy upload with explicit metadata, and authenticated policy deletion
+  for `head-credit` in **Policy library** (while keeping customer packs strictly
+  blocked); and reorganized `README.md`, `DESIGN.md`, and `EVALUATION.md`.
 
 ## 2026-11-25 policy Q&A chat and source links
 
 Codex replaced the single-turn policy question form with a local browser chat
 transcript, added authenticated inline viewing of manifest-verified source files
-at `GET /api/v1/sources/:filename`, separated canonical answers from citation
+at `GET /api/v1/knowledge/source`, separated canonical answers from citation
 cards in SSE `completed` frames, renamed Knowledge to Policy library, and added
 year-only policy scope checks. Automated integration and browser suites were not
 re-run in that turn and were subsequently repaired in the audit pass above.

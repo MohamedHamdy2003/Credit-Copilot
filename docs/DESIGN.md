@@ -36,7 +36,19 @@ auto-loan (`AL-200`) policy sources and three authored auto-loan packs
 
 Trusted policy sources are verified by SHA-256 against
 [corpus-manifest.json](../data/config/corpus-manifest.json) before indexing into
-`knowledge.*`. Customer application packs are verified separately against
+`knowledge.*`. Authorized `head-credit` users (`canIngest = true`) may also
+upload custom policy documents (PDF, Markdown, or CSV) with explicit metadata
+(`product`, `edition`, `kind`, `effectiveFrom`, optional `effectiveTo` and `id`)
+or delete indexed policy documents (`DELETE /api/v1/knowledge/documents/:id`,
+removing chunks, embeddings, index revisions, and pricing rows atomically while
+logging a `deleted` attempt). Live ingestion streams stage-by-stage progress
+(`extract → chunk → embed → index`) over authenticated SSE
+(`POST /api/v1/knowledge/ingestions/streams` +
+`GET /api/v1/knowledge/ingestion-streams/:id`). Customer application packs
+(`APP-*` / `AUTO-*`, fixture hashes, or documents containing applicant form plus
+salary/bureau evidence) are always rejected from `knowledge.*` with
+`403 UntrustedPolicyDocument`. Customer application packs are verified
+separately against
 [assessment-fixtures.json](../data/config/assessment-fixtures.json). In the
 **Applications** workspace (and `POST /api/v1/applications`), officers either
 select a reviewed synthetic pack or upload an original application PDF; the
@@ -93,9 +105,9 @@ turn:
   a refusal. Approval-bypass prompts with qualifying procedure evidence return a
   read-only rejection quoting `PM-1`/`PM-2`/`PM-3`.
 - Source links open the original reviewed PDF, Markdown, or CSV inline through
-  `GET /api/v1/sources/:filename`, which validates exact manifest filenames,
-  re-verifies SHA-256 digests, requires an authenticated session, and disables
-  caching. [Q&A implementation](../packages/application/src/questions.ts) ·
+  `GET /api/v1/knowledge/source?filename=...`, which validates manifest or
+  indexed filenames, re-verifies SHA-256 digests for manifest files, requires an
+  authenticated session, and disables caching. [Q&A implementation](../packages/application/src/questions.ts) ·
   [Operations](../packages/application/src/operations.ts)
 
 ## Dated policy, eligibility rules, and code-only calculations

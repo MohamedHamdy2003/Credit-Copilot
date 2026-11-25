@@ -189,9 +189,18 @@ curl -s http://localhost:3000/api/v1/health
 ```
 
 Sign in as `head-credit` (see [Demo accounts](#demo-accounts)) and open
-**Policy library**. Confirm the reviewed policy sources are indexed. Re-upload
-`data/corpus/policy/credit-policy-2025.pdf` under **Ingest documents** and
-observe status **`skipped`** (SHA-256 idempotency).
+**Policy library**. Confirm the reviewed policy sources and active chunk counts
+are listed. To watch the **live 4-stage ingestion pipeline**
+(`1. Extract → 2. Chunk → 3. Embed → 4. Index`) in action:
+
+- **Delete & re-ingest a reviewed policy**: click **Delete** → **Confirm delete**
+  on `credit-policy-2025.pdf`, then upload `data/corpus/policy/credit-policy-2025.pdf`
+  under **Reviewed policy batch** to watch every stage run live; upload it a
+  second time to observe **`skipped`** (SHA-256 idempotency).
+- **Upload a new custom policy**: switch to **New custom policy**, enter Product,
+  Edition, Type, and Effective date, and upload any `.pdf`, `.md`, or `.csv`
+  policy file (customer packs `APP-*` / `AUTO-*` remain strictly blocked with
+  `UntrustedPolicyDocument`).
 
 **② Edition comparison & inline source citations** — sign in as `loan-officer`,
 open **Policy questions**, select product **`PL-100`**, and ask:
@@ -201,7 +210,7 @@ open **Policy questions**, select product **`PL-100`**, and ask:
 Run it under **`CP-2024`** (**EGP 8,000**) and then under **`CP-2025`**
 (**EGP 10,000**, explaining `CP-1` policy precedence over `PS-2`). Click any
 citation link to open the original PDF/Markdown inline in a new tab via
-`/api/v1/sources/:filename`. Try *"What is the maximum tenor under Circular
+`/api/v1/knowledge/source?filename=...`. Try *"What is the maximum tenor under Circular
 2025/02?"* to see the 60-month product cap (`CP-14`/`PS-3`) explained alongside
 the 72-month conditional circular (`C-1`).
 
@@ -428,7 +437,7 @@ pnpm build
 | Suite | Verified Count | Needs | Notes |
 | --- | --- | --- | --- |
 | `pnpm test` (unit) | **156 tests** (24 suites) | Nothing | Pure domain math, rules, chunker, masking, agents, parser checks |
-| `pnpm test:integration` | **44 tests** (3 suites) | Postgres (`*_test`) | Real PostgreSQL + NestJS HTTP, SSE, hybrid BM25/pgvector, PM-4/PM-9 |
+| `pnpm test:integration` | **45 tests** (3 suites) | Postgres (`*_test`) | Real PostgreSQL + NestJS HTTP, SSE, hybrid BM25/pgvector, PM-4/PM-9, custom ingestion & delete |
 | `pnpm test:e2e` (Playwright) | **11 journeys** | Postgres (`*_test`) + Chromium | Desktop & mobile UI flows on ports 4304 / 5174 |
 | `pnpm evaluate:core:offline` | **15/15 cases** | Postgres (`*_test`) | Deterministic workflow regression (`79/79` security & audit) |
 | `pnpm evaluate --offline-agents` | **15/15 cases** | Postgres (`*_test`) | Deterministic typed-agents regression (`93/93` security & audit) |

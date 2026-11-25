@@ -310,6 +310,29 @@ test('real multipart upload, duplicate registration and mixed knowledge batch re
   await expect(
     page.getByText('APP-001.pdf — failed: UntrustedPolicyDocument', { exact: true }),
   ).toBeVisible();
+  await expect(page.getByLabel('Ingestion stages').getByText('Extract').first()).toBeVisible();
+  await expect(page.getByLabel('Ingestion stages').getByText('Index').first()).toBeVisible();
+
+  // Upload a new custom policy through all 4 live stages, then delete it cleanly.
+  await page.getByRole('button', { name: 'New custom policy', exact: true }).click();
+  await page.getByLabel('Policy edition').fill('CP-2026');
+  await page.getByLabel('Document ID (optional)').fill('CUSTOM-E2E-2026');
+  await page.getByLabel('Effective from').fill('2026-01-01');
+  await page.getByLabel('Policy files').setInputFiles({
+    name: 'e2e-custom-policy.md',
+    mimeType: 'text/markdown',
+    buffer: Buffer.from(
+      '# Custom Policy\n\n## CP-99. Custom Clause\nSynthetic browser test policy.\n',
+    ),
+  });
+  await page.getByRole('button', { name: 'Ingest documents' }).click();
+  await expect(page.getByText('e2e-custom-policy.md — succeeded', { exact: true })).toBeVisible();
+  const customRow = page.getByRole('row').filter({ hasText: 'e2e-custom-policy.md' });
+  await expect(customRow).toBeVisible();
+  await customRow.getByRole('button', { name: 'Delete', exact: true }).click();
+  await customRow.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+  await expect(page.getByText('Deleted e2e-custom-policy.md', { exact: false })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'e2e-custom-policy.md' })).toHaveCount(0);
 });
 test('expired session clears protected UI and a network outage can be retried', async ({
   page,
