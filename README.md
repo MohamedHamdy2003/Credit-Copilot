@@ -1,4 +1,4 @@
-# Credit Copilot
+# <img src="apps/web/public/favicon.svg" alt="Credit Copilot logo" width="32" height="32" align="absmiddle" /> Credit Copilot
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-24-339933.svg)](package.json)
