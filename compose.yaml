@@ -14,6 +14,36 @@ services:
       interval: 3s
       timeout: 3s
       retries: 20
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://copilot:${POSTGRES_PASSWORD:-copilot_local}@db:5432/credit_copilot
+      PORT: ${PORT:-3000}
+      API_HOST: 0.0.0.0
+      WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:5173}
+      WEB_HOST: 0.0.0.0
+      COMPOSE_MANAGED: 'true'
+    ports:
+      - '127.0.0.1:${PORT:-3000}:${PORT:-3000}'
+      - '127.0.0.1:${WEB_PORT:-5173}:${WEB_PORT:-5173}'
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ['pnpm', 'dev', '--seed']
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "Promise.all(['http://127.0.0.1:' + process.env.PORT + '/api/v1/health', process.env.WEB_ORIGIN.replace('localhost', '127.0.0.1')].map(url => fetch(url).then(response => response.ok))).then(results => process.exit(results.every(Boolean) ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 180s
   ollama:
     profiles: ['local-llm']
     image: ollama/ollama:0.40.16
