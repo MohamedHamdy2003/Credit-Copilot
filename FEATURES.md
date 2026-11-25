@@ -19,7 +19,7 @@
 | 15 | **REST API & OpenAPI** | endpoints للتحميل والسؤال والتقييم والموافقة والرفض | ✅ المسارات الأساسية موثقة ومختبرة، مع منع التكرار وعزل الأدلة |
 | 16 | **React UI** | تسجيل الدخول، إدارة المستندات، الأسئلة، تقييم الطلبات، والمراجعة والاعتماد | ✅ واجهة core مربوطة بالـAPI ومختبرة على desktop/mobile |
 | 17 | **Evaluation Suite** | 15 حالة تقيس retrieval، الرفض، الحسابات، العدالة، والحقن | ✅ 15/15 live من commit نظيف؛ تقريري 11/15 و14/15 محفوظين؛ regression offline في CI |
-| 18 | **Reproducible Setup & CI** | تشغيل موثق، migrations، اختبارات، build، وفحص أسرار عبر GitHub Actions | ✅ الأساس منفذ |
+| 18 | **Reproducible Setup & CI** | تشغيل موثق، migrations، اختبارات، build، وفحص أسرار عبر GitHub Actions | ✅ pnpm أو Docker Compose بأمر واحد |
 
 وكل الـ**stretch goals** التالية مطلوبة، وهتتنفذ بعد نجاح الـcore:
 

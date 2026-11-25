@@ -1,4 +1,4 @@
-# Current checkpoint — 22 November 2026
+# Current checkpoint — 25 November 2026
 
 Read agent.md and FEATURES.md first. Current release checkpoint: P18.
 Core evaluation went through PR17/18, hybrid search through PR19/20, query
@@ -233,6 +233,23 @@ suites passed 15/15.
   mentions 12 calendar days and its submission section specifies day 10 by
   23:59 Cairo. The invitation date, candidate time and reflection, unlisted
   upload and submission are still candidate-owned.
+
+## Full-stack Docker Compose — feature/compose-full-stack
+
+`docker compose up --build` now builds one local development image with the API
+and Vite, starts it after PostgreSQL is healthy, then runs migrations, trusted
+policy ingestion and demo-user seeding. The Compose-managed launcher skips
+trying to start Docker from inside its own container. The database volume stays
+when containers stop. Starting the app again repeats the idempotent source seed
+and resets the four demo passwords and sessions. The API binds to the container
+interface while its host port remains loopback-only. `README.md` documents
+`GEMINI_API_KEY`, the unique demo password and optional port overrides.
+
+Verified `docker compose config --quiet`, built the app image from a 3.53 MB
+context with `.env` excluded, and passed TypeScript, formatting and whitespace
+checks. Full Compose startup and live policy ingestion have not been run as part
+of this change. They require a configured `DEMO_PASSWORD` and Gemini quota.
+This is a local review/development image, not a production deployment.
 
 ## Fixed decisions
 

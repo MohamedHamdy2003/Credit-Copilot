@@ -6,6 +6,7 @@ const args = process.argv.slice(2);
 if (args.length > 1 || (args.length === 1 && args[0] !== '--seed'))
   throw new Error('Run pnpm dev with optional --seed');
 const seed = args[0] === '--seed';
+const composeManaged = process.env.COMPOSE_MANAGED === 'true';
 const config = configSchema.parse(process.env),
   origin = new URL(config.WEB_ORIGIN);
 if (origin.protocol !== 'http:') throw new Error('Local dev expects an http WEB_ORIGIN');
@@ -37,7 +38,7 @@ const finish = (child: ChildProcess) =>
   });
 const runSetupScript = (file: string) => finish(start(process.execPath, ['--import', 'tsx', file]));
 try {
-  await finish(start('docker', ['compose', 'up', '-d', '--wait', 'db']));
+  if (!composeManaged) await finish(start('docker', ['compose', 'up', '-d', '--wait', 'db']));
   // Explicit migration CLI, never synchronize/ad-hoc schema creation in the API.
   if (!stopping) await runSetupScript('scripts/migrate.ts');
   if (!stopping && seed) {
@@ -54,7 +55,7 @@ try {
           '--config',
           'apps/web/vite.config.ts',
           '--host',
-          origin.hostname,
+          process.env.WEB_HOST ?? origin.hostname,
           '--port',
           origin.port || '80',
           '--strictPort',
