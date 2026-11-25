@@ -196,7 +196,10 @@ test('auto application shows documented funding and cites its own product rules'
   await expect(page.getByText('synthetic-auto-product.md PS-9', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Delta Copilot', exact: true }).click();
-  await page.getByRole('combobox', { name: 'Product', exact: true }).selectOption('AL-200');
+  await page
+    .getByRole('group', { name: 'Product' })
+    .getByRole('button', { name: 'Auto loan (AL-200)', exact: true })
+    .click();
   await page
     .getByLabel('Your question', { exact: true })
     .fill('What is the minimum down payment for the vehicle loan?');
@@ -245,8 +248,9 @@ test('grounded questions, refusal, conflicts and edition-specific code calculati
   await expect(page.locator('.citation-card a').first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: shot('stream-mobile'), fullPage: true });
-  await page.getByLabel('As-of date (optional)', { exact: true }).fill('2025-04-03');
-  await page.getByLabel('Your question', { exact: true }).fill('Maximum DBR in CP-2024?');
+  await page
+    .getByLabel('Your question', { exact: true })
+    .fill('Maximum DBR in CP-2024 on 2025-04-03?');
   await page.getByRole('button', { name: 'Send question', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('ConflictingEdition');
   await page.getByLabel('Your question', { exact: true }).fill('crypto policy?');

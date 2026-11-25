@@ -15,6 +15,24 @@ interface ChatTurn {
   pending: boolean;
 }
 
+const PRODUCTS: { id: ProductId; label: string }[] = [
+  { id: 'PL-100', label: 'Personal loan (PL-100)' },
+  { id: 'AL-200', label: 'Auto loan (AL-200)' },
+];
+
+const SUGGESTIONS: Record<ProductId, string[]> = {
+  'PL-100': [
+    'What is the maximum DBR under CP-2025?',
+    'What is the minimum income for PL-100 under CP-2025?',
+    'What happens when a bureau score is below 600?',
+  ],
+  'AL-200': [
+    'What is the minimum down payment for the vehicle loan?',
+    'What is the maximum loan amount and tenor for AL-200?',
+    'What documents are required for an auto loan application?',
+  ],
+};
+
 function sourceHref(sourceFile: string, page?: number | null) {
   const pageAnchor = page ? `#page=${page}` : '';
   return `/api/v1/knowledge/source?filename=${encodeURIComponent(sourceFile)}${pageAnchor}`;
@@ -35,7 +53,6 @@ function sourceLocation(citation: Citation) {
 
 export function Questions() {
   const [product, setProduct] = useState<ProductId>('PL-100');
-  const [asOfDate, setAsOfDate] = useState('');
   const [draft, setDraft] = useState('');
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const [busy, setBusy] = useState(false);
@@ -68,18 +85,18 @@ export function Questions() {
       .filter((turn) => !turn.error && turn.answer && !turn.answer.refused)
       .slice(-3)
       .map((turn) => turn.question);
+    const mentionedDate = question.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0];
     const mentionedEdition = question
       .match(/\b(?:CP-20(?:24|25)|AUTO-2025)\b/i)?.[0]
       ?.toUpperCase();
     const referencedYears = [...new Set(question.match(/\b20\d{2}\b/g) ?? [])];
     const scope =
-      asOfDate ||
+      mentionedDate ||
       mentionedEdition ||
       (referencedYears.length ? `Year ${referencedYears.join(', ')}` : 'Active policies today');
     const body = {
       question,
       product,
-      ...(asOfDate ? { asOfDate } : {}),
       ...(context.length ? { context } : {}),
     };
     const signature = JSON.stringify(body);
@@ -167,21 +184,29 @@ export function Questions() {
 
   return (
     <>
-      <header className="page-heading">
+      <header className="page-heading copilot-heading">
         <div>
           <h1>Delta Copilot</h1>
-          <p>Ask dated credit policy questions grounded in verified bank sources.</p>
+          <p>A Grounded RAG Assistant for Personal Loan Underwriting</p>
         </div>
-      </header>
-
-      <section className="panel policy-chat" aria-label="Delta Copilot chat">
-        <div className="chat-heading">
-          <div>
-            <h2>Policy assistant</h2>
-            <p className="muted">
-              Answers use the selected product and active policies. Mention an edition or date for
-              historical rules.
-            </p>
+        <div className="copilot-controls">
+          <div
+            className="llm-toggle-group copilot-product-toggle"
+            role="group"
+            aria-label="Product"
+          >
+            {PRODUCTS.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={product === item.id ? 'active' : ''}
+                aria-pressed={product === item.id}
+                disabled={busy}
+                onClick={() => setProduct(item.id)}
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
           <button
             type="button"
@@ -192,38 +217,9 @@ export function Questions() {
             New chat
           </button>
         </div>
+      </header>
 
-        <div className="scope-grid">
-          <label>
-            Product
-            <select
-              value={product}
-              disabled={busy}
-              onChange={(event) => {
-                setProduct(event.target.value as ProductId);
-                setAsOfDate('');
-              }}
-            >
-              <option value="PL-100">Personal loan (PL-100)</option>
-              <option value="AL-200">Auto loan (AL-200)</option>
-            </select>
-          </label>
-          <label>
-            As-of date (optional)
-            <input
-              type="date"
-              value={asOfDate}
-              disabled={busy}
-              onChange={(event) => setAsOfDate(event.target.value)}
-            />
-          </label>
-        </div>
-
-        <p className="chat-privacy muted">
-          Ask policy questions only. Do not enter applicant names, IDs, phone numbers or other
-          personal data. Up to three recent questions may be sent as follow-up context.
-        </p>
-
+      <section className="panel policy-chat" aria-label="Delta Copilot chat">
         <div
           className="chat-history"
           ref={transcript}
@@ -237,15 +233,11 @@ export function Questions() {
               </span>
               <h3>Start with a policy question</h3>
               <p>
-                Choose the product above and ask in plain English. Every answer includes verified
-                source citations.
+                Ask about current policies or mention an edition or date (e.g. CP-2024) for
+                historical rules. Every answer includes verified source citations.
               </p>
               <div className="suggestions" aria-label="Suggested questions">
-                {[
-                  'What is the maximum DBR under CP-2025?',
-                  'What is the minimum income for PL-100 under CP-2025?',
-                  'What happens when a bureau score is below 600?',
-                ].map((question) => (
+                {SUGGESTIONS[product].map((question) => (
                   <button key={question} type="button" onClick={() => setDraft(question)}>
                     {question}
                   </button>
@@ -349,6 +341,10 @@ export function Questions() {
               {busy ? 'Searching…' : 'Send question'}
             </button>
           </div>
+          <p className="chat-privacy muted">
+            Ask policy questions only. Do not enter applicant names, IDs, phone numbers, or other
+            personal data.
+          </p>
         </form>
       </section>
     </>

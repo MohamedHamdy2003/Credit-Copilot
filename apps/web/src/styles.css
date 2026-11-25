@@ -98,7 +98,7 @@ small {
 }
 .workspace {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 244px minmax(0, 1fr);
   min-height: 100dvh;
 }
 .sidebar {
@@ -994,38 +994,37 @@ blockquote {
   margin-bottom: 0;
   font-size: 13px;
 }
+.copilot-heading {
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.copilot-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
 .quiet-button {
   white-space: nowrap;
   padding: 8px 12px;
   color: var(--muted);
 }
-.scope-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 18px;
-  padding: 18px 24px 0;
-}
-.scope-grid label {
-  font-size: 13px;
-}
-.scope-grid input,
-.scope-grid select {
-  min-height: 42px;
-}
 .chat-privacy {
-  margin: 0;
-  padding: 0 24px 14px;
-  font-size: 12px;
+  margin: 10px 0 0;
+  padding: 0;
+  font-size: 11.5px;
+  text-align: center;
 }
 .chat-history {
   display: flex;
-  min-height: 300px;
-  max-height: 480px;
+  min-height: 360px;
+  max-height: 540px;
   flex-direction: column;
   gap: 20px;
   overflow: auto;
   padding: 24px;
-  border-top: 1px solid var(--border);
   background: #f6f8f7;
   overscroll-behavior: contain;
 }
@@ -1534,7 +1533,7 @@ button.danger-button:hover {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .workspace {
-    grid-template-columns: 190px minmax(0, 1fr);
+    grid-template-columns: 210px minmax(0, 1fr);
   }
   .content {
     padding: 24px;
@@ -1690,16 +1689,20 @@ button.danger-button:hover {
     padding: 7px 9px;
     font-size: 12px;
   }
-  .scope-grid {
-    grid-template-columns: 1fr;
-    gap: 0;
-    padding: 16px 16px 0;
+  .copilot-controls {
+    width: 100%;
+    justify-content: flex-start;
   }
-  .scope-grid label {
-    margin-bottom: 12px;
+  .copilot-product-toggle {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+  .copilot-product-toggle button {
+    padding: 6px 10px;
+    font-size: 12px;
   }
   .chat-privacy {
-    padding: 0 16px 14px;
+    text-align: left;
   }
   .chat-history {
     min-height: 250px;

@@ -194,14 +194,15 @@ are listed. To watch the **live 4-stage ingestion pipeline**
   `UntrustedPolicyDocument`).
 
 **② Edition comparison & inline source citations** — sign in as `loan-officer`,
-open **Delta Copilot**, select product **`PL-100`**, and ask:
+open **Delta Copilot**, keep **`Personal loan (PL-100)`** selected in the
+top-right toggle bar, and ask:
 
 > *What is the minimum net monthly income for PL-100 in CP-2024?*
 
-Then ask the same question for **`CP-2025`** (or change **As-of date**) to
-compare **EGP 8,000** vs **EGP 10,000** (explaining `CP-1` policy precedence
-over `PS-2`). Leaving **As-of date** empty searches all currently active
-policies automatically. Click any citation link to open the original PDF/Markdown
+Then ask the same question for **`CP-2025`** (or include a date in the question)
+to compare **EGP 8,000** vs **EGP 10,000** (explaining `CP-1` policy precedence
+over `PS-2`). Questions without an edition or date automatically search currently
+active policies. Click any citation link to open the original PDF/Markdown
 inline in a new tab via `/api/v1/knowledge/source?filename=...`. Try *"What is
 the maximum tenor under Circular 2025/02?"* to see the 60-month product cap
 (`CP-14`/`PS-3`) explained alongside the 72-month conditional circular (`C-1`).
