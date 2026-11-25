@@ -59,8 +59,15 @@ export function Questions() {
   const request = useRef<AbortController | null>(null);
   const retry = useRef<{ key: string; body: string } | null>(null);
   const transcript = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => () => request.current?.abort(), []);
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+  }, [draft, tool]);
   useEffect(() => {
     const element = transcript.current;
     if (element) element.scrollTop = element.scrollHeight;
@@ -400,21 +407,23 @@ export function Questions() {
           </div>
 
           <form className="chat-composer" onSubmit={ask}>
-            <label htmlFor="policy-question">Your question</label>
-            <textarea
-              id="policy-question"
-              name="question"
-              rows={2}
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onKeyDown={handleQuestionKeyDown}
-              required
-              maxLength={2000}
-              disabled={busy}
-              placeholder="Ask about a policy, threshold or procedure…"
-            />
-            <div className="composer-footer">
-              <small>Enter to send · Shift+Enter for a new line</small>
+            <label htmlFor="policy-question" className="sr-only">
+              Your question
+            </label>
+            <div className="composer-box">
+              <textarea
+                ref={inputRef}
+                id="policy-question"
+                name="question"
+                rows={1}
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                onKeyDown={handleQuestionKeyDown}
+                required
+                maxLength={2000}
+                disabled={busy}
+                placeholder="Ask about a policy, threshold or procedure…"
+              />
               <button className="primary" type="submit" disabled={busy || !draft.trim()}>
                 {busy ? 'Searching…' : 'Send question'}
               </button>
