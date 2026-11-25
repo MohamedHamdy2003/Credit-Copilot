@@ -25,6 +25,38 @@ const chatCounters = z.object({
   prompt_eval_count: z.unknown().optional(),
   eval_count: z.unknown().optional(),
 });
+const tagsResponse = z.object({
+  models: z
+    .array(
+      z.object({
+        name: z.string().min(1),
+      }),
+    )
+    .default([]),
+});
+
+export async function listOllamaModels(
+  baseUrl: string,
+  timeoutMs = 2500,
+): Promise<{ reachable: boolean; models: string[] }> {
+  try {
+    const endpoint = new URL('/api/tags', baseUrl);
+    const response = await fetch(endpoint, {
+      method: 'GET',
+      redirect: 'error',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) return { reachable: false, models: [] };
+    const parsed = tagsResponse.safeParse(await response.json());
+    if (!parsed.success) return { reachable: false, models: [] };
+    const models = parsed.data.models
+      .map((entry) => entry.name)
+      .filter((name) => !/[-:]cloud$/i.test(name));
+    return { reachable: true, models };
+  } catch {
+    return { reachable: false, models: [] };
+  }
+}
 
 export class OllamaAdapter implements GenerationPort {
   constructor(private readonly settings: OllamaSettings) {}

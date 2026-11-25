@@ -10,7 +10,7 @@ export const ollamaSettingsSchema = z.object({
       const url = new URL(value);
       return (
         url.protocol === 'http:' &&
-        ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) &&
+        ['127.0.0.1', 'localhost', '[::1]', 'ollama'].includes(url.hostname) &&
         !url.username &&
         !url.password &&
         url.pathname === '/' &&

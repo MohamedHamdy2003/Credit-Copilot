@@ -12,6 +12,7 @@ import { PostgresDecisionStore } from '../packages/infrastructure/src/db/decisio
 import { createOperations } from '../packages/infrastructure/src/operations.js';
 import { createCaseReviews } from '../packages/infrastructure/src/db/case-review-store.js';
 import { loadProductCatalog } from '../packages/infrastructure/src/product-catalog.js';
+import { RuntimeGenerationProvider } from '../packages/infrastructure/src/llm/provider.js';
 import { WorkflowTestProvider } from '../tests/helpers/workflow-provider.js';
 import { seedRejection } from '../tests/e2e/seed-rejection.js';
 import {
@@ -54,7 +55,22 @@ for (const username of [
     ],
   );
 }
-const provider = new WorkflowTestProvider();
+const rawProvider = new WorkflowTestProvider();
+const provider = new RuntimeGenerationProvider(rawProvider, {
+  geminiConfigured: true,
+  geminiModel: 'gemini-3.5-flash-lite',
+  ollama: {
+    OLLAMA_BASE_URL: 'http://127.0.0.1:11434',
+    OLLAMA_MODEL: 'qwen3:4b-instruct-2507-q4_K_M',
+    OLLAMA_TIMEOUT_MS: 120000,
+  },
+  initialMode: 'gemini',
+  localFactory: () => rawProvider,
+  probeOllama: async () => ({
+    reachable: true,
+    models: ['qwen3:4b-instruct-2507-q4_K_M'],
+  }),
+});
 const manifest = JSON.parse(
   await readFile('data/config/corpus-manifest.json', 'utf8'),
 ) as ManifestEntry[];

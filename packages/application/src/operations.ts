@@ -7,6 +7,11 @@ import {
   type NormalizedDocument,
 } from '../../contracts/src/documents.js';
 import type { IssuedOfferDocument } from '../../contracts/src/offers.js';
+import {
+  generationProviderUpdateSchema,
+  type GenerationProviderUpdate,
+  type LlmProviderStatus,
+} from '../../contracts/src/llm.js';
 import { productIds, type ProductId } from '../../contracts/src/products.js';
 import type {
   AssessmentStreamEvent,
@@ -94,11 +99,16 @@ export interface KnowledgePort {
     bytes: Uint8Array;
   }>;
 }
+export interface LlmControlPort {
+  status(canManage: boolean): Promise<LlmProviderStatus>;
+  configure(update: GenerationProviderUpdate): Promise<LlmProviderStatus>;
+}
 export interface OperationDependencies {
   policies: Record<ProductId, Policy[]>;
   store: ApplicationStore;
   usage: UsagePort;
   knowledge: KnowledgePort;
+  llm?: LlmControlPort;
   parse(upload: Upload): Promise<NormalizedDocument>;
   fixtures: { reference: string; filename: string; hash: string; bytes: Uint8Array }[];
   assess(
@@ -565,5 +575,30 @@ export class OperationsService {
   offerDocument(actor: Actor, id: string) {
     z.uuid().parse(id);
     return this.deps.store.offerDocument(actor, id);
+  }
+  llmStatus(actor: Actor): Promise<LlmProviderStatus> {
+    invariant(
+      this.deps.llm,
+      'ServiceUnavailable',
+      'LLM provider management is not configured',
+      503,
+    );
+    return this.deps.llm.status(actor.tier === 'head');
+  }
+  setLlmProvider(actor: Actor, raw: unknown): Promise<LlmProviderStatus> {
+    invariant(
+      actor.tier === 'head',
+      'Forbidden',
+      'Only Head Credit Officer may change the active LLM provider',
+      403,
+    );
+    invariant(
+      this.deps.llm,
+      'ServiceUnavailable',
+      'LLM provider management is not configured',
+      503,
+    );
+    const update = generationProviderUpdateSchema.parse(raw);
+    return this.deps.llm.configure(update);
   }
 }
