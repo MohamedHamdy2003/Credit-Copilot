@@ -1,17 +1,24 @@
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import type { Actor } from '../../domain/src/access.js';
-import type { NormalizedDocument } from '../../contracts/src/documents.js';
+import {
+  customPolicyMetadataSchema,
+  type CustomPolicyMetadata,
+  type NormalizedDocument,
+} from '../../contracts/src/documents.js';
 import type { IssuedOfferDocument } from '../../contracts/src/offers.js';
 import { productIds, type ProductId } from '../../contracts/src/products.js';
 import type {
   AssessmentStreamEvent,
+  IngestionStage,
+  IngestionStreamEvent,
   QuestionStreamEvent,
   StreamFrame,
 } from '../../contracts/src/streams.js';
+import { IngestionStreams } from './ingestion-streams.js';
 import { QuestionStreams } from './question-streams.js';
 import { maskPolicyQuestion, type answerPolicyQuestion } from './questions.js';
-import { invariant } from '../../domain/src/errors.js';
+import { DomainError, invariant } from '../../domain/src/errors.js';
 import { resolveMode, type AssessmentMode } from '../../domain/src/evidence-mode.js';
 import { parseApplicationForm } from './application-form.js';
 import { selectPolicy, type Policy } from '../../domain/src/policy.js';
@@ -54,8 +61,31 @@ export interface ApplicationStore {
   offer(actor: Actor, id: string): Promise<unknown>;
   offerDocument(actor: Actor, id: string): Promise<IssuedOfferDocument>;
 }
+export interface KnowledgeIngestionProgress {
+  stage: IngestionStage;
+  status: 'running' | 'completed' | 'skipped' | 'failed';
+  detail?: string;
+  current?: number;
+  total?: number;
+}
 export interface KnowledgePort {
-  ingest(filename: string, bytes: Uint8Array, mime?: string): Promise<unknown>;
+  ingest(
+    filename: string,
+    bytes: Uint8Array,
+    mime?: string,
+    options?: {
+      customMetadata?: CustomPolicyMetadata;
+      onProgress?: (event: KnowledgeIngestionProgress) => void;
+    },
+  ): Promise<{
+    id: string;
+    documentId: string;
+    filename: string;
+    status: 'succeeded' | 'skipped';
+    chunks: number;
+    stages: KnowledgeIngestionProgress[];
+  }>;
+  deleteDocument(id: string): Promise<{ deleted: true; id: string; filename: string }>;
   documents(): Promise<unknown>;
   attempts(): Promise<unknown>;
   source(filename: string): Promise<{
@@ -93,15 +123,39 @@ export interface OperationDependencies {
 }
 export class OperationsService {
   private readonly questionStreams = new QuestionStreams();
+  private readonly ingestionStreams = new IngestionStreams();
   constructor(private readonly deps: OperationDependencies) {}
-  async ingest(actor: Actor, uploads: Upload[], requestId: string) {
+  private parseCustomMetadata(raw: unknown, fileCount: number): CustomPolicyMetadata | undefined {
+    if (raw === undefined || raw === null || raw === '') return undefined;
+    let parsedRaw: unknown = raw;
+    if (typeof raw === 'string') {
+      try {
+        parsedRaw = JSON.parse(raw);
+      } catch {
+        throw new DomainError(
+          'InvalidPolicyMetadata',
+          'Custom policy metadata must be valid JSON',
+          422,
+        );
+      }
+    }
+    const metadata = customPolicyMetadataSchema.parse(parsedRaw);
+    invariant(
+      fileCount === 1 || !metadata.id,
+      'InvalidUpload',
+      'Custom document ID can only be set when uploading a single policy file',
+    );
+    return metadata;
+  }
+  async ingest(actor: Actor, uploads: Upload[], requestId: string, rawMetadata?: unknown) {
     invariant(
       actor.canIngest,
       'Forbidden',
       'Reviewed knowledge ingestion permission required',
       403,
     );
-    invariant(uploads.length > 0 && uploads.length <= 20, 'InvalidUpload', 'Select1–20 files');
+    invariant(uploads.length > 0 && uploads.length <= 20, 'InvalidUpload', 'Select 1–20 files');
+    const customMetadata = this.parseCustomMetadata(rawMetadata, uploads.length);
     return this.deps.usage.track(
       { actorId: actor.id, requestId, operation: 'knowledge_ingestion' },
       async () => {
@@ -110,20 +164,116 @@ export class OperationsService {
           try {
             results.push({
               filename: upload.filename,
-              result: await this.deps.knowledge.ingest(upload.filename, upload.bytes, upload.mime),
+              result: await this.deps.knowledge.ingest(upload.filename, upload.bytes, upload.mime, {
+                customMetadata,
+              }),
               status: 'succeeded',
             });
           } catch (error) {
             results.push({
               filename: upload.filename,
               status: 'failed',
-              code: error instanceof Error ? error.name : 'IngestionFailed',
+              code:
+                error instanceof DomainError
+                  ? error.code
+                  : error instanceof Error
+                    ? error.name
+                    : 'IngestionFailed',
             });
           }
         }
         return { results };
       },
     );
+  }
+  startIngestionStream(actor: Actor, uploads: Upload[], requestId: string, rawMetadata?: unknown) {
+    invariant(
+      actor.canIngest,
+      'Forbidden',
+      'Reviewed knowledge ingestion permission required',
+      403,
+    );
+    invariant(uploads.length > 0 && uploads.length <= 20, 'InvalidUpload', 'Select 1–20 files');
+    const customMetadata = this.parseCustomMetadata(rawMetadata, uploads.length);
+    return this.ingestionStreams.start(actor.id, this.deps.newId, async (emit) => {
+      await this.deps.usage.track(
+        { actorId: actor.id, requestId, operation: 'knowledge_ingestion' },
+        async () => {
+          let succeeded = 0,
+            skipped = 0,
+            failed = 0;
+          for (const [fileIndex, upload] of uploads.entries()) {
+            try {
+              const outcome = await this.deps.knowledge.ingest(
+                upload.filename,
+                upload.bytes,
+                upload.mime,
+                {
+                  customMetadata,
+                  onProgress: (event) =>
+                    emit({
+                      kind: 'stage',
+                      fileIndex,
+                      filename: upload.filename,
+                      ...event,
+                    }),
+                },
+              );
+              if (outcome.status === 'skipped') skipped++;
+              else succeeded++;
+              emit({
+                kind: 'file_completed',
+                fileIndex,
+                filename: upload.filename,
+                status: outcome.status,
+                documentId: outcome.documentId,
+                chunks: outcome.chunks,
+              });
+            } catch (error) {
+              failed++;
+              emit({
+                kind: 'file_completed',
+                fileIndex,
+                filename: upload.filename,
+                status: 'failed',
+                code:
+                  error instanceof DomainError
+                    ? error.code
+                    : error instanceof Error
+                      ? error.name
+                      : 'IngestionFailed',
+                message: error instanceof DomainError ? error.message : 'Document ingestion failed',
+              });
+            }
+          }
+          emit({
+            kind: 'completed',
+            totalFiles: uploads.length,
+            succeeded,
+            skipped,
+            failed,
+          });
+        },
+      );
+    });
+  }
+  ingestionEvents(actor: Actor, id: string): StreamFrame<IngestionStreamEvent>[] {
+    invariant(
+      actor.canIngest,
+      'Forbidden',
+      'Reviewed knowledge ingestion permission required',
+      403,
+    );
+    return this.ingestionStreams.read(actor.id, z.uuid().parse(id));
+  }
+  deleteDocument(actor: Actor, id: unknown) {
+    invariant(
+      actor.canIngest,
+      'Forbidden',
+      'Reviewed knowledge ingestion permission required',
+      403,
+    );
+    return this.deps.knowledge.deleteDocument(z.string().trim().min(1).max(64).parse(id));
   }
   documents() {
     return this.deps.knowledge.documents();
