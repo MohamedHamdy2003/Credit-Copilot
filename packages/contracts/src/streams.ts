@@ -41,6 +41,7 @@ export const questionStreamEvent = z.discriminatedUnion('kind', [
     kind: z.literal('completed'),
     asOfDate: z.iso.date(),
     refused: z.boolean(),
+    answer: z.string().max(20000),
     resolution: z.string().optional(),
   }),
   z.object({ kind: z.literal('failed'), code: z.literal('QuestionUnavailable') }),

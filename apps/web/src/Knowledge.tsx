@@ -47,13 +47,13 @@ export function Knowledge({ actor }: { actor: Actor }) {
     <>
       <header className="page-heading">
         <div>
-          <h1>Knowledge</h1>
+          <h1>Policy library</h1>
           <p>Reviewed policies. Traceable sources.</p>
         </div>
       </header>
       <p className="notice">
         Policy documents only. Customer applications are stored separately and never enter this
-        knowledge base.
+        library.
       </p>
       {actor.canIngest ? (
         <section className="panel">
@@ -88,7 +88,7 @@ export function Knowledge({ actor }: { actor: Actor }) {
         </section>
       ) : (
         <p className="muted">
-          Your account can read knowledge. Ingestion requires separate permission.
+          Your account can read the policy library. Ingestion requires separate permission.
         </p>
       )}
       <ResourceState {...documents} retry={documents.refresh} />

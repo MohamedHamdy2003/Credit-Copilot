@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { getEncoding } from 'js-tiktoken';
 const tokenizer = getEncoding('cl100k_base');
-export const CHUNKER_VERSION = 'clause-cl100k-v2';
+export const CHUNKER_VERSION = 'clause-cl100k-v3';
 export const tokenCount = (text: string) => tokenizer.encode(text).length;
 
 export function splitWithOverlap(text: string, maximum = 800, overlap = 60): string[] {
@@ -31,12 +31,33 @@ export function chunkDocument(document: NormalizedDocument, metadata: DocumentMe
   const flush = () => {
     if (current.text.trim()) groups.push(current);
   };
+  let currentPrefix: string | null = null;
+  let currentMajor = -1;
   for (const block of document.blocks) {
     for (const line of block.text.split('\n')) {
-      const clause = line.match(/^\s*(?:#+\s*)?((?:CP|PM|PS|C)-\d+(?:\.\d+)?)(?:[.\s]|$)/)?.[1];
-      if (clause || (block.row !== null && current.row !== block.row)) {
+      const clauseMatch = line.match(/^\s*(?:#+\s*)?((CP|PM|PS|C)-(\d+)(?:\.\d+)?)(?:[.\s]|$)/);
+      const clause = clauseMatch?.[1];
+      const prefix = clauseMatch?.[2] ?? null;
+      const major = clauseMatch ? Number(clauseMatch[3]) : -1;
+      // Comparison tables (e.g., CP-13 summarizing earlier CP-4.1/CP-3.3/CP-9 clauses)
+      // reference lower clause numbers and stay inside the enclosing clause chunk.
+      const startsNewClause =
+        Boolean(clause) && !(prefix === currentPrefix && major < currentMajor);
+      if (startsNewClause || (block.row !== null && current.row !== block.row)) {
         flush();
-        current = { text: '', section: clause ?? block.section, pages: [], row: block.row };
+        current = {
+          text: '',
+          section: startsNewClause ? clause! : block.section,
+          pages: [],
+          row: block.row,
+        };
+        if (startsNewClause) {
+          currentPrefix = prefix;
+          currentMajor = major;
+        } else {
+          currentPrefix = null;
+          currentMajor = -1;
+        }
       }
       current.text += `${line}\n`;
       if (block.page !== null && !current.pages.includes(block.page))

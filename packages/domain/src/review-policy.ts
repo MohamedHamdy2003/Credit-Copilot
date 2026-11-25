@@ -51,6 +51,7 @@ export function rejectionClauses(input: {
   missing: string[];
   results: { rule: string; result: string }[];
   customerDeclined: boolean;
+  allowReferredClauses?: boolean;
 }) {
   invariant(
     !input.fraudReferral && !input.missing.length,
@@ -61,7 +62,13 @@ export function rejectionClauses(input: {
   return [
     ...new Set(
       input.results
-        .filter((r) => r.result === 'fail' && r.rule !== 'CP-4.1')
+        .filter(
+          (r) =>
+            (r.result === 'fail' && r.rule !== 'CP-4.1') ||
+            (input.allowReferredClauses === true &&
+              r.result === 'refer' &&
+              ['CP-6', 'CP-8', 'CP-5'].includes(r.rule)),
+        )
         .map((r) => r.rule.split(' ')[0]!)
         .concat(input.customerDeclined ? ['CP-4.1'] : []),
     ),

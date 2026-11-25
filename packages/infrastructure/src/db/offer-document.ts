@@ -175,10 +175,19 @@ export async function buildIssuedOfferDocument(input: {
 }): Promise<IssuedOfferDocument> {
   const { offerId, runId, form, result, preparerId, approval, issuance, disbursementDate } = input;
   try {
+    const approvedReferral =
+      result.recommendation === 'REFER_TO_HUMAN' &&
+      !result.fraudReferral &&
+      result.evidence.missing.length === 0 &&
+      Boolean(result.results?.length) &&
+      !result.results?.some((r) => r.result === 'fail') &&
+      Boolean(
+        result.results?.some((r) => r.result === 'refer' && ['CP-6', 'CP-8'].includes(r.rule)),
+      );
     requireProvenance(
       form.reference === result.reference &&
         form.productId === (result.productId ?? 'PL-100') &&
-        ['APPROVE', 'OFFER_ALTERNATIVE'].includes(result.recommendation) &&
+        (['APPROVE', 'OFFER_ALTERNATIVE'].includes(result.recommendation) || approvedReferral) &&
         result.recommendedAmount &&
         compareMoney(result.recommendedAmount, approval.amount) === 0 &&
         result.calculation &&
@@ -211,6 +220,17 @@ export async function buildIssuedOfferDocument(input: {
       ),
       citation(sheet, 'PS-7', terms.evidence),
       citation(policy, 'CP-3.5', 'Final instalment must fall on or before the 60th birthday.'),
+      ...(approvedReferral
+        ? [
+            citation(
+              policy,
+              result.results?.some((r) => r.rule === 'CP-6' && r.result === 'refer')
+                ? 'CP-6'
+                : 'CP-8',
+              'Referred application approved by Senior Credit Officer with recorded written justification under PM-4.',
+            ),
+          ]
+        : []),
       ...(form.productId === 'AL-200'
         ? [
             citation(

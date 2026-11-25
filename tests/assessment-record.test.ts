@@ -1,35 +1,18 @@
 import { readFile } from 'node:fs/promises';
 import { ParserRegistry } from '../packages/infrastructure/src/parsers/registry.js';
-import {
-  assessAndRecord,
-  type AssessmentRecord,
-} from '../packages/application/src/assessment-record.js';
-import type {
-  AssessmentInput,
-  AssessmentDependencies,
-} from '../packages/application/src/assessment.js';
+import type { AssessmentRecord } from '../packages/application/src/assessment-record.js';
+import type { DocumentAssessmentDependencies } from '../packages/application/src/document-assessment.js';
+import { createDocumentAssessmentWorkflow } from '../packages/infrastructure/src/workflows/document-assessment.js';
 import { FakeGeneration } from './helpers/fake-provider.js';
-let input: AssessmentInput;
-let dependencies: AssessmentDependencies;
+
+let app004: Awaited<ReturnType<ParserRegistry['extract']>>;
+let app001: Awaited<ReturnType<ParserRegistry['extract']>>;
+let dependencies: DocumentAssessmentDependencies;
+
 beforeAll(async () => {
-  input = {
-    document: await new ParserRegistry().extract(
-      'APP-004.pdf',
-      await readFile('data/corpus/evidence/APP-004.pdf'),
-    ),
-    actorId: 'actor',
-    at: '2026-11-17T12:00:00Z',
-    synthetic: true,
-    evidence: [],
-    verifiedFacts: {
-      certificateDate: '2025-04-15',
-      confirmed: true,
-      hasDefault: false,
-      bankEmployee: false,
-      purposeAllowed: true,
-      plannedDisbursement: '2025-04-22',
-    },
-  };
+  const parser = new ParserRegistry();
+  app004 = await parser.extract('APP-004.pdf', await readFile('data/corpus/evidence/APP-004.pdf'));
+  app001 = await parser.extract('APP-001.pdf', await readFile('data/corpus/evidence/APP-001.pdf'));
   dependencies = {
     provider: new FakeGeneration({}),
     prompt: 'test',
@@ -37,52 +20,103 @@ beforeAll(async () => {
     product: JSON.parse(await readFile('data/config/personal-loan.json', 'utf8')),
     pricing: [],
     settings: { allowDemo: true },
+    clauses: { loadRequired: async () => [] },
+    persistence: {
+      runId: 'run',
+      applicationId: 'app',
+      requestId: 'request',
+      repository: { save: async () => undefined },
+    },
   };
 });
+
 it('records strict missing evidence and fraud flags without model invocation', async () => {
   const records: AssessmentRecord[] = [];
-  const result = await assessAndRecord(
-    input,
-    dependencies,
-    {
-      save: async (record) => {
-        records.push(record);
+  const provider = new FakeGeneration({});
+  const workflow = createDocumentAssessmentWorkflow({
+    ...dependencies,
+    provider,
+    persistence: {
+      ...dependencies.persistence,
+      repository: {
+        save: async (record) => {
+          records.push(record);
+        },
       },
     },
-    { runId: 'run', applicationId: 'app', requestId: 'request' },
-  );
+  });
+  const outcome = await (
+    await workflow.createRun()
+  ).start({
+    inputData: {
+      document: app004,
+      actorId: 'actor',
+      at: '2026-11-17T12:00:00Z',
+      synthetic: true,
+    },
+  });
+  expect(outcome.status).toBe('success');
+  if (outcome.status !== 'success') throw new Error('Workflow failed');
+  const result = outcome.result.result!;
   expect(result.recommendation).toBe('REFER_TO_HUMAN');
   expect(result.fraudReferral).toBe(true);
   expect(result.evidence.missing).toContain('national_id_copy');
+  expect(provider.calls).toHaveLength(0);
   expect(records).toHaveLength(1);
   expect(records[0]?.requestId).toBe('request');
 });
+
 it('persists policy-not-found as an explicit referral', async () => {
   const records: AssessmentRecord[] = [];
-  const result = await assessAndRecord(
-    input,
-    { ...dependencies, policies: [] },
-    {
-      save: async (record) => {
-        records.push(record);
+  const workflow = createDocumentAssessmentWorkflow({
+    ...dependencies,
+    policies: [],
+    persistence: {
+      ...dependencies.persistence,
+      repository: {
+        save: async (record) => {
+          records.push(record);
+        },
       },
     },
-    { runId: 'run', applicationId: 'app', requestId: 'request' },
-  );
-  expect('reason' in result && result.reason).toBe('PolicyEditionNotFound');
+  });
+  const outcome = await (
+    await workflow.createRun()
+  ).start({
+    inputData: {
+      document: app001,
+      actorId: 'actor',
+      at: '2026-11-17T12:00:00Z',
+      synthetic: true,
+    },
+  });
+  expect(outcome.status).toBe('success');
+  if (outcome.status !== 'success') throw new Error('Workflow failed');
+  expect(outcome.result.result?.reason).toBe('PolicyEditionNotFound');
   expect(records[0]?.result.policyEdition).toBeNull();
 });
+
 it('does not report success when persistence fails', async () => {
-  await expect(
-    assessAndRecord(
-      input,
-      dependencies,
-      {
+  const workflow = createDocumentAssessmentWorkflow({
+    ...dependencies,
+    persistence: {
+      ...dependencies.persistence,
+      repository: {
         save: async () => {
           throw new Error('database unavailable');
         },
       },
-      { runId: 'run', applicationId: 'app', requestId: 'request' },
-    ),
-  ).rejects.toThrow('database unavailable');
+    },
+  });
+  const outcome = await (
+    await workflow.createRun()
+  ).start({
+    inputData: {
+      document: app004,
+      actorId: 'actor',
+      at: '2026-11-17T12:00:00Z',
+      synthetic: true,
+    },
+  });
+  expect(outcome.status).toBe('failed');
 });

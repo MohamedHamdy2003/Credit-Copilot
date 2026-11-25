@@ -22,6 +22,9 @@ export function creditMemo(result: AssessmentResult, form?: ApplicationForm) {
     ...result.evidence.assumptions.map(
       (a) => `Assumption: ${a.reason}; actual ${a.actualEvidence}; verified=false`,
     ),
+    ...(result.approvalRequiredFrom
+      ? [`Approval authority required: ${result.approvalRequiredFrom.replaceAll('_', ' ')}`]
+      : []),
     ...(result.pricing
       ? [
           `Annual rate ${result.pricing.annualRatePercent}%; source ${result.pricing.sourceFile} row ${result.pricing.row}`,

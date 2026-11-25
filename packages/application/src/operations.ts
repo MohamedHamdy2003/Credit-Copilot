@@ -58,6 +58,11 @@ export interface KnowledgePort {
   ingest(filename: string, bytes: Uint8Array, mime?: string): Promise<unknown>;
   documents(): Promise<unknown>;
   attempts(): Promise<unknown>;
+  source(filename: string): Promise<{
+    filename: string;
+    contentType: string;
+    bytes: Uint8Array;
+  }>;
 }
 export interface OperationDependencies {
   policies: Record<ProductId, Policy[]>;
@@ -80,6 +85,7 @@ export interface OperationDependencies {
     question: string;
     asOfDate: string;
     product: string;
+    context?: string[];
   }): ReturnType<typeof answerPolicyQuestion>;
   calculate(input: unknown): unknown;
   settings: { allowDemo: boolean; defaultMode?: AssessmentMode };
@@ -121,6 +127,9 @@ export class OperationsService {
   }
   documents() {
     return this.deps.knowledge.documents();
+  }
+  source(filename: unknown) {
+    return this.deps.knowledge.source(z.string().trim().min(1).max(255).parse(filename));
   }
   attempts(actor: Actor) {
     invariant(actor.canIngest, 'Forbidden', 'Ingestion permission required', 403);
@@ -261,6 +270,7 @@ export class OperationsService {
         asOfDate: z.iso.date().optional(),
         product: z.enum(productIds).optional(),
         edition: z.enum(['CP-2024', 'CP-2025', 'AUTO-2025']).optional(),
+        context: z.array(z.string().trim().min(1).max(2000)).max(3).optional(),
       })
       .strict()
       .parse(raw);
@@ -271,6 +281,18 @@ export class OperationsService {
       ),
     ];
     const dates = [...new Set(input.question.match(/\b\d{4}-\d{2}-\d{2}\b/g) ?? [])];
+    const circulars = [
+      ...new Set(
+        [...input.question.matchAll(/\bcircular\s+(20\d{2}\/\d{2})\b/gi)].map((m) => m[1]!),
+      ),
+    ];
+    // Strip document identifiers and full dates before inspecting standalone policy years.
+    const withoutIdentifiers = input.question
+      .replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ')
+      .replace(/\b(?:CP-20(?:24|25)|AUTO-2025|PT-20\d{2}-\d{2}|PM-CC-20\d{2})\b/gi, ' ')
+      .replace(/\bcircular\s+20\d{2}\/\d{2}\b/gi, ' ');
+    const standaloneYears = [...new Set(withoutIdentifiers.match(/\b20\d{2}\b/g) ?? [])];
+    const hasExplicitScope = Boolean(input.asOfDate || input.edition || dates.length > 0);
     invariant(
       editions.length <= 1 && dates.length <= 1,
       'AmbiguousPolicyQuestion',
@@ -294,10 +316,49 @@ export class OperationsService {
       'Policy edition belongs to a different product',
     );
     const product = input.product ?? editionProduct ?? 'PL-100';
+    const context = [...new Set(input.context ?? [])];
+    invariant(
+      context.reduce((total, question) => total + question.length, 0) <= 3000,
+      'QuestionContextTooLong',
+      'Follow-up context must not exceed 3000 characters',
+    );
     const policies = this.deps.policies[product];
+    const circularEffectiveDates: Record<string, string> = {
+      '2024/07': '2024-08-01',
+      '2025/02': '2025-03-01',
+    };
+    const circularDate =
+      !hasExplicitScope && !edition && circulars.length === 1
+        ? circularEffectiveDates[circulars[0]!]
+        : undefined;
+    let yearStartDate: string | undefined;
+    if (!hasExplicitScope && !edition && !circularDate && standaloneYears.length === 1) {
+      const referencedYear = standaloneYears[0]!;
+      const yearStart = `${referencedYear}-01-01`;
+      const yearEnd = `${Number(referencedYear) + 1}-01-01`;
+      const yearPolicies = policies.filter(
+        (policy) =>
+          policy.effectiveFrom < yearEnd && (!policy.effectiveTo || policy.effectiveTo > yearStart),
+      );
+      if (yearPolicies.length > 1) {
+        invariant(
+          false,
+          'AmbiguousPolicyYear',
+          `${referencedYear} includes multiple policy editions. Select an edition or an exact date.`,
+        );
+      }
+      yearStartDate =
+        yearPolicies.length === 1
+          ? yearPolicies[0]!.effectiveFrom > yearStart
+            ? yearPolicies[0]!.effectiveFrom
+            : yearStart
+          : yearStart;
+    }
     const asOfDate =
       input.asOfDate ??
       dates[0] ??
+      circularDate ??
+      yearStartDate ??
       policies.find((p) => p.edition === edition)?.effectiveFrom ??
       new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
     if (edition)
@@ -306,7 +367,7 @@ export class OperationsService {
         'ConflictingEdition',
         'Selected date does not belong to the requested edition',
       );
-    return { question: input.question, product, asOfDate };
+    return { question: input.question, product, asOfDate, context };
   }
   async question(actor: Actor, raw: unknown, requestId: string) {
     const question = this.resolveQuestion(raw);
@@ -319,7 +380,13 @@ export class OperationsService {
     const requestKey = this.requestKey(key);
     const question = this.resolveQuestion(raw);
     const fingerprint = createHash('sha256')
-      .update(JSON.stringify({ ...question, question: maskPolicyQuestion(question.question) }))
+      .update(
+        JSON.stringify({
+          ...question,
+          question: maskPolicyQuestion(question.question),
+          context: question.context.map(maskPolicyQuestion),
+        }),
+      )
       .digest('hex');
     return this.questionStreams.start(actor.id, requestKey, fingerprint, this.deps.newId, () =>
       this.deps.usage.track({ actorId: actor.id, requestId, operation: 'policy_question' }, () =>

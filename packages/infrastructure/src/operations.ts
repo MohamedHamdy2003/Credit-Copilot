@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { DataSource } from 'typeorm';
 import type { Config } from '../../contracts/src/config.js';
 import { OperationsService } from '../../application/src/operations.js';
@@ -48,6 +48,29 @@ export async function createOperations(
     parse: (upload) => parser.extract(upload.filename, upload.bytes, upload.mime),
     knowledge: {
       ingest: (name, bytes, mime) => ingestion.ingest(name, bytes, mime),
+      source: async (filename) => {
+        const entry = manifest.find((candidate) => candidate.filename === filename);
+        invariant(
+          entry && !/[\\/]/.test(entry.filename),
+          'NotFound',
+          'Reviewed policy source not found',
+          404,
+        );
+        const bytes = await readFile(`data/corpus/policy/${entry.filename}`);
+        invariant(
+          createHash('sha256').update(bytes).digest('hex') === entry.sha256,
+          'UntrustedPolicyDocument',
+          'Reviewed policy source failed integrity verification',
+          409,
+        );
+        return {
+          filename: entry.filename,
+          contentType: entry.filename.toLowerCase().endsWith('.pdf')
+            ? 'application/pdf'
+            : 'text/plain; charset=utf-8',
+          bytes,
+        };
+      },
       documents: () =>
         db.query(
           'SELECT id,filename,metadata,pipeline_version,created_at FROM knowledge.documents ORDER BY id',

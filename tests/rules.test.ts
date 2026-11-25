@@ -79,6 +79,16 @@ describe('eligibility before affordability', () => {
     expect(
       assessRules({ ...facts, confirmed: null }, policy, product, pricing).recommendation,
     ).toBe('REFER_TO_HUMAN'));
+  it('declines when a mandatory CP-3 criterion fails even alongside a referral rule', () => {
+    const result = assessRules(
+      { ...facts, birthDate: '1968-06-20', bureauScore: 580 },
+      policy,
+      product,
+      pricing,
+    );
+    expect(result.recommendation).toBe('DECLINE');
+    expect(result.calculation).toBeNull();
+  });
   it('offers affordable alternative rather than silently declining', () => {
     const result = assessRules({ ...facts, amount: '350000' }, policy, product, pricing);
     expect(result.recommendation).toBe('OFFER_ALTERNATIVE');

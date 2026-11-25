@@ -6,16 +6,41 @@ export { ASSESSMENT_STAGES, type AssessmentStage } from '../../contracts/src/str
 import { applicationFormSchema, parseApplicationForm } from './application-form.js';
 import { sanitizeEvidence, extractSanitized } from './extraction.js';
 import { deriveEvidenceFacts } from './evidence-facts.js';
-import { resolveMode, evaluateEvidence } from '../../domain/src/evidence-mode.js';
-import { selectPolicy, selectPricing, type Policy } from '../../domain/src/policy.js';
+import {
+  resolveMode,
+  evaluateEvidence,
+  type AssessmentMode,
+} from '../../domain/src/evidence-mode.js';
+import {
+  selectPolicy,
+  selectPricing,
+  type Policy,
+  type PricingRow,
+  type Product,
+} from '../../domain/src/policy.js';
+import { requiredApprovalTier } from '../../domain/src/access.js';
 import { assessRules } from '../../domain/src/rules.js';
 import { DomainError, invariant } from '../../domain/src/errors.js';
-import type { AssessmentDependencies } from './assessment.js';
 import type { AssessmentRepository, AssessmentResult } from './assessment-record.js';
 import type { Chunk } from '../../contracts/src/documents.js';
 import { creditMemo } from './credit-memo.js';
 import type { GenerationPort, Usage } from './ports.js';
-import type { AgentToolCall, AssessmentAgent, AssessmentAgentPort } from './assessment-agents.js';
+import type {
+  AgentToolCall,
+  AssessmentAgent,
+  AssessmentAgentInputMap,
+  AssessmentAgentOutputMap,
+  AssessmentAgentPort,
+} from './assessment-agents.js';
+
+export interface AssessmentDependencies {
+  provider: GenerationPort;
+  prompt: string;
+  policies: Policy[];
+  product: Product;
+  pricing: PricingRow[];
+  settings: { allowDemo: boolean; defaultMode?: AssessmentMode };
+}
 
 export const documentAssessmentInputSchema = z
   .object({
@@ -147,16 +172,20 @@ const plannerStep: Record<AssessmentAgent, UsageStep> = {
   memo: 'plan_prepare_memo',
 };
 
-async function runAssessmentOperation<T>(
-  agent: AssessmentAgent,
+async function runAssessmentOperation<K extends AssessmentAgent, T>(
+  agent: K,
+  expectedInput: AssessmentAgentInputMap[K],
   state: AssessmentState,
   deps: DocumentAssessmentDependencies,
   operation: () => Promise<T> | T,
+  summarizeOutput: (value: T) => AssessmentAgentOutputMap[K],
 ): Promise<T> {
   if (!deps.agents || state.failure) return operation();
   return deps.agents.run(
     agent,
+    expectedInput,
     operation,
+    summarizeOutput,
     meteredGeneration(state, deps, plannerStep[agent], 'assessment_agent_planning'),
     (call) => state.agentToolCalls.push(call),
   );
@@ -214,22 +243,47 @@ export async function executeAssessmentStage(
         break;
       }
       case 'extract_data':
-        state.extraction = await runAssessmentOperation('evidence', state, deps, () =>
-          extractSanitized(
-            state.sanitized!,
-            meteredGeneration(state, deps, 'extract_data'),
-            deps.prompt,
-          ),
+        state.extraction = await runAssessmentOperation(
+          'evidence',
+          {
+            applicationReference: state.form!.reference,
+            expectedSections: ['salary', 'bureau'],
+          },
+          state,
+          deps,
+          () =>
+            extractSanitized(
+              state.sanitized!,
+              meteredGeneration(state, deps, 'extract_data'),
+              deps.prompt,
+            ),
+          (extracted) => ({
+            completed: true,
+            verifiedFieldCount: Object.keys(extracted.fields).length,
+          }),
         );
         break;
       case 'retrieve_policy_clauses': {
-        state.clauses = await runAssessmentOperation('policy', state, deps, () =>
-          deps.clauses.loadRequired(
-            state.policy!.edition,
-            state.form!.applicationDate,
-            deps.product.id,
-            deps.product.sourceFile,
-          ),
+        state.clauses = await runAssessmentOperation(
+          'policy',
+          {
+            policyEdition: state.policy!.edition,
+            productId: state.form!.productId,
+            asOfDate: state.form!.applicationDate,
+          },
+          state,
+          deps,
+          () =>
+            deps.clauses.loadRequired(
+              state.policy!.edition,
+              state.form!.applicationDate,
+              deps.product.id,
+              deps.product.sourceFile,
+            ),
+          (loaded) => ({
+            completed: true,
+            clauseCount: loaded.length,
+          }),
         );
         const active = state.clauses.filter(
           (clause) =>
@@ -343,6 +397,7 @@ export async function executeAssessmentStage(
           state.result = {
             ...base,
             recommendation: 'REFER_TO_HUMAN',
+            approvalRequiredFrom: requiredApprovalTier(null, true),
             reason: state.failure,
             fraudReferral: state.failure === 'SuspectedTampering',
             calculation: null,
@@ -354,22 +409,36 @@ export async function executeAssessmentStage(
           };
         else {
           const r = state.rules!;
+          const referred = r.recommendation === 'REFER_TO_HUMAN';
+          const authorityAmount = referred ? state.form?.amount : r.recommendedAmount;
           state.result = {
             ...base,
             ...r,
+            approvalRequiredFrom: requiredApprovalTier(authorityAmount, referred),
             extraction: state.extraction!,
             fraudReferral: false,
-            status:
-              r.recommendation === 'REFER_TO_HUMAN'
-                ? 'pending_review'
-                : r.recommendation === 'OFFER_ALTERNATIVE'
-                  ? 'pending_customer_acceptance'
-                  : 'pending_approval',
+            status: referred
+              ? 'pending_review'
+              : r.recommendation === 'OFFER_ALTERNATIVE'
+                ? 'pending_customer_acceptance'
+                : 'pending_approval',
             pricing: state.pricing,
           };
         }
-        state.result.memo = await runAssessmentOperation('memo', state, deps, () =>
-          creditMemo(state.result!, state.form),
+        state.result.memo = await runAssessmentOperation(
+          'memo',
+          {
+            applicationReference: state.result.reference,
+            recommendation: state.result.recommendation,
+            policyEdition: state.result.policyEdition,
+          },
+          state,
+          deps,
+          () => creditMemo(state.result!, state.form),
+          (rendered) => ({
+            completed: true,
+            lineCount: rendered.split('\n').length,
+          }),
         );
         break;
       }

@@ -73,7 +73,7 @@ const config = configSchema.parse({
 const app = await createApi({
   caseReviews: await createCaseReviews(db),
   auth: new AuthService(new PostgresAuthStore(db), credentials, 8),
-  decisions: new DecisionService(new PostgresDecisionStore(db, policies)),
+  decisions: new DecisionService(new PostgresDecisionStore(db, policies, catalog)),
   operations: await createOperations(db, provider, config, catalog),
   maxUploadBytes: 10 * 1024 * 1024,
   webOrigin: 'http://127.0.0.1:5174',

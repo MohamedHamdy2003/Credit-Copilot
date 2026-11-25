@@ -15,7 +15,13 @@ function DecisionForm({
   const owner = actor.id === run.preparer_id;
   const customer = owner && run.status === 'pending_customer_acceptance';
   const reviewer = actor.role === 'credit_officer' && !owner;
+  const senior = ['senior', 'head'].includes(actor.tier);
   const blockedReferral = run.result.fraudReferral || run.result.evidence.missing.length > 0;
+  const reviewableReferral =
+    run.result.recommendation === 'REFER_TO_HUMAN' &&
+    !blockedReferral &&
+    Boolean(run.result.extraction) &&
+    !run.result.results?.some((r) => r.result === 'fail');
   const actions = customer
     ? ['customer_response']
     : reviewer && run.status === 'approved'
@@ -23,7 +29,13 @@ function DecisionForm({
       : reviewer && ['pending_review', 'pending_approval'].includes(run.status)
         ? blockedReferral
           ? []
-          : ['approve', 'reject']
+          : run.result.recommendation === 'REFER_TO_HUMAN'
+            ? senior && reviewableReferral
+              ? ['approve', 'reject']
+              : []
+            : run.result.recommendation === 'DECLINE'
+              ? ['reject']
+              : ['approve', 'reject']
         : [];
   const [action, setAction] = useState(actions[0] ?? 'approve'),
     [busy, setBusy] = useState(false),
@@ -220,6 +232,12 @@ export function Assessment({
                     <Money value={result.recommendedAmount} />
                   </dd>
                 </div>
+                {result.approvalRequiredFrom && (
+                  <div>
+                    <dt>Required authority</dt>
+                    <dd>{result.approvalRequiredFrom.replaceAll('_', ' ')}</dd>
+                  </div>
+                )}
                 {result.autoFinance && (
                   <div>
                     <dt>Vehicle price less documented down payment</dt>

@@ -15,13 +15,14 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: 'pnpm exec tsx scripts/e2e-api.ts',
+      command: 'node --import tsx scripts/e2e-api.ts',
       url: 'http://127.0.0.1:4304/api/v1/health',
       timeout: 90000,
       reuseExistingServer: false,
     },
     {
-      command: 'pnpm dev:web --port 5174 --strictPort',
+      command:
+        'node node_modules/vite/bin/vite.js --config apps/web/vite.config.ts --port 5174 --strictPort',
       url: 'http://127.0.0.1:5174',
       timeout: 60000,
       reuseExistingServer: false,

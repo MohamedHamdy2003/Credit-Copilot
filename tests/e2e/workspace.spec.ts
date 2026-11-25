@@ -199,10 +199,10 @@ test('auto application shows documented funding and cites its own product rules'
   await page.getByRole('combobox', { name: 'Product', exact: true }).selectOption('AL-200');
   await page.getByRole('combobox', { name: 'Policy edition' }).selectOption('AUTO-2025');
   await page
-    .getByLabel('Question', { exact: true })
+    .getByLabel('Your question', { exact: true })
     .fill('What is the minimum down payment for the vehicle loan?');
-  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
-  await expect(page.getByText('synthetic-auto-product.md', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Send question', exact: true }).click();
+  await expect(page.getByRole('link', { name: 'synthetic-auto-product.md' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: shot('auto-policy-mobile'), fullPage: true });
   expect(errors).toEqual([]);
@@ -217,11 +217,9 @@ test('Usage shows only recorded model activity with unknown provider charges on 
   await page.getByRole('button', { name: 'Usage', exact: true }).click();
   await expect(page.getByText('No model usage recorded yet.')).toBeVisible();
   await page.getByRole('button', { name: 'Policy questions', exact: true }).click();
-  await page.getByLabel('Question', { exact: true }).fill('Maximum DBR in CP-2025?');
-  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
-  await expect(
-    page.getByRole('heading', { name: 'Verified source excerpts', exact: true }),
-  ).toBeVisible();
+  await page.getByLabel('Your question', { exact: true }).fill('Maximum DBR in CP-2025?');
+  await page.getByRole('button', { name: 'Send question', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Citations', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Usage', exact: true }).click();
   const summary = page.getByRole('region', { name: 'Recorded usage' });
@@ -241,18 +239,20 @@ test('grounded questions, refusal, conflicts and edition-specific code calculati
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Policy questions', exact: true }).click();
-  await page.getByLabel('Question', { exact: true }).fill('Maximum DBR in CP-2024?');
-  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Verified source excerpts' })).toBeVisible();
-  await expect(page.locator('.source strong').first()).toBeVisible();
+  await page.getByLabel('Your question', { exact: true }).fill('Maximum DBR in CP-2024?');
+  await page.getByRole('button', { name: 'Send question', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Citations', exact: true })).toBeVisible();
+  await expect(page.locator('.citation-card a').first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: shot('stream-mobile'), fullPage: true });
-  await page.getByLabel('As-of date (optional)').fill('2025-04-03');
-  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
+  await page.getByLabel('As-of date', { exact: true }).fill('2025-04-03');
+  await page.getByLabel('Your question', { exact: true }).fill('Maximum DBR in CP-2024?');
+  await page.getByRole('button', { name: 'Send question', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('ConflictingEdition');
-  await page.getByLabel('Question', { exact: true }).fill('crypto policy?');
-  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Insufficient evidence' })).toBeVisible();
+  await page.getByLabel('Your question', { exact: true }).fill('crypto policy?');
+  await page.getByRole('button', { name: 'Send question', exact: true }).click();
+  await expect(page.getByText('Insufficient evidence', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Affordability calculator', exact: true }).click();
   await page.getByLabel('Requested amount (EGP)', { exact: true }).fill('300000');
   await page.getByLabel('Net monthly income (EGP)').fill('30000');
   await page.getByLabel('Monthly obligations (EGP)').fill('4000');
@@ -263,6 +263,7 @@ test('grounded questions, refusal, conflicts and edition-specific code calculati
   await page.getByLabel('Calculation date').fill('2024-12-01');
   await page.getByRole('button', { name: 'Calculate affordability' }).click();
   await expect(page.getByText('EGP 382,000.00', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Ask a policy question', exact: true }).click();
   await page.route('**/api/v1/question-streams/*', (route) =>
     route.fulfill({
       status: 200,
@@ -270,9 +271,12 @@ test('grounded questions, refusal, conflicts and edition-specific code calculati
       body: 'id: 1\ndata: {"kind":"failed","code":"QuestionUnavailable"}\n\n',
     }),
   );
-  await page.getByRole('button', { name: 'Ask question', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('Policy question service is unavailable');
-  await expect(page.getByRole('button', { name: 'Ask question', exact: true })).toBeEnabled();
+  await page.getByLabel('Your question', { exact: true }).fill('What is the late fee?');
+  await page.getByRole('button', { name: 'Send question', exact: true }).click();
+  await expect(page.getByRole('alert').last()).toContainText(
+    'Policy question service is unavailable',
+  );
+  await expect(page.getByLabel('Your question', { exact: true })).toBeEnabled();
   expect(errors).toEqual([]);
 });
 test('real multipart upload, duplicate registration and mixed knowledge batch results', async ({
@@ -287,14 +291,14 @@ test('real multipart upload, duplicate registration and mixed knowledge batch re
   await expect(page.getByLabel('Assessment mode')).toBeVisible();
   await add(page);
   await expect(page.getByRole('row').filter({ hasText: 'Synthetic pack' })).toHaveCount(1);
-  await page.getByRole('button', { name: 'Knowledge', exact: true }).click();
+  await page.getByRole('button', { name: 'Policy library', exact: true }).click();
   await expect(
     page.getByText('Ingestion requires separate permission.', { exact: false }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: 'Ingest documents' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Sign out', exact: true }).click();
   await login(page, 'head');
-  await page.getByRole('button', { name: 'Knowledge', exact: true }).click();
+  await page.getByRole('button', { name: 'Policy library', exact: true }).click();
   await page
     .getByLabel('Policy files')
     .setInputFiles([
@@ -312,14 +316,14 @@ test('expired session clears protected UI and a network outage can be retried', 
 }) => {
   await login(page, 'basic');
   await page.route('**/api/v1/applications', (route) => route.abort());
-  await page.getByRole('button', { name: 'Knowledge', exact: true }).click();
+  await page.getByRole('button', { name: 'Policy library', exact: true }).click();
   await page.getByRole('button', { name: 'Applications', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Could not reach the server');
   await page.unroute('**/api/v1/applications');
   await page.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect(page.getByText('No applications yet.', { exact: false })).toBeVisible();
   await page.context().clearCookies();
-  await page.getByRole('button', { name: 'Knowledge', exact: true }).click();
+  await page.getByRole('button', { name: 'Policy library', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible();
   await expect(page.getByText('Your session ended.', { exact: false })).toBeVisible();
   await expect(page.getByRole('navigation')).toHaveCount(0);

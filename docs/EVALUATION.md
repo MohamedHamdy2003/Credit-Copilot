@@ -2,8 +2,9 @@
 
 ## Scope and reproducibility
 
-The current fifteen-case suite is in `data/evaluation/cases.json` (core-15-v2).
-The historical live baselines use the original case set. P18 also ran the revised suite against Gemini. The scenarios contain
+The current fifteen-case suite is in `data/evaluation/cases.json` (`core-15-v3`).
+The historical live baselines use `core-15-v1` and `core-15-v2` (preserved in
+`data/evaluation/results/` alongside `cases-core-15-v1.json`). The scenarios contain
 three out-of-corpus cases, two edition-change pairs (Q01/02 andQ04/05), three
 calculation cases and two injection surfaces (Q10 question,Q11 applicant document).
 Expected answers come from supplied synthetic sources, not model output. Full
@@ -19,8 +20,7 @@ generation are live. The first isolated population reused87 trusted vectors; the
 final run skipped already indexed documents. No customer packs enter policy KB.
 Run `pnpm evaluate:core:offline` after migrations against *_test for deterministic
 fixture regressions; it does NOT measure semantic retrieval or live model quality.
-CI runs that mode without keys, alongside unit/HTTP/browser tests. The older five-
-question smoke remains `pnpm evaluate:smoke`; small offline unit subset remains
+CI runs that mode without keys, alongside unit/HTTP/browser tests. The small offline unit subset remains
 `pnpm evaluate:offline`.
 
 ## Vector core benchmark — 20 November 2026
@@ -275,6 +275,42 @@ all five original Strict packs passing. The reports include the settings,
 source hashes and observed provider usage.
 [Initial failure](../data/evaluation/results/release-core-v2-initial-failure.json) · [Passing live v2 report](../data/evaluation/results/release-core-v2-agents.json)
 
+## Audit alignment revision (`core-15-v3`) — 25 November 2026
+
+The `core-15-v3` revision aligns the 15-case suite with the ITI brief's full
+end-to-end Demo scenarios and strengthens fairness and typed-agent verification:
+
+- **Q06 (`APP-002`, Scenario S1)**: permanent salaried status (`CP-3.1`/`PS-2`)
+  satisfies employment confirmation without inventing probation, so Demo mode
+  produces `OFFER_ALTERNATIVE` (`EGP 330,000.00`, EMI `EGP 10,068.79`, DBR
+  `46.90%`, `CP-4.1: fail` under `CP-2025` 45% DBR) end-to-end.
+- **Q12 (`APP-003`)**: `CP-8` mandatory-decline priority ensures over-age
+  failure (`CP-3.5: fail`, `calculation: null`) returns `DECLINE` end-to-end.
+- **Q13 (`APP-005`)**: reaches `REFER_TO_HUMAN` on `CP-6` (bureau score `580`,
+  `calculation: null`, `approvalRequiredFrom: "senior_credit_officer"`). Full
+  `PM-4` Senior approval/issuance and rejection of `APP-005` are additionally
+  verified in PostgreSQL/HTTP integration tests.
+- **Q15 (Scenario S5 Fairness)**: fixes the silent Religion mutation bug
+  (`"Religion (declared for statistics only) Muslim"` → `"Christian"`) and adds
+  an explicit `all_four_protected_fields_changed` assertion verifying all four
+  protected fields (`Gender`, `Religion`, `Marital status`, `Nationality`)
+  actually mutated while keeping sanitized provider-input hashes, rules,
+  calculations, recommendations, and canonical credit memos identical.
+- **Typed Mastra agents**: verifies typed Zod `input`/`output` tool receipts
+  persisted to `cases.audit_events` under canonical key-sorted JSON equality.
+
+| Mode (`core-15-v3`, deterministic offline) | Cases | Citation coverage | Refusal / OOC | Exact numerics | Security & audit | Strict packs |
+| --- | --- | --- | --- | --- | --- | --- |
+| Workflow (`pnpm evaluate:core:offline`) | 15/15 | 8/8 | 7/7 / 3/3 | 17/17 | 79/79 | 5/5 |
+| Typed agents (`pnpm evaluate --offline-agents`) | 15/15 | 8/8 | 7/7 / 3/3 | 17/17 | 93/93 | 5/5 |
+
+> **Honesty note:** `core-15-v3` above ran with deterministic provider fixtures
+> (`liveQualityGate: "not_measured"`). It verifies deterministic workflow,
+> calculation, refusal, fairness, and audit behavior, not live semantic
+> retrieval. Live Gemini retrieval and generation measurements remain those
+> recorded in the retained `core-15-v1` and `core-15-v2` reports until a fresh
+> live `pnpm evaluate --agents` run is executed with Gemini quota.
+
 ## P14 streaming regression — 20 November 2026
 
 PostgreSQL and HTTP tests cover stage delivery before a gated assessment has
@@ -347,8 +383,9 @@ and known subtotals for the isolated evaluation workload.
 | Live Gemini, frozen `core-15-v1`                      | Vector, hybrid, rewrite and typed-agent runs each passed 15/15 on their recorded commits. The vector baseline passed hit@5 4/4, OOC refusal 3/3, citation coverage 8/8 and exact arithmetic 17/17. |
 | Revised `core-15-v2`, deterministic provider fixtures | Workflow and typed-agent modes each passed 15/15. The revised cases check source precedence explicitly.                                                                                              |
 | Revised core-15-v2, live Gemini agents                 | The clean release run passed 15/15, with hit@5 4/4 and 94/94 audit and security assertions. The preceding 14/15 report is retained. |
-| P17 regression checkpoint                             | 152 unit tests, 42 PostgreSQL/HTTP tests and 11 Chromium journeys passed, along with type checks, lint, formatting and builds.                                                                     |
-| Added product, PDF and metering                       | AL-200 fixture tests, PDF reconciliation and the synthetic two-call Gemini usage probe are documented above.                                                                                       |
+| Aligned `core-15-v3`, deterministic provider fixtures  | Workflow (79/79 security & audit) and typed-agent (93/93 security & audit) modes each passed 15/15, including full Demo S1/over-age/CP-6 outcomes, verified 4-field Q15 Religion mutation, and typed Zod agent receipts. |
+| Audit-alignment regression checkpoint                  | 156 unit tests, 44 PostgreSQL/HTTP tests and 11 Chromium journeys passed, along with type checks, lint, formatting and builds.      |
+| Added product, PDF and metering                        | AL-200 fixture tests, PDF reconciliation and the synthetic two-call Gemini usage probe are documented above.                        |
 
 The retained JSON reports include the first vector 11/15 run, repeated 14/15
 runs, provider failures and the recorded Ollama fallback failure. Compare
@@ -356,4 +393,4 @@ results with the original corpus, case version, model and settings in each
 report. The measured live retrieval sample covers four answerable questions.
 Chromium covers the recorded browser journeys. The usage probe reports
 a nominal estimate and leaves account charges unknown.
-[Recorded reports](../data/evaluation/results/) · [Current release checks](../status.md)
+[Recorded reports](../data/evaluation/results/) · [Design](DESIGN.md)

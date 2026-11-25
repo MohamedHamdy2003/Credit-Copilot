@@ -17,8 +17,23 @@ export function requireReviewer(
     403,
   );
 }
+export type ApprovalAuthorityRole =
+  'credit_officer' | 'senior_credit_officer' | 'head_of_consumer_credit';
+
 export function approvalAuthorityLimit(tier: Actor['tier']): string {
   return { none: '0.00', credit: '250000.00', senior: '500000.00', head: '1000000.00' }[tier];
+}
+
+export function requiredApprovalTier(
+  amount: string | null | undefined,
+  referred: boolean,
+): ApprovalAuthorityRole | null {
+  if (amount && compareMoney(amount, '0') > 0) {
+    if (compareMoney(amount, '500000.00') > 0) return 'head_of_consumer_credit';
+    if (referred || compareMoney(amount, '250000.00') > 0) return 'senior_credit_officer';
+    return 'credit_officer';
+  }
+  return referred ? 'senior_credit_officer' : null;
 }
 export function authorizeApproval(
   actor: Actor,

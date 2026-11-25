@@ -131,12 +131,22 @@ function explainPersonalLoanConflict(
 }
 export function maskPolicyQuestion(question: string) {
   return question
-    .replace(/\b\d{14}\b/g, '[MASKED_ID]')
-    .replace(/\b01\d(?:[- ]?\d){8}\b/g, '[MASKED_PHONE]');
+    .replace(
+      /(?:(?<!\d)(?:\+?20|0020)[- ]?0?1[0125]|\b01[0125])(?:[- ]?\d){8}\b/g,
+      '[MASKED_PHONE]',
+    )
+    .replace(/\b\d{14}\b/g, '[MASKED_ID]');
+}
+
+const FOLLOW_UP_PATTERN =
+  /^(?:what|how|and|same|does|do|is|are|can|will)\s+(?:about|for|under|in|if|it|its|that|this|those|they|them)\b|\b(?:it|its|that|this|those|them|they|the same|above|previous)\b/i;
+
+export function isFollowUpQuestion(question: string): boolean {
+  return FOLLOW_UP_PATTERN.test(question.trim());
 }
 
 export async function answerPolicyQuestion(
-  input: { question: string; asOfDate: string; product?: string },
+  input: { question: string; asOfDate: string; product?: string; context?: string[] },
   dependencies: {
     search: PolicySearch;
     provider: GenerationPort;
@@ -151,8 +161,24 @@ export async function answerPolicyQuestion(
   );
   validDate(input.asOfDate);
   const question = maskPolicyQuestion(input.question);
+  const sanitizedContext = (input.context ?? [])
+    .slice(-3)
+    .map((previous) => maskPolicyQuestion(previous.trim()))
+    .filter(Boolean);
+  // Only carry prior turn context when the current question is an explicit follow-up,
+  // preventing unrelated new questions (especially out-of-corpus ones) from inheriting prior hits.
+  const priorQuestions =
+    sanitizedContext.length > 0 && isFollowUpQuestion(question) ? sanitizedContext : [];
+  const retrievalQuestion = priorQuestions.length
+    ? `${priorQuestions.at(-1)!}\n${question}`
+    : question;
   const hits = (
-    await dependencies.search.search(question, input.asOfDate, input.product ?? 'PL-100', 5)
+    await dependencies.search.search(
+      retrievalQuestion,
+      input.asOfDate,
+      input.product ?? 'PL-100',
+      5,
+    )
   ).filter(
     (hit) => Number.isFinite(hit.similarity) && hit.similarity >= dependencies.minimumSimilarity,
   );
@@ -167,7 +193,7 @@ export async function answerPolicyQuestion(
   // Source-reference context is separate from the vector top5. It never creates
   // an answer when the primary search is below threshold or the model refuses.
   const related = await dependencies.search.related?.(
-    question,
+    retrievalQuestion,
     input.asOfDate,
     input.product ?? 'PL-100',
     hits,
@@ -217,6 +243,8 @@ export async function answerPolicyQuestion(
     dependencies.prompt,
     JSON.stringify({
       question,
+      priorQuestions,
+      product: input.product ?? 'PL-100',
       asOfDate: input.asOfDate,
       evidence: candidates.map((chunk) => ({
         chunkId: chunk.id,

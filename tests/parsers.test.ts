@@ -63,6 +63,13 @@ describe('document parser layer', () => {
     expect(chunks).toEqual(chunkDocument(doc, meta));
     expect(chunks.find((c) => c.section === 'CP-4.1')?.text).toContain('45%');
     expect(chunks.find((c) => c.section === 'CP-4.1')?.pageStart).toBe(2);
+    expect(chunks.filter((c) => c.section === 'CP-4.1')).toHaveLength(1);
+    expect(chunks.filter((c) => c.section === 'CP-3.3')).toHaveLength(1);
+    expect(chunks.filter((c) => c.section === 'CP-9')).toHaveLength(1);
+    const cp13 = chunks.find((c) => c.section === 'CP-13');
+    expect(cp13?.text).toContain('CP-4.1');
+    expect(cp13?.text).toContain('CP-3.3');
+    expect(cp13?.text).toContain('CP-9');
     expect(chunks.every((c) => c.edition === 'CP-2025')).toBe(true);
   });
   it('parses all CSV bands and selects the exact supplied rate', async () => {

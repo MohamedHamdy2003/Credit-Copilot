@@ -32,6 +32,7 @@ it('keeps missing evidence, tampering and below-minimum score as referrals rathe
     customerDeclined: false,
   };
   expect(rejectionClauses(base)).toEqual([]);
+  expect(rejectionClauses({ ...base, allowReferredClauses: true })).toEqual(['CP-6']);
   expect(() => rejectionClauses({ ...base, missing: ['national_id_copy'] })).toThrow(
     'requires referral',
   );

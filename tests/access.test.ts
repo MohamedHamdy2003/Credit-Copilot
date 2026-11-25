@@ -1,4 +1,8 @@
-import { authorizeApproval, type Actor } from '../packages/domain/src/access.js';
+import {
+  authorizeApproval,
+  requiredApprovalTier,
+  type Actor,
+} from '../packages/domain/src/access.js';
 import { decisionCommandSchema } from '../packages/application/src/decisions.js';
 const actor = (tier: Actor['tier']): Actor => ({
   id: 'reviewer',
@@ -39,4 +43,13 @@ it('rejects authority, amount and approver identity supplied inside decision req
       actorId: 'head',
     }),
   ).toThrow();
+});
+it('computes the required PM-2 approval authority from recommended amount and referral status', () => {
+  expect(requiredApprovalTier('250000.00', false)).toBe('credit_officer');
+  expect(requiredApprovalTier('300000.00', false)).toBe('senior_credit_officer');
+  expect(requiredApprovalTier('500000.00', false)).toBe('senior_credit_officer');
+  expect(requiredApprovalTier('500000.01', false)).toBe('head_of_consumer_credit');
+  expect(requiredApprovalTier('100000.00', true)).toBe('senior_credit_officer');
+  expect(requiredApprovalTier(null, true)).toBe('senior_credit_officer');
+  expect(requiredApprovalTier(null, false)).toBeNull();
 });

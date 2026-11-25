@@ -1,5 +1,86 @@
 # AI usage log
 
+> **Candidate ownership note:** AI assistants (Codex and Antigravity) assisted
+> with implementation, test authoring, and documentation drafting under
+> candidate direction. Architecture trade-offs, strict/demo policy rules,
+> source-authoritative calculations, and final verification belong to the
+> submitting candidate. Actual personal hours spent and final candidate
+> reflection remain candidate-owned fields before final submission.
+
+## 2026-11-25 ITI brief audit, alignment fixes, and README overhaul
+
+Antigravity audited the entire repository against the supplied ITI "Credit
+Copilot Lite" brief and all twelve synthetic documents before the candidate
+approved a targeted remediation pass on `feature/policy-chat-citations`:
+
+- **Git hygiene**: moved unpushed commit `534dda5` off `main` onto
+  `feature/policy-chat-citations` and aligned local `main` with `origin/main` so
+  all changes go through a clean pull request with CI.
+- **Actual AI-authored mistakes caught and corrected during this audit**:
+  1. **Year-ambiguity regex over-matched document IDs and Q09**: commit
+     `534dda5` rejected questions mentioning `Circular 2025/02`, `PT-2025-01`,
+     or an out-of-corpus `2027` table (even when `asOfDate` was already
+     specified) with HTTP 422 `AmbiguousPolicyYear`. Fixed in
+     `packages/application/src/operations.ts` by stripping document/circular IDs
+     and ISO dates before standalone-year checks, resolving single-circular
+     mentions to their effective dates, and honoring explicit `asOfDate` /
+     `edition` parameters.
+  2. **Policy Chat context leakage into out-of-corpus refusals**: the chat UI
+     sent the last three user questions unconditionally as `context`, causing a
+     self-contained out-of-corpus question (such as crypto-backed loan terms
+     asked right after minimum-income questions) to inherit prior terms into
+     retrieval and bypass refusal. Fixed via `isFollowUpQuestion()` in
+     `packages/application/src/questions.ts` and filtering out refused/errored
+     turns in `apps/web/src/Questions.tsx`.
+  3. **International phone masking order bug**: expanding Egyptian mobile
+     masking to `+20` and `0020` variants initially ran after the 14-digit
+     national ID regex, causing `00201000000001` (14 digits) to be tagged
+     `[MASKED_ID]` instead of `[MASKED_PHONE]`. Caught immediately by unit test
+     and fixed by running phone masking first with a non-digit lookbehind.
+  4. **Q15 fairness test silently skipped Religion mutation**:
+     `scripts/evaluation/runner.ts` attempted `.replace('Religion Muslim', ...)`,
+     which failed to match the actual `APP-001.pdf` string
+     `"Religion (declared for statistics only) Muslim"`. Fixed with exact string
+     replacement and an explicit assertion verifying all four protected fields
+     changed (`all_four_protected_fields_changed`).
+  5. **`CP-13` comparison table split into mislabeled chunks**: in
+     `credit-policy-2025.pdf`, the `CP-13` summary table rows beginning with
+     `CP-4.1`, `CP-3.3`, and `CP-9` caused the clause chunker to emit duplicate
+     lower-numbered chunks with comparison text. Fixed in
+     `packages/infrastructure/src/parsers/chunker.ts` (`clause-cl100k-v3`) by
+     tracking active section prefix and major number.
+  6. **Blocked PM-4 referral adjudication**: `decision-store.ts` blocked Senior
+     and Head reviewers from approving or rejecting reviewable `CP-6` referrals
+     such as `APP-005` (bureau score 580). Enabled server-computed affordability,
+     authority checks (`PM-2`/`PM-4`), four-eyes enforcement, PDF offer
+     issuance, and verified-clause rejection while keeping missing-evidence and
+     fraud referrals blocked (`409`) and regular Credit Officers blocked (`403`).
+  7. **Broken tests after `534dda5`**: updated SSE `completed` frame assertions
+     in `tests/core-api.integration.test.ts` and updated Playwright selectors in
+     `tests/e2e/workspace.spec.ts` to match the redesigned Policy library and
+     Policy questions chat UI.
+- **ITI scenario alignment & cleanup**: recognized explicit permanent salaried
+  status (`CP-3.1`/`PS-2`) without active probation caveats so all five original
+  packs (`APP-001`–`APP-005`) reach their documented scenarios in Demo mode;
+  enforced `CP-8` mandatory-decline priority over soft referrals; added
+  `approvalRequiredFrom` per `PM-2` and Appendix E.2; upgraded Mastra agents to
+  typed Zod input/output schemas with strict server-side argument verification;
+  deleted deprecated legacy `assessment.ts` files; silenced Jest's Haste
+  collision on `artifacts/`; improved `Dockerfile`
+  dependency caching; removed internal non-deliverable working files
+  (`docs/PR-PLAN.md`, `FEATURES.md`, `agent.md`, `AGENTS.md`, `status.md`,
+  `scripts/evaluate-smoke.ts`); verified the `AL-200` auto-loan extension end to
+  end; and reorganized `README.md`, `DESIGN.md`, and `EVALUATION.md`.
+
+## 2026-11-25 policy Q&A chat and source links
+
+Codex replaced the single-turn policy question form with a local browser chat
+transcript, added authenticated inline viewing of manifest-verified source files
+at `GET /api/v1/sources/:filename`, separated canonical answers from citation
+cards in SSE `completed` frames, renamed Knowledge to Policy library, and added
+year-only policy scope checks. Automated integration and browser suites were not
+re-run in that turn and were subsequently repaired in the audit pass above.
+
 ## 2026-11-22 reviewer setup and release evidence
 
 The user asked Codex to review the supplied brief and sources, finish the next
@@ -14,7 +95,7 @@ demo with a deterministic provider fixture and ran the separate live Gemini
 rehearsal and evaluation. The user set the requirement to preserve the supplied
 source bytes and the strict/demo behavior. The checked-in log reflects known
 authorship and configuration choices. It does not allocate candidate hours or
-claim independent manual authorship. [Verification status](../status.md)
+claim independent manual authorship. [Evaluation](EVALUATION.md)
 
 ## 2026-11-21 model usage accounting
 
@@ -96,11 +177,11 @@ sanitized reports and CI regressions. It re-read the original DOCX and preserved
 the distinction between instructions in the brief and the user's authorized work;
 no submission email/video upload was performed.
 
-The first real run failed4/15 despite raw hit@5=4/4: Q01/02/03 lacked necessary
+The first real run failed 4/15 despite raw hit@5=4/4: Q01/02/03 lacked necessary
 operative/conflicting citations; Q11 omitted policy edition after early tampering
 referral. Metadata and separately linked source context repaired completeness
 without changing vector ranking/threshold, and safe policy selection repaired audit.
-Initial failure and final15/15 report are committed, not replaced by a success-only
+Initial failure and final 15/15 report are committed, not replaced by a success-only
 summary. Three real live executions were observed; fake CI never claims semantic
 quality. Code-filled referral memos, failed-JSON usage preservation and a tested
 one-command local launcher close concrete core gaps; dead placeholder config was
@@ -109,11 +190,11 @@ removed. No probation/ID evidence, provider cost or commit date was fabricated.
 ## 2026-11-20 referrals and written reasons
 
 Codex re-read PM-4/5/7/9 from the supplied manual and CP-8. PM-9 requests a written
-reason within30 days; it does not specify an appeal adjudication workflow. New
+reason within 30 days; it does not specify an appeal adjudication workflow. New
 case-review code/UI therefore preserves the human decision and returns a recorded
 reason snapshot. Review also identified earlier rejection code accepting missing
 evidence/referral citations; this was corrected to verified failures or a declined
-alternative, without changing source requirements. Day30 inclusion/Cairo decision
+alternative, without changing source requirements. Day 30 inclusion/Cairo decision
 date and the configurable business calendar are documented implementation choices.
 No actual Fraud Unit delivery or live Gemini quality measurement is claimed.
 
@@ -131,17 +212,6 @@ test caught cross-realm AbortError handling; cancellation detection was correcte
 No policy thresholds/evidence were changed to make UI tests pass. Provider output
 in browser tests is fake; user review of AI-authored code remains required.
 
-## 2026-11-17 planning and implementation
-
-Codex read the supplied synthetic corpus and brief, proposed architecture and PR sequencing, and authored implementation with user review. The user chose the stack, strict/demo behavior, source-authoritative calculations and CI scope. Code written by Codex must be reviewed and understood by the submitting candidate; no claim of independent manual authorship is made.
-
-Actual planning mistakes corrected:
-
-1. Codex initially proposed demo assumptions for probation completion as well as the missing ID copy. The user explicitly limited demo to ID presence. Planning was corrected; other missing evidence must still refer.
-2. Codex supplied an obsolete `isEvalSupported` PDF.js option copied from knowledge of older versions. TypeScript rejected it against the installed PDF.js6.5.438 declarations. The option was removed and the parser is checked against the actual installed API and all12 source files. This illustrates why library assumptions need compile/runtime verification.
-
-The Appendix E arithmetic inconsistency belongs to the supplied brief, not an invented AI mistake: independent decimal arithmetic confirmed 330,000 at45% and382,000 at50%. Real five-case Gemini evaluation has run; results and the corrected tenor failure are recorded in EVALUATION.md.
-
 ## 2026-11-19 core REST implementation
 
 Codex authored authenticated operations ports/controllers, private application
@@ -153,3 +223,27 @@ because its fake provider finished too quickly; an explicit provider gate now
 tests overlapping requests. A CORS-header assertion initially failed TypeScript's
 undefined check and was corrected before the passing validation run. HTTP tests
 use fake provider output; no new live Gemini quality result is attributed to them.
+
+## 2026-11-17 planning and implementation
+
+Codex read the supplied synthetic corpus and brief, proposed architecture and PR
+sequencing, and authored implementation with user review. The user chose the
+stack, strict/demo behavior, source-authoritative calculations and CI scope. Code
+written by Codex must be reviewed and understood by the submitting candidate; no
+claim of independent manual authorship is made.
+
+Actual planning mistakes corrected:
+
+1. Codex initially proposed demo assumptions for probation completion as well as
+   the missing ID copy. The user explicitly limited demo to ID presence.
+   Planning was corrected; other missing evidence must still refer.
+2. Codex supplied an obsolete `isEvalSupported` PDF.js option copied from
+   knowledge of older versions. TypeScript rejected it against the installed
+   PDF.js 6.5.438 declarations. The option was removed and the parser is checked
+   against the actual installed API and all 12 source files. This illustrates why
+   library assumptions need compile/runtime verification.
+
+The Appendix E arithmetic inconsistency belongs to the supplied brief, not an
+invented AI mistake: independent decimal arithmetic confirmed 330,000 at 45%
+and 382,000 at 50%. Real five-case Gemini evaluation has run; results and the
+corrected tenor failure are recorded in `EVALUATION.md`.

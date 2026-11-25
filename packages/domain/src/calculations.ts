@@ -80,6 +80,10 @@ export function compareMoney(a: Money, b: Money): number {
   return new D(a).comparedTo(new D(b));
 }
 
+export function formatMoney(value: Money): Money {
+  return nonnegative(value, 'amount').toFixed(2);
+}
+
 export function calculateVehicleFunding(
   vehiclePrice: Money,
   downPayment: Money,
