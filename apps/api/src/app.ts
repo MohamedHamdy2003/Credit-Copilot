@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import {
   Controller,
+  Delete,
   Get,
   Post,
   Req,
@@ -353,6 +354,12 @@ export async function createApi(deps: {
     @Get('knowledge/documents') documents() {
       return this.service().documents();
     }
+    @Delete('knowledge/documents/:id')
+    @UseGuards(IngestionGuard)
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    deleteDocument(@Param('id') id: string, @Req() req: AuthRequest) {
+      return this.service().deleteDocument(req.actor, id);
+    }
     @Get('knowledge/ingestions') attempts(@Req() req: AuthRequest) {
       return this.service().attempts(req.actor);
     }
@@ -362,7 +369,7 @@ export async function createApi(deps: {
     @ApiHeader({ name: 'x-csrf-token', required: true })
     @UseInterceptors(
       FilesInterceptor('files', 20, {
-        limits: { fileSize: deps.maxUploadBytes ?? 10485760, files: 20, fields: 0 },
+        limits: { fileSize: deps.maxUploadBytes ?? 10485760, files: 20, fields: 10 },
       }),
     )
     @ApiBody({
@@ -371,14 +378,86 @@ export async function createApi(deps: {
         required: ['files'],
         properties: {
           files: { type: 'array', maxItems: 20, items: { type: 'string', format: 'binary' } },
+          metadata: {
+            type: 'string',
+            description: 'Optional JSON policy metadata for uploading a custom policy document',
+          },
         },
       },
     })
-    ingest(@UploadedFiles() files: MemoryUpload[] | undefined, @Req() req: AuthRequest) {
+    ingest(
+      @UploadedFiles() files: MemoryUpload[] | undefined,
+      @Body() body: Record<string, unknown> | undefined,
+      @Req() req: AuthRequest,
+    ) {
       return this.service().ingest(
         req.actor,
         (files ?? []).map((f) => ({ filename: f.originalname, bytes: f.buffer, mime: f.mimetype })),
         req.requestId,
+        body?.metadata,
+      );
+    }
+    @Post('knowledge/ingestions/streams')
+    @HttpCode(202)
+    @ApiConsumes('multipart/form-data')
+    @UseGuards(IngestionGuard)
+    @ApiHeader({ name: 'x-csrf-token', required: true })
+    @UseInterceptors(
+      FilesInterceptor('files', 20, {
+        limits: { fileSize: deps.maxUploadBytes ?? 10485760, files: 20, fields: 10 },
+      }),
+    )
+    @ApiBody({
+      schema: {
+        type: 'object',
+        required: ['files'],
+        properties: {
+          files: { type: 'array', maxItems: 20, items: { type: 'string', format: 'binary' } },
+          metadata: {
+            type: 'string',
+            description: 'Optional JSON policy metadata for uploading a custom policy document',
+          },
+        },
+      },
+    })
+    @ApiAcceptedResponse({
+      schema: {
+        type: 'object',
+        required: ['streamId'],
+        properties: { streamId: { type: 'string', format: 'uuid' } },
+      },
+    })
+    startIngestionStream(
+      @UploadedFiles() files: MemoryUpload[] | undefined,
+      @Body() body: Record<string, unknown> | undefined,
+      @Req() req: AuthRequest,
+    ) {
+      return this.service().startIngestionStream(
+        req.actor,
+        (files ?? []).map((f) => ({ filename: f.originalname, bytes: f.buffer, mime: f.mimetype })),
+        req.requestId,
+        body?.metadata,
+      );
+    }
+    @Get('knowledge/ingestion-streams/:id')
+    @UseGuards(IngestionGuard)
+    @ApiProduces('text/event-stream')
+    @ApiHeader({ name: 'Last-Event-ID', required: false })
+    @ApiOkResponse({
+      description: 'Live extract -> chunk -> embed -> index progress events',
+      schema: { type: 'string' },
+    })
+    ingestionStream(
+      @Param('id') id: string,
+      @Headers('last-event-id') cursor: unknown,
+      @Req() req: AuthRequest,
+      @Res() res: Response,
+    ) {
+      return sendEventStream(
+        res,
+        cursor,
+        () => this.service().ingestionEvents(req.actor, id),
+        () => deps.auth.authenticate(req.cookies?.copilot_session),
       );
     }
     @Post('questions')

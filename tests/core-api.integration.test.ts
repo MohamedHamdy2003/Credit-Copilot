@@ -138,6 +138,11 @@ const post = (path: string, s: { cookie: string[]; csrf: string }) =>
     .post(`/api/v1/${path}`)
     .set('Cookie', s.cookie)
     .set('x-csrf-token', s.csrf);
+const del = (path: string, s: { cookie: string[]; csrf: string }) =>
+  request(app.getHttpServer())
+    .delete(`/api/v1/${path}`)
+    .set('Cookie', s.cookie)
+    .set('x-csrf-token', s.csrf);
 async function select(s: Awaited<ReturnType<typeof account>>, reference = 'APP-001') {
   const result = await post(`applications/fixtures/${reference}`, s).send({}).expect(201);
   return result.body.id as string;
@@ -1175,4 +1180,155 @@ it('allows Senior Credit Officer to approve or reject a CP-6 low-score referral 
     [runReject.body.runId],
   );
   expect(notice).toEqual({ clause: 'CP-6', policy_edition: 'CP-2025' });
+});
+
+it('streams live extract-chunk-embed-index stages for custom policies, blocks customer packs, and deletes cleanly', async () => {
+  const loan = await account();
+  const head = await account('head', true);
+  const customPolicy = Buffer.from(
+    '# Custom Credit Bulletin\n\n## CB-1. Special Retention Rule\nRetained salaried customers with five years tenure qualify for priority review.\n',
+    'utf8',
+  );
+  const metadata = JSON.stringify({
+    id: 'CUSTOM-2026-01',
+    edition: 'CP-2026',
+    product: 'PL-100',
+    kind: 'circular',
+    effectiveFrom: '2026-01-01',
+    effectiveTo: null,
+  });
+
+  // Non-ingestion roles cannot upload or delete policies.
+  await post('knowledge/ingestions/streams', loan)
+    .field('metadata', metadata)
+    .attach('files', customPolicy, 'custom-bulletin-2026.md')
+    .expect(403);
+  await del('knowledge/documents/CP-2025', loan).expect(403);
+
+  // Head uploads a new custom policy and receives all 4 live pipeline stages via SSE.
+  const started = await post('knowledge/ingestions/streams', head)
+    .field('metadata', metadata)
+    .attach('files', customPolicy, 'custom-bulletin-2026.md')
+    .expect(202);
+  const stream = await readStream(`knowledge/ingestion-streams/${started.body.streamId}`, head)
+    .expect('Content-Type', /text\/event-stream/)
+    .expect(200);
+  const frames = readFrames<{
+    kind: string;
+    stage?: string;
+    status?: string;
+    documentId?: string;
+    chunks?: number;
+    succeeded?: number;
+    skipped?: number;
+    failed?: number;
+    code?: string;
+  }>(stream.text);
+  const completedStages = frames
+    .filter((f) => f.data.kind === 'stage' && f.data.status === 'completed')
+    .map((f) => f.data.stage);
+  expect(completedStages).toEqual(['extract', 'chunk', 'embed', 'index']);
+  expect(frames).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        data: expect.objectContaining({
+          kind: 'file_completed',
+          filename: 'custom-bulletin-2026.md',
+          status: 'succeeded',
+          documentId: 'CUSTOM-2026-01',
+        }),
+      }),
+      expect.objectContaining({
+        data: expect.objectContaining({
+          kind: 'completed',
+          totalFiles: 1,
+          succeeded: 1,
+          skipped: 0,
+          failed: 0,
+        }),
+      }),
+    ]),
+  );
+
+  // Listed in Policy library with chunk count and viewable via /api/v1/knowledge/source.
+  const docs = await readStream('knowledge/documents', loan).expect(200);
+  expect(docs.body).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        id: 'CUSTOM-2026-01',
+        filename: 'custom-bulletin-2026.md',
+        chunk_count: expect.any(Number),
+      }),
+    ]),
+  );
+  const viewed = await readStream('knowledge/source?filename=custom-bulletin-2026.md', loan).expect(
+    200,
+  );
+  expect(viewed.text).toContain('CB-1');
+
+  // Re-uploading the identical custom policy skips embed & index idempotently.
+  const repeat = await post('knowledge/ingestions/streams', head)
+    .field('metadata', metadata)
+    .attach('files', customPolicy, 'custom-bulletin-2026.md')
+    .expect(202);
+  const repeatStream = await readStream(
+    `knowledge/ingestion-streams/${repeat.body.streamId}`,
+    head,
+  ).expect(200);
+  const repeatFrames = readFrames<{ kind: string; stage?: string; status?: string }>(
+    repeatStream.text,
+  );
+  expect(
+    repeatFrames
+      .filter((f) => f.data.kind === 'stage' && f.data.status === 'skipped')
+      .map((f) => f.data.stage),
+  ).toEqual(['embed', 'index']);
+
+  // Customer packs remain strictly blocked even when custom policy metadata is provided.
+  const blocked = await post('knowledge/ingestions/streams', head)
+    .field(
+      'metadata',
+      JSON.stringify({
+        edition: 'CP-2026',
+        product: 'PL-100',
+        kind: 'policy',
+        effectiveFrom: '2026-01-01',
+        effectiveTo: null,
+      }),
+    )
+    .attach('files', await readFile('data/corpus/evidence/APP-001.pdf'), 'APP-001.pdf')
+    .expect(202);
+  const blockedStream = await readStream(
+    `knowledge/ingestion-streams/${blocked.body.streamId}`,
+    head,
+  ).expect(200);
+  const blockedFrames = readFrames<{ kind: string; status?: string; code?: string }>(
+    blockedStream.text,
+  );
+  expect(blockedFrames).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        data: expect.objectContaining({
+          kind: 'file_completed',
+          status: 'failed',
+          code: 'UntrustedPolicyDocument',
+        }),
+      }),
+    ]),
+  );
+
+  // Deleting the custom policy removes chunks/embeddings/revisions and logs a deleted audit row.
+  const removed = await del('knowledge/documents/CUSTOM-2026-01', head).expect(200);
+  expect(removed.body).toEqual({
+    deleted: true,
+    id: 'CUSTOM-2026-01',
+    filename: 'custom-bulletin-2026.md',
+  });
+  expect(
+    await db.query("SELECT id FROM knowledge.documents WHERE id='CUSTOM-2026-01'"),
+  ).toHaveLength(0);
+  expect(
+    await db.query("SELECT id FROM knowledge.chunks WHERE document_id='CUSTOM-2026-01'"),
+  ).toHaveLength(0);
+  await del('knowledge/documents/CUSTOM-2026-01', head).expect(404);
 });

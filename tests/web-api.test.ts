@@ -23,6 +23,15 @@ it('sends cookies, memory CSRF and stable idempotency without setting a multipar
       headers: { 'x-csrf-token': 'csrf', 'Idempotency-Key': 'same-attempt' },
     }),
   ]);
+  await client.request('knowledge/documents/CP-2025', { method: 'DELETE' });
+  expect(calls[1]).toEqual([
+    '/api/v1/knowledge/documents/CP-2025',
+    expect.objectContaining({
+      credentials: 'include',
+      method: 'DELETE',
+      headers: { 'x-csrf-token': 'csrf' },
+    }),
+  ]);
 });
 it('clears CSRF on expired sessions but keeps login failures local to the form', async () => {
   globalThis.fetch = async () =>

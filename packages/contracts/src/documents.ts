@@ -24,6 +24,25 @@ export interface DocumentMetadata {
   product: string;
   kind: 'policy' | 'product' | 'procedure' | 'circular' | 'pricing';
 }
+export const customPolicyMetadataSchema = z
+  .object({
+    id: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9._-]{2,64}$/, 'Document ID must be 2–64 letters, digits, ., _, or -')
+      .optional(),
+    edition: z.string().trim().min(1).max(40),
+    effectiveFrom: z.iso.date(),
+    effectiveTo: z.iso.date().nullable().optional(),
+    product: z.enum(['PL-100', 'AL-200']),
+    kind: z.enum(['policy', 'product', 'procedure', 'circular', 'pricing']),
+  })
+  .strict()
+  .refine((value) => !value.effectiveTo || value.effectiveTo > value.effectiveFrom, {
+    message: 'Effective-to date must be later than effective-from date',
+    path: ['effectiveTo'],
+  });
+export type CustomPolicyMetadata = z.infer<typeof customPolicyMetadataSchema>;
 export interface Chunk {
   id: string;
   ordinal: number;

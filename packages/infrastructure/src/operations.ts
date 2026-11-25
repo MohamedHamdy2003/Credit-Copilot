@@ -35,7 +35,9 @@ export async function createOperations(
   ) as ManifestEntry[];
   const extractionPrompt = await readFile('prompts/extraction.txt', 'utf8'),
     questionPrompt = await readFile('prompts/questions.txt', 'utf8');
-  const ingestion = new IngestionService(db, provider, manifest, parser),
+  const fixtures = await loadAssessmentFixtures();
+  const excludedHashes = new Set(fixtures.map((entry) => entry.hash));
+  const ingestion = new IngestionService(db, provider, manifest, parser, excludedHashes),
     search = new RetrievalService(db, provider, config.RETRIEVAL_STRATEGY, config);
   const store = new PostgresApplicationStore(db);
   return new OperationsService({
@@ -43,37 +45,55 @@ export async function createOperations(
     store,
     usage,
     newId: randomUUID,
-    fixtures: await loadAssessmentFixtures(),
+    fixtures,
     settings: { allowDemo: config.ALLOW_DEMO_MODE, defaultMode: config.ASSESSMENT_MODE },
     parse: (upload) => parser.extract(upload.filename, upload.bytes, upload.mime),
     knowledge: {
-      ingest: (name, bytes, mime) => ingestion.ingest(name, bytes, mime),
+      ingest: (name, bytes, mime, options) => ingestion.ingest(name, bytes, mime, options),
+      deleteDocument: (id) => ingestion.deleteDocument(id),
       source: async (filename) => {
+        invariant(!/[\\/]/.test(filename), 'NotFound', 'Policy source not found', 404);
         const entry = manifest.find((candidate) => candidate.filename === filename);
-        invariant(
-          entry && !/[\\/]/.test(entry.filename),
-          'NotFound',
-          'Reviewed policy source not found',
-          404,
-        );
-        const bytes = await readFile(`data/corpus/policy/${entry.filename}`);
-        invariant(
-          createHash('sha256').update(bytes).digest('hex') === entry.sha256,
-          'UntrustedPolicyDocument',
-          'Reviewed policy source failed integrity verification',
-          409,
-        );
+        if (entry) {
+          const bytes = await readFile(`data/corpus/policy/${entry.filename}`);
+          invariant(
+            createHash('sha256').update(bytes).digest('hex') === entry.sha256,
+            'UntrustedPolicyDocument',
+            'Reviewed policy source failed integrity verification',
+            409,
+          );
+          return {
+            filename: entry.filename,
+            contentType: entry.filename.toLowerCase().endsWith('.pdf')
+              ? 'application/pdf'
+              : 'text/plain; charset=utf-8',
+            bytes,
+          };
+        }
+        const rows = (await db.query(
+          'SELECT filename, normalized FROM knowledge.documents WHERE filename=$1 LIMIT 1',
+          [filename],
+        )) as {
+          filename: string;
+          normalized: { blocks?: { originalText?: string; text: string }[] };
+        }[];
+        const stored = rows[0];
+        invariant(stored, 'NotFound', 'Policy source not found', 404);
+        const text = (stored.normalized.blocks ?? [])
+          .map((block) => block.originalText ?? block.text)
+          .join('\n\n');
         return {
-          filename: entry.filename,
-          contentType: entry.filename.toLowerCase().endsWith('.pdf')
-            ? 'application/pdf'
-            : 'text/plain; charset=utf-8',
-          bytes,
+          filename: stored.filename,
+          contentType: 'text/plain; charset=utf-8',
+          bytes: Buffer.from(text, 'utf8'),
         };
       },
       documents: () =>
         db.query(
-          'SELECT id,filename,metadata,pipeline_version,created_at FROM knowledge.documents ORDER BY id',
+          `SELECT d.id, d.filename, d.metadata, d.pipeline_version, d.created_at,
+                  (SELECT count(*)::int FROM knowledge.chunks c WHERE c.document_id=d.id AND c.active) AS chunk_count
+             FROM knowledge.documents d
+            ORDER BY d.id`,
         ),
       attempts: () =>
         db.query(

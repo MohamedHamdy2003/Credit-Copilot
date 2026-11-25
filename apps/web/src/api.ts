@@ -31,12 +31,18 @@ export class ApiClient {
   }
   async request<T>(
     path: string,
-    options: { body?: unknown; key?: string; signal?: AbortSignal } = {},
+    options: {
+      method?: 'GET' | 'POST' | 'DELETE';
+      body?: unknown;
+      key?: string;
+      signal?: AbortSignal;
+    } = {},
   ): Promise<T> {
     const headers: Record<string, string> = {};
     let body: BodyInit | undefined;
+    const method = options.method ?? (options.body === undefined ? 'GET' : 'POST');
+    if (method !== 'GET') headers['x-csrf-token'] = this.csrf;
     if (options.body !== undefined) {
-      headers['x-csrf-token'] = this.csrf;
       if (options.body instanceof FormData) body = options.body;
       else {
         headers['Content-Type'] = 'application/json';
@@ -47,7 +53,7 @@ export class ApiClient {
     let response: Response;
     try {
       response = await fetch(`/api/v1/${path}`, {
-        method: body === undefined ? 'GET' : 'POST',
+        method,
         credentials: 'include',
         headers,
         body,
