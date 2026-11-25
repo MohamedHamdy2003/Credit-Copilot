@@ -124,8 +124,8 @@ export class IngestionService {
         stage: 'extract',
         status: 'completed',
         detail: maxPage
-          ? `${document.format.toUpperCase()} · ${maxPage} page(s) · ${document.blocks.length} block(s)`
-          : `${document.format.toUpperCase()} · ${document.blocks.length} block(s)`,
+          ? `${document.format.toUpperCase()} · ${maxPage} pages · ${document.blocks.length} blocks`
+          : `${document.format.toUpperCase()} · ${document.blocks.length} blocks`,
       });
 
       report({ stage: 'chunk', status: 'running', detail: `Chunking (${CHUNKER_VERSION})` });
@@ -144,7 +144,7 @@ export class IngestionService {
       report({
         stage: 'chunk',
         status: 'completed',
-        detail: `${chunks.length} chunk(s) (${CHUNKER_VERSION})`,
+        detail: `${chunks.length} chunks (${CHUNKER_VERSION})`,
       });
 
       const indexed = (await this.db.query(
@@ -160,7 +160,7 @@ export class IngestionService {
         report({
           stage: 'embed',
           status: 'skipped',
-          detail: `Reusing ${chunks.length} existing embedding(s)`,
+          detail: `Reusing ${chunks.length} existing embeddings`,
         });
         report({
           stage: 'index',
@@ -185,7 +185,7 @@ export class IngestionService {
       report({
         stage: 'embed',
         status: 'running',
-        detail: `Embedding 0 of ${chunks.length} chunk(s)`,
+        detail: `Embedding 0 of ${chunks.length} chunks`,
         current: 0,
         total: chunks.length,
       });
@@ -194,7 +194,7 @@ export class IngestionService {
         report({
           stage: 'embed',
           status: 'running',
-          detail: `Embedded ${index + 1} of ${chunks.length} chunk(s)`,
+          detail: `Embedded ${index + 1} of ${chunks.length} chunks`,
           current: index + 1,
           total: chunks.length,
         });
@@ -202,7 +202,7 @@ export class IngestionService {
       report({
         stage: 'embed',
         status: 'completed',
-        detail: `${vectors.length} vector(s) · ${this.embeddings.dimensions}d`,
+        detail: `${vectors.length} vectors · ${this.embeddings.dimensions}d`,
         current: chunks.length,
         total: chunks.length,
       });
@@ -210,7 +210,7 @@ export class IngestionService {
       report({
         stage: 'index',
         status: 'running',
-        detail: `Committing ${chunks.length} chunk(s) to knowledge.*`,
+        detail: `Committing ${chunks.length} chunks to knowledge.*`,
       });
       await this.db.transaction(async (manager) => {
         // Serialize concurrent ingestion for this logical document, then recheck conflicts.
@@ -279,7 +279,7 @@ export class IngestionService {
       report({
         stage: 'index',
         status: 'completed',
-        detail: `Indexed ${chunks.length} chunk(s) as ${metadata.id}`,
+        detail: `Indexed ${chunks.length} chunks as ${metadata.id}`,
       });
       return {
         id: attempt,

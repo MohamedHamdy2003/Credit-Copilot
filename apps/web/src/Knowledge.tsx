@@ -265,7 +265,7 @@ export function Knowledge({ actor }: { actor: Actor }) {
         <section className="panel">
           <div className="library-header">
             <h2>Ingest policy documents</h2>
-            <div className="question-tools" role="group" aria-label="Ingestion mode">
+            <div className="ingestion-mode-tools" role="group" aria-label="Ingestion mode">
               <button
                 type="button"
                 className={uploadMode === 'reviewed' ? 'primary' : ''}
@@ -407,7 +407,7 @@ export function Knowledge({ actor }: { actor: Actor }) {
                 )}
                 {summary && (
                   <small>
-                    Completed {summary.totalFiles} file(s): {summary.succeeded} indexed ·{' '}
+                    Completed {summary.totalFiles} files: {summary.succeeded} indexed ·{' '}
                     {summary.skipped} skipped · {summary.failed} failed
                   </small>
                 )}
@@ -430,7 +430,7 @@ export function Knowledge({ actor }: { actor: Actor }) {
                           <small>
                             {file.outcome.documentId}
                             {file.outcome.chunks !== undefined
-                              ? ` · ${file.outcome.chunks} chunk(s)`
+                              ? ` · ${file.outcome.chunks} chunks`
                               : ''}
                           </small>
                         )}
@@ -486,8 +486,8 @@ export function Knowledge({ actor }: { actor: Actor }) {
         <section className="table-wrap">
           {!!documents.data.length && (
             <div className="library-summary">
-              <strong>{documents.data.length} indexed source(s)</strong>
-              <span className="muted">{totalChunks} active chunk(s)</span>
+              <strong>{documents.data.length} indexed sources</strong>
+              <span className="muted">{totalChunks} active chunks</span>
             </div>
           )}
           <table>
