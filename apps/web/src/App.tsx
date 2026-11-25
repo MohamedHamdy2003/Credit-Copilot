@@ -4,12 +4,14 @@ import type { Session } from './types';
 import { ErrorNotice } from './components';
 import { Applications } from './Applications';
 import { Questions } from './Questions';
+import { Affordability } from './Affordability';
 import { Knowledge } from './Knowledge';
 import { Reviews } from './Reviews';
 import { Usage } from './Usage';
 const pages = [
   'Applications',
-  'Policy questions',
+  'Delta Copilot',
+  'Affordability calculator',
   'Policy library',
   'Usage',
   'Review queue',
@@ -177,7 +179,8 @@ export function App() {
       <main className="content">
         <ErrorNotice error={error} />
         {page === 'Applications' && <Applications actor={session.user} />}{' '}
-        {page === 'Policy questions' && <Questions />}
+        {page === 'Delta Copilot' && <Questions />}
+        {page === 'Affordability calculator' && <Affordability />}
         {page === 'Policy library' && <Knowledge actor={session.user} />}{' '}
         {page === 'Usage' && <Usage />}
         {page === 'Review queue' && <Reviews actor={session.user} />}

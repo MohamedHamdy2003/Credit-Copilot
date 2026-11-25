@@ -195,7 +195,7 @@ test('auto application shows documented funding and cites its own product rules'
   await page.getByRole('tab', { name: 'Rules & sources' }).click();
   await expect(page.getByText('synthetic-auto-product.md PS-9', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Policy questions', exact: true }).click();
+  await page.getByRole('button', { name: 'Delta Copilot', exact: true }).click();
   await page.getByRole('combobox', { name: 'Product', exact: true }).selectOption('AL-200');
   await page
     .getByLabel('Your question', { exact: true })
@@ -215,7 +215,7 @@ test('Usage shows only recorded model activity with unknown provider charges on 
   page.on('pageerror', (error) => errors.push(error.message));
   await page.getByRole('button', { name: 'Usage', exact: true }).click();
   await expect(page.getByText('No model usage recorded yet.')).toBeVisible();
-  await page.getByRole('button', { name: 'Policy questions', exact: true }).click();
+  await page.getByRole('button', { name: 'Delta Copilot', exact: true }).click();
   await page.getByLabel('Your question', { exact: true }).fill('Maximum DBR in CP-2025?');
   await page.getByRole('button', { name: 'Send question', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Citations', exact: true })).toBeVisible();
@@ -237,7 +237,7 @@ test('grounded questions, refusal, conflicts and edition-specific code calculati
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('button', { name: 'Policy questions', exact: true }).click();
+  await page.getByRole('button', { name: 'Delta Copilot', exact: true }).click();
   await page.getByLabel('Your question', { exact: true }).fill('Maximum DBR in CP-2024?');
   await page.getByRole('button', { name: 'Send question', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Citations', exact: true })).toBeVisible();
@@ -262,7 +262,7 @@ test('grounded questions, refusal, conflicts and edition-specific code calculati
   await page.getByLabel('Calculation date').fill('2024-12-01');
   await page.getByRole('button', { name: 'Calculate affordability' }).click();
   await expect(page.getByText('EGP 382,000.00', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Ask a policy question', exact: true }).click();
+  await page.getByRole('button', { name: 'Delta Copilot', exact: true }).click();
   await page.route('**/api/v1/question-streams/*', (route) =>
     route.fulfill({
       status: 200,

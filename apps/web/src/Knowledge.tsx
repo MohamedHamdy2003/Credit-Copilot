@@ -385,7 +385,7 @@ export function Knowledge({ actor }: { actor: Actor }) {
             <p className="muted">
               {uploadMode === 'reviewed'
                 ? 'PDF, CSV or MD · 10 MiB per file · up to 20 files. Reviewed manifest hashes are indexed automatically; unreviewed files are rejected.'
-                : 'PDF, CSV or MD · 10 MiB max. The document will run live through Extract → Chunk → Embed → Index and become searchable in Policy questions.'}
+                : 'PDF, CSV or MD · 10 MiB max. The document will run live through Extract → Chunk → Embed → Index and become searchable in Delta Copilot.'}
             </p>
             <button className="primary" disabled={busy}>
               {busy ? 'Ingesting…' : 'Ingest documents'}

@@ -203,7 +203,7 @@ are listed. To watch the **live 4-stage ingestion pipeline**
   `UntrustedPolicyDocument`).
 
 **② Edition comparison & inline source citations** — sign in as `loan-officer`,
-open **Policy questions**, select product **`PL-100`**, and ask:
+open **Delta Copilot**, select product **`PL-100`**, and ask:
 
 > *What is the minimum net monthly income for PL-100 in CP-2024?*
 
@@ -215,7 +215,7 @@ inline in a new tab via `/api/v1/knowledge/source?filename=...`. Try *"What is
 the maximum tenor under Circular 2025/02?"* to see the 60-month product cap
 (`CP-14`/`PS-3`) explained alongside the 72-month conditional circular (`C-1`).
 
-**③ Anti-hallucination refusal (out-of-corpus)** — in the same Policy questions
+**③ Anti-hallucination refusal (out-of-corpus)** — in the same **Delta Copilot**
 chat, ask:
 
 > *What are the terms for a crypto-backed loan?*
