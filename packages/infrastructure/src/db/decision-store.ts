@@ -9,11 +9,18 @@ import {
   type Actor,
 } from '../../../domain/src/access.js';
 import { invariant } from '../../../domain/src/errors.js';
-import { addMonths, compareMoney } from '../../../domain/src/calculations.js';
+import {
+  addMonths,
+  affordability,
+  compareMoney,
+  formatMoney,
+} from '../../../domain/src/calculations.js';
 import { parseApplicationForm } from '../../../application/src/application-form.js';
 import type { NormalizedDocument } from '../../../contracts/src/documents.js';
-import { selectPolicy, type Policy } from '../../../domain/src/policy.js';
+import type { ProductId } from '../../../contracts/src/products.js';
+import { selectPolicy, selectPricing, type Policy } from '../../../domain/src/policy.js';
 import { rejectionClauses } from '../../../domain/src/review-policy.js';
+import { loadProductCatalog, type ProductSources } from '../product-catalog.js';
 import { buildIssuedOfferDocument, type OfferApprovalRow } from './offer-document.js';
 interface RunRow {
   latest_assessment_id?: string | null;
@@ -29,7 +36,12 @@ export class PostgresDecisionStore implements DecisionStore {
   constructor(
     private readonly db: DataSource,
     private readonly policies: Policy[],
+    private catalog?: Record<ProductId, ProductSources>,
   ) {}
+  private async productCatalog() {
+    this.catalog ??= await loadProductCatalog();
+    return this.catalog;
+  }
   async read(actor: Actor, runId: string) {
     const rows = (await this.db.query(
       'SELECT r.id,r.application_id,r.status,r.version,r.result,a.preparer_id,o.id AS offer_id FROM cases.assessment_runs r JOIN cases.applications a ON a.id=r.application_id LEFT JOIN cases.offers o ON o.run_id=r.id WHERE r.id=$1',
@@ -137,32 +149,86 @@ export class PostgresDecisionStore implements DecisionStore {
           'Assessment is not awaiting approval',
           409,
         );
-        const amount = result.recommendedAmount;
-        invariant(
-          amount && compareMoney(amount, '0') > 0,
-          'UnresolvedReferral',
-          'A complete reassessment with a recommended amount is required',
-          409,
-        );
-        authorizeApproval(
-          actor,
-          run.preparer_id,
-          amount,
-          result.recommendation === 'REFER_TO_HUMAN',
-          command.comment,
-        );
         invariant(
           !result.fraudReferral && result.evidence.missing.length === 0,
           'UnresolvedReferral',
           'Missing or tampered evidence must be resolved by reassessment',
           409,
         );
+        const referred = result.recommendation === 'REFER_TO_HUMAN';
+        let amount = result.recommendedAmount ?? null;
+        let updatedResult: AssessmentResult | null = null;
+        let referredClauses: string[] = [];
+        if (referred) {
+          const rules = result.results ?? [];
+          referredClauses = rules.filter((r) => r.result === 'refer').map((r) => r.rule);
+          const reviewableReferral =
+            Boolean(result.extraction) &&
+            rules.length > 0 &&
+            !rules.some((r) => r.result === 'fail') &&
+            referredClauses.length > 0 &&
+            referredClauses.every((rule) => ['CP-6', 'CP-8'].includes(rule));
+          invariant(
+            reviewableReferral,
+            'UnresolvedReferral',
+            'A complete reassessment with verified evidence is required before approval',
+            409,
+          );
+          const form = parseApplicationForm(run.normalized);
+          const productSources = (await this.productCatalog())[form.productId];
+          const policy = selectPolicy(productSources.policies, form.applicationDate);
+          invariant(
+            policy.edition === result.policyEdition,
+            'ReassessmentRequired',
+            'Policy snapshot mismatch',
+          );
+          const pricing = selectPricing(
+            productSources.pricing,
+            form.applicationDate,
+            form.months,
+            form.payrollTransfer,
+          );
+          const calculation = affordability({
+            principal: form.amount,
+            annualRatePercent: pricing.annualRatePercent,
+            months: form.months,
+            income: result.extraction!.fields.income.value,
+            obligations: result.extraction!.fields.obligations.value,
+            maxDbr: policy.maxDbr,
+            productMaximum: productSources.product.maximumAmount,
+          });
+          invariant(
+            calculation.passes,
+            'AffordabilityLimitExceeded',
+            'Requested amount exceeds policy debt burden limit; reassess for a revised amount',
+            409,
+          );
+          amount = formatMoney(form.amount);
+          updatedResult = {
+            ...result,
+            calculation,
+            pricing: {
+              annualRatePercent: pricing.annualRatePercent,
+              sourceFile: pricing.sourceFile,
+              row: pricing.row,
+            },
+            recommendedAmount: amount,
+          };
+        } else {
+          invariant(
+            result.recommendation === 'APPROVE' || result.recommendation === 'OFFER_ALTERNATIVE',
+            'UnresolvedReferral',
+            'Failed eligibility cannot be silently overridden',
+            409,
+          );
+        }
         invariant(
-          result.recommendation === 'APPROVE' || result.recommendation === 'OFFER_ALTERNATIVE',
+          amount && compareMoney(amount, '0') > 0,
           'UnresolvedReferral',
-          'Failed eligibility cannot be silently overridden',
+          'A complete reassessment with a recommended amount is required',
           409,
         );
+        authorizeApproval(actor, run.preparer_id, amount, referred, command.comment);
         if (result.recommendation === 'OFFER_ALTERNATIVE') {
           const responses = (await manager.query(
             'SELECT accepted FROM cases.customer_responses WHERE run_id=$1',
@@ -174,6 +240,12 @@ export class PostgresDecisionStore implements DecisionStore {
             'Customer must accept the alternative first',
             409,
           );
+        }
+        if (updatedResult) {
+          await manager.query('UPDATE cases.assessment_runs SET result=$2 WHERE id=$1', [
+            runId,
+            updatedResult,
+          ]);
         }
         const approvalId = randomUUID();
         await manager.query(
@@ -188,6 +260,7 @@ export class PostgresDecisionStore implements DecisionStore {
           amount,
           comment: command.comment,
           version: run.version,
+          ...(referred ? { referred: true, referredClauses, procedure: 'PM-4' } : {}),
         });
       } else if (command.action === 'reject') {
         requireReviewer(actor);
@@ -219,6 +292,8 @@ export class PostgresDecisionStore implements DecisionStore {
           missing: result.evidence.missing,
           results: result.results ?? [],
           customerDeclined: customerDeclined[0]?.accepted === false,
+          allowReferredClauses:
+            result.recommendation === 'REFER_TO_HUMAN' && ['senior', 'head'].includes(actor.tier),
         });
         invariant(
           allowed.includes(command.clause),
@@ -238,7 +313,9 @@ export class PostgresDecisionStore implements DecisionStore {
           : policy.sourceFile;
         const criterion =
           result.results?.find(
-            (r) => r.result === 'fail' && r.rule.split(' ')[0] === command.clause,
+            (r) =>
+              (r.result === 'fail' || r.result === 'refer') &&
+              r.rule.split(' ')[0] === command.clause,
           )?.reason ?? 'Customer declined the maximum eligible alternative under CP-4.1';
         const writtenReason = `${criterion}. Reviewer justification: ${command.comment}`;
         await manager.query(

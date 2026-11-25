@@ -1,5 +1,4 @@
-import type { AssessmentInput, AssessmentDependencies } from './assessment.js';
-import { assessApplication } from './assessment.js';
+import type { ApprovalAuthorityRole } from '../../domain/src/access.js';
 import type { Usage } from './ports.js';
 import type { AgentToolCall } from './assessment-agents.js';
 
@@ -15,6 +14,7 @@ export interface AssessmentResult {
   removedFields: string[];
   steps: string[];
   recommendation: 'APPROVE' | 'DECLINE' | 'REFER_TO_HUMAN' | 'OFFER_ALTERNATIVE';
+  approvalRequiredFrom?: ApprovalAuthorityRole | null;
   status: 'pending_review' | 'pending_customer_acceptance' | 'pending_approval';
   calculation: ReturnType<typeof import('../../domain/src/rules.js').assessRules>['calculation'];
   results?: import('../../domain/src/rules.js').RuleResult[];
@@ -45,21 +45,4 @@ export interface AssessmentRecord {
 export interface AssessmentRepository {
   /** Atomically append immutable assessment, audit, usage and fraud referral. */
   save(record: AssessmentRecord): Promise<void>;
-}
-export async function assessAndRecord(
-  input: AssessmentInput,
-  dependencies: AssessmentDependencies,
-  repository: AssessmentRepository,
-  identifiers: { runId: string; applicationId: string; requestId: string },
-) {
-  const result = await assessApplication(input, dependencies);
-  await repository.save({
-    id: identifiers.runId,
-    applicationId: identifiers.applicationId,
-    requestId: identifiers.requestId,
-    actorId: input.actorId,
-    at: input.at,
-    result,
-  });
-  return { runId: identifiers.runId, ...result };
 }

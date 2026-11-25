@@ -144,13 +144,11 @@ export function assessRules(
     reason: 'Product amount and tenor limits',
   });
   if (results.some((r) => r.result !== 'pass')) {
-    const mandatoryDecline =
-      facts.hasDefault || results.some((r) => r.rule === 'PS-9' && r.result === 'fail');
+    // Under CP-8, any failed mandatory eligibility or product criterion requires DECLINE;
+    // REFER_TO_HUMAN applies only when no mandatory criterion failed.
+    const mandatoryDecline = results.some((r) => r.result === 'fail');
     return {
-      recommendation:
-        !mandatoryDecline && results.some((r) => r.result === 'refer')
-          ? ('REFER_TO_HUMAN' as const)
-          : ('DECLINE' as const),
+      recommendation: mandatoryDecline ? ('DECLINE' as const) : ('REFER_TO_HUMAN' as const),
       results,
       calculation: null,
       recommendedAmount: null,

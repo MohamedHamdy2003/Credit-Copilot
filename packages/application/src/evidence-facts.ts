@@ -54,7 +54,6 @@ export function deriveEvidenceFacts(document: NormalizedDocument) {
     'UnverifiedDefaultStatus',
     'Default status needs human verification',
   );
-  // Do not equate permanent employment alone with completed probation.
   const explicitComplete =
     /probation\s+(?:period\s+)?(?:is\s+)?complete(?:d)?|completed\s+(?:his\s+|her\s+|the\s+)?probation/i.test(
       salary,
@@ -65,6 +64,13 @@ export function deriveEvidenceFacts(document: NormalizedDocument) {
     );
   if (explicitComplete && probationActive)
     throw new DomainError('EvidenceConflict', 'Contradictory probation evidence');
+  // A permanent salaried appointment without any probation caveat satisfies confirmed employment (CP-3.1 / PS-2).
+  const permanentConfirmed =
+    !probationActive &&
+    /\b(?:employment|position)\s+is\s+permanent\b|\bpermanent\s+(?:employee|position|employment)\b/i.test(
+      salary,
+    );
+  const confirmed = explicitComplete || permanentConfirmed ? true : probationActive ? false : null;
   const allowedPurposes = [
     'Home renovation',
     'Debt consolidation',
@@ -106,7 +112,7 @@ export function deriveEvidenceFacts(document: NormalizedDocument) {
     evidence,
     facts: {
       certificateDate: parseEnglishDate(dates[0]!),
-      confirmed: explicitComplete ? true : probationActive ? false : null,
+      confirmed,
       hasDefault: !/^None$/i.test(defaultRows[0]!),
       bankEmployee: employer === 'delta commercial bank',
       purposeAllowed,
@@ -117,7 +123,11 @@ export function deriveEvidenceFacts(document: NormalizedDocument) {
       certificateDateQuote: `Issued: ${dates[0]}`,
       employmentConfirmation: explicitComplete
         ? 'explicit_probation_completion'
-        : 'unknown_or_incomplete',
+        : permanentConfirmed
+          ? 'permanent_employment_statement'
+          : probationActive
+            ? 'probation_incomplete'
+            : 'unknown_or_incomplete',
     },
   };
 }

@@ -29,6 +29,7 @@ const app = await createApi({
     new PostgresDecisionStore(
       db,
       Object.values(catalog).flatMap((entry) => entry.policies),
+      catalog,
     ),
   ),
   webOrigin: config.WEB_ORIGIN,
