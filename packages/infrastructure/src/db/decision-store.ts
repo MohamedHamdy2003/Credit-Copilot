@@ -60,7 +60,7 @@ export class PostgresDecisionStore implements DecisionStore {
   async queue(actor: Actor) {
     requireReviewer(actor);
     return this.db.query(
-      "SELECT r.id,r.application_id,r.status,r.version,r.result->>'recommendation' AS recommendation,r.result->>'recommendedAmount' AS recommended_amount,r.created_at FROM cases.assessment_runs r JOIN cases.applications a ON a.id=r.application_id WHERE r.status IN ('pending_review','pending_approval','pending_customer_acceptance') AND (a.latest_assessment_id IS NULL OR a.latest_assessment_id=r.id) AND (r.recommendation<>'REFER_TO_HUMAN' OR $1) ORDER BY r.created_at,r.id",
+      "SELECT r.id,r.application_id,a.reference,r.status,r.version,r.result->>'recommendation' AS recommendation,r.result->>'recommendedAmount' AS recommended_amount,r.created_at FROM cases.assessment_runs r JOIN cases.applications a ON a.id=r.application_id WHERE r.status IN ('pending_review','pending_approval','pending_customer_acceptance') AND (a.latest_assessment_id IS NULL OR a.latest_assessment_id=r.id) AND (r.recommendation<>'REFER_TO_HUMAN' OR $1) ORDER BY r.created_at,r.id",
       [['senior', 'head'].includes(actor.tier)],
     );
   }

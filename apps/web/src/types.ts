@@ -41,6 +41,7 @@ export interface Run {
 export interface ReviewRow {
   id: string;
   application_id: string;
+  reference: string;
   status: string;
   recommendation: string;
   recommended_amount: string | null;

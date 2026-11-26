@@ -49,7 +49,7 @@ export function Reviews({ actor }: { actor: Actor }) {
           <table>
             <thead>
               <tr>
-                <th>Assessment</th>
+                <th>Application</th>
                 <th>Status</th>
                 <th>Recommended</th>
                 <th>Action</th>
@@ -58,7 +58,9 @@ export function Reviews({ actor }: { actor: Actor }) {
             <tbody>
               {queue.data.map((r) => (
                 <tr className={selected === r.id ? 'selected' : ''} key={r.id}>
-                  <td className="break">{r.id}</td>
+                  <td title={`Assessment ${r.id}`}>
+                    <strong>{r.reference}</strong>
+                  </td>
                   <td>
                     <Status value={r.status} />
                   </td>
