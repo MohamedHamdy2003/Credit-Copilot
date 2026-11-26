@@ -184,14 +184,15 @@ Sign in as `head-credit` (see [Demo accounts](#demo-accounts)) and open
 are listed. To watch the **live 4-stage ingestion pipeline**
 (`1. Extract → 2. Chunk → 3. Embed → 4. Index`) in action:
 
-- **Delete & re-ingest a reviewed policy**: click **Delete** → **Confirm delete**
-  on `credit-policy-2025.pdf`, then upload `data/corpus/policy/credit-policy-2025.pdf`
-  under **Reviewed policy batch** to watch every stage run live; upload it a
+- **Delete & re-ingest a bank policy**: click **Delete** → confirm in the
+  modal on `credit-policy-2025.pdf`, then upload
+  `data/corpus/policy/credit-policy-2025.pdf` directly (leave **Policy edition**
+  blank to auto-match by SHA-256) to watch every stage run live; upload it a
   second time to observe **`skipped`** (SHA-256 idempotency).
-- **Upload a new custom policy**: switch to **New custom policy**, enter Product,
-  Edition, Type, and Effective date, and upload any `.pdf`, `.md`, or `.csv`
-  policy file (customer packs `APP-*` / `AUTO-*` remain strictly blocked with
-  `UntrustedPolicyDocument`).
+- **Upload a new custom policy**: select any `.pdf`, `.md`, or `.csv` policy
+  file (header dates/edition auto-fill when detected), review **Validity &
+  metadata**, and click **Ingest documents** (customer packs `APP-*` / `AUTO-*`
+  remain strictly blocked with `UntrustedPolicyDocument`).
 
 **② Edition comparison & inline source citations** — sign in as `loan-officer`,
 open **Delta Copilot**, keep **`Personal loan (PL-100)`** selected in the

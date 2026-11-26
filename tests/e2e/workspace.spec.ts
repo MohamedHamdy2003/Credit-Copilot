@@ -361,8 +361,7 @@ test('real multipart upload, duplicate registration, draft delete and mixed know
   await expect(page.getByLabel('Ingestion stages').getByText('Extract').first()).toBeVisible();
   await expect(page.getByLabel('Ingestion stages').getByText('Index').first()).toBeVisible();
 
-  // Upload a new custom policy through all 4 live stages, then delete it cleanly.
-  await page.getByRole('button', { name: 'New custom policy', exact: true }).click();
+  // Upload a new custom policy through all 4 live stages, then delete it via the confirmation modal.
   await page.getByLabel('Policy edition').fill('CP-2026');
   await page.getByLabel('Document ID (optional)').fill('CUSTOM-E2E-2026');
   await page.getByLabel('Effective from').fill('2026-01-01');
@@ -377,8 +376,11 @@ test('real multipart upload, duplicate registration, draft delete and mixed know
   await expect(page.getByText('e2e-custom-policy.md — succeeded', { exact: true })).toBeVisible();
   const customRow = page.getByRole('row').filter({ hasText: 'e2e-custom-policy.md' });
   await expect(customRow).toBeVisible();
+  await expect(customRow.getByText('Active', { exact: true })).toBeVisible();
   await customRow.getByRole('button', { name: 'Delete', exact: true }).click();
-  await customRow.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+  const policyDialog = page.getByRole('dialog');
+  await expect(policyDialog).toBeVisible();
+  await policyDialog.getByRole('button', { name: 'Delete policy', exact: true }).click();
   await expect(page.getByText('Deleted e2e-custom-policy.md', { exact: false })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'e2e-custom-policy.md' })).toHaveCount(0);
 });

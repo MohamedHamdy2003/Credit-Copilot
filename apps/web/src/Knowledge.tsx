@@ -6,7 +6,15 @@ import {
 } from '../../../packages/contracts/src/streams.js';
 import { api } from './api';
 import type { Actor, KnowledgeDocument, IngestionAttempt } from './types';
-import { Empty, ErrorNotice, ResourceState, Status, Toast, useResource } from './components';
+import {
+  ConfirmDialog,
+  Empty,
+  ErrorNotice,
+  ResourceState,
+  Status,
+  Toast,
+  useResource,
+} from './components';
 
 type StageState = {
   status: 'pending' | 'running' | 'completed' | 'skipped' | 'failed';
@@ -35,11 +43,28 @@ interface BatchSummary {
   failed: number;
 }
 
+type PolicyKind = 'policy' | 'product' | 'procedure' | 'circular' | 'pricing';
+
 const STAGE_LABELS: Record<IngestionStage, { step: string; title: string }> = {
   extract: { step: '1', title: 'Extract' },
   chunk: { step: '2', title: 'Chunk' },
   embed: { step: '3', title: 'Embed' },
   index: { step: '4', title: 'Index' },
+};
+
+const MONTHS: Record<string, string> = {
+  january: '01',
+  february: '02',
+  march: '03',
+  april: '04',
+  may: '05',
+  june: '06',
+  july: '07',
+  august: '08',
+  september: '09',
+  october: '10',
+  november: '11',
+  december: '12',
 };
 
 function initialStages(): Record<IngestionStage, StageState> {
@@ -59,6 +84,78 @@ function todayCairo() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
 }
 
+function parseHeaderDate(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+  const match = /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/.exec(trimmed);
+  if (!match) return null;
+  const month = MONTHS[match[2]!.toLowerCase()];
+  if (!month) return null;
+  return `${match[3]}-${month}-${match[1]!.padStart(2, '0')}`;
+}
+
+function detectPolicyMetadata(
+  filename: string,
+  sampleText: string,
+): {
+  product?: 'PL-100' | 'AL-200';
+  kind?: PolicyKind;
+  edition?: string;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+} {
+  const lower = filename.toLowerCase();
+  const combined = `${filename}\n${sampleText}`;
+  const product: 'PL-100' | 'AL-200' | undefined = /\bAL-200\b|\bauto[\s-]?loan\b/i.test(combined)
+    ? 'AL-200'
+    : /\bPL-100\b|\bpersonal[\s-]?loan\b/i.test(combined)
+      ? 'PL-100'
+      : undefined;
+  const kind: PolicyKind | undefined =
+    lower.endsWith('.csv') || /\bpricing\b/i.test(lower)
+      ? 'pricing'
+      : /\bcircular\b/i.test(combined)
+        ? 'circular'
+        : /\bprocedure/i.test(combined)
+          ? 'procedure'
+          : /\bproduct\s+sheet\b/i.test(combined)
+            ? 'product'
+            : /\bpolicy\b/i.test(combined)
+              ? 'policy'
+              : undefined;
+  const editionMatch =
+    /\b(CP-20\d{2}|AUTO-20\d{2})\b/i.exec(combined) ??
+    /\bCircular\s+(20\d{2})\/(\d{2})\b/i.exec(combined);
+  const edition = editionMatch
+    ? editionMatch[2]
+      ? `C-${editionMatch[1]}-${editionMatch[2]}`
+      : editionMatch[1]!.toUpperCase()
+    : undefined;
+  const effectiveFromMatch =
+    /\b(?:Effective(?:\s+from)?|IN FORCE from)[:*\s]+(\d{4}-\d{2}-\d{2}|\d{1,2}\s+[A-Za-z]+\s+\d{4})/i.exec(
+      sampleText,
+    );
+  const effectiveFrom = effectiveFromMatch
+    ? (parseHeaderDate(effectiveFromMatch[1]!) ?? undefined)
+    : undefined;
+  const effectiveToMatch =
+    /\b(?:Effective\s+to|Superseded[^.\n]*?\bon|Ends)[:*\s]+(\d{4}-\d{2}-\d{2}|\d{1,2}\s+[A-Za-z]+\s+\d{4})/i.exec(
+      sampleText,
+    );
+  const effectiveTo = effectiveToMatch
+    ? (parseHeaderDate(effectiveToMatch[1]!) ?? undefined)
+    : undefined;
+  return { product, kind, edition, effectiveFrom, effectiveTo };
+}
+
+function validityStatus(effectiveFrom?: string, effectiveTo?: string | null) {
+  const today = todayCairo();
+  if (effectiveFrom && today < effectiveFrom)
+    return { label: 'Scheduled', tone: 'status-scheduled' };
+  if (effectiveTo && today >= effectiveTo) return { label: 'Expired', tone: 'status-neutral' };
+  return { label: 'Active', tone: 'status-approved' };
+}
+
 export function Knowledge({ actor }: { actor: Actor }) {
   const documents = useResource(
     (signal) => api.request<KnowledgeDocument[]>('knowledge/documents', { signal }),
@@ -71,15 +168,13 @@ export function Knowledge({ actor }: { actor: Actor }) {
         : Promise.resolve([]),
     [actor.canIngest],
   );
-  const [uploadMode, setUploadMode] = useState<'reviewed' | 'custom'>('reviewed');
   const [customId, setCustomId] = useState('');
   const [customEdition, setCustomEdition] = useState('');
   const [customProduct, setCustomProduct] = useState<'PL-100' | 'AL-200'>('PL-100');
-  const [customKind, setCustomKind] = useState<
-    'policy' | 'product' | 'procedure' | 'circular' | 'pricing'
-  >('policy');
+  const [customKind, setCustomKind] = useState<PolicyKind>('policy');
   const [effectiveFrom, setEffectiveFrom] = useState(todayCairo);
   const [effectiveTo, setEffectiveTo] = useState('');
+  const [autoFillNote, setAutoFillNote] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
@@ -87,8 +182,8 @@ export function Knowledge({ actor }: { actor: Actor }) {
   const [filesProgress, setFilesProgress] = useState<FileProgress[]>([]);
   const [summary, setSummary] = useState<BatchSummary | null>(null);
 
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<KnowledgeDocument | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [deleteNotice, setDeleteNotice] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<unknown>();
 
@@ -97,6 +192,49 @@ export function Knowledge({ actor }: { actor: Actor }) {
   useEffect(() => {
     return () => streamAbort.current?.abort();
   }, []);
+
+  async function handleFilesSelected(fileList: FileList | null) {
+    setAutoFillNote(null);
+    if (!fileList || fileList.length !== 1) return;
+    const file = fileList[0]!;
+    if (/^(?:APP|AUTO)-\d+/i.test(file.name)) return;
+    const alreadyIndexed = (documents.data ?? []).some((doc) => doc.filename === file.name);
+    if (alreadyIndexed) return;
+    const isText = /\.(?:md|csv)$/i.test(file.name);
+    const sampleText = isText
+      ? await file
+          .slice(0, 4096)
+          .text()
+          .catch(() => '')
+      : '';
+    const detected = detectPolicyMetadata(file.name, sampleText);
+    const filled: string[] = [];
+    if (detected.product) {
+      setCustomProduct(detected.product);
+      filled.push('product');
+    }
+    if (detected.kind) {
+      setCustomKind(detected.kind);
+      filled.push('type');
+    }
+    if (detected.edition && !customEdition.trim()) {
+      setCustomEdition(detected.edition);
+      filled.push('edition');
+    }
+    if (detected.effectiveFrom) {
+      setEffectiveFrom(detected.effectiveFrom);
+      filled.push('effective date');
+    }
+    if (detected.effectiveTo) {
+      setEffectiveTo(detected.effectiveTo);
+      filled.push('expiry date');
+    }
+    if (filled.length > 0) {
+      setAutoFillNote(
+        `Auto-detected ${filled.join(', ')} from ${file.name}. Review before ingesting.`,
+      );
+    }
+  }
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -113,9 +251,10 @@ export function Knowledge({ actor }: { actor: Actor }) {
     }
     const payload = new FormData();
     for (const file of files) payload.append('files', file);
-    if (uploadMode === 'custom') {
-      if (!customEdition.trim() || !effectiveFrom) {
-        setError(new Error('Provide an edition and effective-from date for custom policies.'));
+    const hasCustomMetadata = customEdition.trim().length > 0;
+    if (hasCustomMetadata) {
+      if (!effectiveFrom) {
+        setError(new Error('Provide an effective-from date when specifying a custom edition.'));
         return;
       }
       if (effectiveTo && effectiveTo <= effectiveFrom) {
@@ -212,11 +351,11 @@ export function Knowledge({ actor }: { actor: Actor }) {
       documents.refresh();
       attempts.refresh();
       form.reset();
-      if (uploadMode === 'custom') {
-        setCustomId('');
-        setCustomEdition('');
-        setEffectiveTo('');
-      }
+      setCustomId('');
+      setCustomEdition('');
+      setEffectiveFrom(todayCairo());
+      setEffectiveTo('');
+      setAutoFillNote(null);
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'AbortError')) setError(e);
     } finally {
@@ -228,22 +367,23 @@ export function Knowledge({ actor }: { actor: Actor }) {
   async function removeDocument(doc: KnowledgeDocument) {
     setDeleteError(undefined);
     setDeleteNotice(null);
-    setDeletingId(doc.id);
+    setDeleting(true);
     try {
       await api.request<{ deleted: true; id: string; filename: string }>(
         `knowledge/documents/${encodeURIComponent(doc.id)}`,
         { method: 'DELETE' },
       );
-      setConfirmDeleteId(null);
+      setPendingDelete(null);
       setDeleteNotice(
         `Deleted ${doc.filename} (${doc.id}) and its indexed chunks. You can upload it again to re-run ingestion.`,
       );
       documents.refresh();
       attempts.refresh();
     } catch (e) {
+      setPendingDelete(null);
       setDeleteError(e);
     } finally {
-      setDeletingId(null);
+      setDeleting(false);
     }
   }
 
@@ -259,36 +399,33 @@ export function Knowledge({ actor }: { actor: Actor }) {
       </header>
       {actor.canIngest ? (
         <section className="panel">
-          <div className="library-header">
-            <h2>Ingest policy documents</h2>
-            <div className="ingestion-mode-tools" role="group" aria-label="Ingestion mode">
-              <button
-                type="button"
-                className={uploadMode === 'reviewed' ? 'primary' : ''}
-                disabled={busy}
-                onClick={() => {
-                  setUploadMode('reviewed');
-                  setError(undefined);
-                }}
-              >
-                Reviewed policy batch
-              </button>
-              <button
-                type="button"
-                className={uploadMode === 'custom' ? 'primary' : ''}
-                disabled={busy}
-                onClick={() => {
-                  setUploadMode('custom');
-                  setError(undefined);
-                }}
-              >
-                New custom policy
-              </button>
-            </div>
-          </div>
+          <h2>Ingest policy documents</h2>
+          <p className="muted">
+            Upload one or more policy files (PDF, CSV, or MD · up to 10 MiB each). Recognized bank
+            policies match automatically; specify edition and validity dates below for new policies.
+          </p>
 
           <form onSubmit={upload}>
-            {uploadMode === 'custom' && (
+            <label>
+              Policy files
+              <input
+                name="files"
+                type="file"
+                multiple
+                accept=".pdf,.csv,.md"
+                required
+                disabled={busy}
+                onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
+              />
+            </label>
+
+            <fieldset className="policy-metadata-box">
+              <legend>Validity &amp; metadata (for new policies)</legend>
+              {autoFillNote && (
+                <p className="autofill-hint" role="status">
+                  {autoFillNote}
+                </p>
+              )}
               <div className="form-grid">
                 <label>
                   Product
@@ -308,12 +445,7 @@ export function Knowledge({ actor }: { actor: Actor }) {
                   <select
                     value={customKind}
                     disabled={busy}
-                    onChange={(event) =>
-                      setCustomKind(
-                        event.target.value as
-                          'policy' | 'product' | 'procedure' | 'circular' | 'pricing',
-                      )
-                    }
+                    onChange={(event) => setCustomKind(event.target.value as PolicyKind)}
                   >
                     <option value="policy">Credit policy</option>
                     <option value="circular">Circular</option>
@@ -328,9 +460,8 @@ export function Knowledge({ actor }: { actor: Actor }) {
                     type="text"
                     value={customEdition}
                     disabled={busy}
-                    required
                     maxLength={40}
-                    placeholder="e.g. CP-2026 or C-2026-01"
+                    placeholder="Optional for bank policies · e.g. CP-2026"
                     onChange={(event) => setCustomEdition(event.target.value)}
                   />
                 </label>
@@ -352,7 +483,7 @@ export function Knowledge({ actor }: { actor: Actor }) {
                     type="date"
                     value={effectiveFrom}
                     disabled={busy}
-                    required
+                    required={customEdition.trim().length > 0}
                     onChange={(event) => setEffectiveFrom(event.target.value)}
                   />
                 </label>
@@ -366,23 +497,8 @@ export function Knowledge({ actor }: { actor: Actor }) {
                   />
                 </label>
               </div>
-            )}
-            <label>
-              Policy files
-              <input
-                name="files"
-                type="file"
-                multiple={uploadMode === 'reviewed'}
-                accept=".pdf,.csv,.md"
-                required
-                disabled={busy}
-              />
-            </label>
-            <p className="muted">
-              {uploadMode === 'reviewed'
-                ? 'PDF, CSV or MD · 10 MiB per file · up to 20 files. Reviewed manifest hashes are indexed automatically; unreviewed files are rejected.'
-                : 'PDF, CSV or MD · 10 MiB max. The document will run live through Extract → Chunk → Embed → Index and become searchable in Delta Copilot.'}
-            </p>
+            </fieldset>
+
             <button className="primary" disabled={busy}>
               {busy ? 'Ingesting…' : 'Ingest documents'}
             </button>
@@ -471,6 +587,22 @@ export function Knowledge({ actor }: { actor: Actor }) {
       )}
 
       {deleteNotice && <Toast message={deleteNotice} onDone={() => setDeleteNotice(null)} />}
+      {pendingDelete && (
+        <ConfirmDialog
+          title={`Delete ${pendingDelete.filename}?`}
+          description={
+            <>
+              This will permanently remove <strong>{pendingDelete.filename}</strong> (
+              <code>{pendingDelete.id}</code>) and all its indexed chunks from the policy library.
+            </>
+          }
+          confirmLabel="Delete policy"
+          busyLabel="Deleting…"
+          busy={deleting}
+          onConfirm={() => void removeDocument(pendingDelete)}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
       <ErrorNotice error={deleteError} />
       <ResourceState {...documents} retry={documents.refresh} />
 
@@ -489,65 +621,50 @@ export function Knowledge({ actor }: { actor: Actor }) {
                 <th>Product</th>
                 <th>Edition</th>
                 <th>Effective</th>
+                <th>Validity</th>
                 <th>Chunks</th>
-                <th>Index version</th>
                 {actor.canIngest && <th>Actions</th>}
               </tr>
             </thead>
             <tbody>
-              {documents.data.map((d) => (
-                <tr key={d.id}>
-                  <td className="break">
-                    <a href={sourceHref(d.filename)} target="_blank" rel="noopener noreferrer">
-                      {d.filename}
-                    </a>
-                    <small className="doc-id">{d.id}</small>
-                  </td>
-                  <td>{d.metadata.product ?? '—'}</td>
-                  <td>{d.metadata.edition ?? '—'}</td>
-                  <td>
-                    {d.metadata.effectiveFrom ?? '—'}
-                    {d.metadata.effectiveTo ? ` → ${d.metadata.effectiveTo}` : ''}
-                  </td>
-                  <td>{d.chunk_count ?? '—'}</td>
-                  <td>{d.pipeline_version}</td>
-                  {actor.canIngest && (
+              {documents.data.map((d) => {
+                const validity = validityStatus(d.metadata.effectiveFrom, d.metadata.effectiveTo);
+                return (
+                  <tr key={d.id}>
+                    <td className="break">
+                      <a href={sourceHref(d.filename)} target="_blank" rel="noopener noreferrer">
+                        {d.filename}
+                      </a>
+                      <small className="doc-id">{d.id}</small>
+                    </td>
+                    <td>{d.metadata.product ?? '—'}</td>
+                    <td>{d.metadata.edition ?? '—'}</td>
                     <td>
-                      {confirmDeleteId === d.id ? (
-                        <div className="inline-confirm">
-                          <button
-                            type="button"
-                            className="danger-button"
-                            disabled={deletingId === d.id}
-                            onClick={() => void removeDocument(d)}
-                          >
-                            {deletingId === d.id ? 'Deleting…' : 'Confirm delete'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={deletingId === d.id}
-                            onClick={() => setConfirmDeleteId(null)}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      ) : (
+                      {d.metadata.effectiveFrom ?? '—'}
+                      {d.metadata.effectiveTo ? ` → ${d.metadata.effectiveTo}` : ''}
+                    </td>
+                    <td>
+                      <span className={`status-pill ${validity.tone}`}>{validity.label}</span>
+                    </td>
+                    <td>{d.chunk_count ?? '—'}</td>
+                    {actor.canIngest && (
+                      <td>
                         <button
                           type="button"
                           className="danger-outline"
-                          disabled={deletingId !== null || busy}
+                          disabled={deleting || busy}
                           onClick={() => {
-                            setConfirmDeleteId(d.id);
+                            setPendingDelete(d);
                             setDeleteError(undefined);
                           }}
                         >
                           Delete
                         </button>
-                      )}
-                    </td>
-                  )}
-                </tr>
-              ))}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           {!documents.data.length && <Empty>No policies indexed yet.</Empty>}
