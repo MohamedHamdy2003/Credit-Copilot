@@ -166,6 +166,16 @@ test('explicit Demo, four-eyes human review and issued offer keep verification f
     page.getByText('Demo assessment — not fully evidence-verified.', { exact: true }),
   ).toBeVisible();
   await expect(page.getByText('EGP 8,630.39', { exact: true })).toBeVisible();
+  await page.getByText('Full memo text').click();
+  const memoDoc = page.getByRole('article', { name: 'Full credit memorandum' });
+  await expect(memoDoc).toBeVisible();
+  await expect(memoDoc.getByText('Credit underwriting memorandum')).toBeVisible();
+  await expect(memoDoc.getByText('Policy rule evaluation')).toBeVisible();
+  await memoDoc.getByRole('button', { name: 'Raw text', exact: true }).click();
+  await expect(memoDoc.locator('pre.memo')).toContainText('Human decision required.');
+  await memoDoc.getByRole('button', { name: 'Formatted', exact: true }).click();
+  await page.getByText('Full memo text').click();
+  await expect(memoDoc).toBeHidden();
   const response = await page.request.get('/api/v1/applications');
   const rows = await response.json();
   const id = rows[0].latest_assessment_id as string;
