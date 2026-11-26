@@ -83,21 +83,51 @@ export function App() {
     [error, setError] = useState<unknown>(),
     [restoreRevision, setRestoreRevision] = useState(0),
     [fullscreen, setFullscreen] = useState(false),
+    [nativeFullscreen, setNativeFullscreen] = useState(false),
     [showExitButton, setShowExitButton] = useState(false);
   const exitHideTimer = useRef<number | null>(null);
 
-  const exitFullscreen = useCallback(() => {
+  const exitFullscreen = useCallback(async () => {
     setShowExitButton(false);
     setFullscreen(false);
+    setNativeFullscreen(false);
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        // Ignore if browser already exited fullscreen.
+      }
+    }
   }, []);
 
-  function enterFullscreen() {
+  async function enterFullscreen() {
     setFullscreen(true);
     setShowExitButton(false);
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      try {
+        await document.documentElement.requestFullscreen();
+        setNativeFullscreen(Boolean(document.fullscreenElement));
+      } catch {
+        setNativeFullscreen(false);
+      }
+    }
   }
 
   useEffect(() => {
-    if (!fullscreen) return;
+    const onFullscreenChange = () => {
+      const active = Boolean(document.fullscreenElement);
+      setNativeFullscreen(active);
+      if (!active) {
+        setFullscreen(false);
+        setShowExitButton(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!fullscreen || nativeFullscreen) return;
     const clearHide = () => {
       if (exitHideTimer.current !== null) {
         window.clearTimeout(exitHideTimer.current);
@@ -116,7 +146,7 @@ export function App() {
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') exitFullscreen();
+      if (event.key === 'Escape') void exitFullscreen();
     };
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('keydown', onKeyDown);
@@ -125,7 +155,7 @@ export function App() {
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('keydown', onKeyDown);
     };
-  }, [fullscreen, exitFullscreen]);
+  }, [fullscreen, nativeFullscreen, exitFullscreen]);
   function accept(s: Session) {
     api.setCsrf(s.csrfToken);
     setSession(s);
@@ -194,14 +224,14 @@ export function App() {
   if (!session) return <Login onLogin={accept} expired={expired} />;
   return (
     <div className={`workspace${fullscreen ? ' is-fullscreen' : ''}`}>
-      {fullscreen && (
+      {fullscreen && !nativeFullscreen && (
         <button
           type="button"
           className={`fullscreen-exit${showExitButton ? ' is-visible' : ''}`}
           aria-label="Exit full screen"
           title="Exit full screen (Esc)"
           onMouseEnter={() => setShowExitButton(true)}
-          onClick={exitFullscreen}
+          onClick={() => void exitFullscreen()}
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
             <path
@@ -246,7 +276,7 @@ export function App() {
               className="fullscreen-trigger"
               aria-label="Enter full screen"
               title="Full screen"
-              onClick={enterFullscreen}
+              onClick={() => void enterFullscreen()}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path

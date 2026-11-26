@@ -48,13 +48,18 @@ test('login errors, restored cookie session, logout and mobile layout', async ({
   await login(page, 'basic');
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Applications', exact: true })).toBeVisible();
-  // Enter full-screen mode from top-right trigger and exit via top-center hover X button.
+  // Enter full-screen mode (keeping sidebar visible) and exit cleanly.
   await page.getByRole('button', { name: 'Enter full screen', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Enter full screen', exact: true })).toHaveCount(0);
-  await page.mouse.move(640, 4);
+  await expect(page.getByRole('navigation', { name: 'Workspace' })).toBeVisible();
   const exitFullscreen = page.getByRole('button', { name: 'Exit full screen', exact: true });
-  await expect(exitFullscreen).toHaveClass(/is-visible/);
-  await exitFullscreen.click();
+  if (await exitFullscreen.count()) {
+    await page.mouse.move(640, 4);
+    await expect(exitFullscreen).toHaveClass(/is-visible/);
+    await exitFullscreen.click();
+  } else {
+    await page.evaluate(() => document.exitFullscreen());
+  }
   await expect(page.getByRole('button', { name: 'Enter full screen', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByRole('button', { name: 'New application', exact: true })).toBeVisible();
