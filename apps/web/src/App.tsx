@@ -167,11 +167,10 @@ export function App() {
             ))}
         </nav>
         <div className="identity">
-          <strong>{session.user.username}</strong>
-          <small>
+          <span className="identity-role">
             {session.user.role.replaceAll('_', ' ')} · {session.user.tier}
-          </small>
-          <button disabled={logoutBusy} onClick={() => void logout()}>
+          </span>
+          <button className="signout-button" disabled={logoutBusy} onClick={() => void logout()}>
             {logoutBusy ? 'Signing out…' : 'Sign out'}
           </button>
         </div>
