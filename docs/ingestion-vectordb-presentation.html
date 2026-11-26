@@ -3,22 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Credit Copilot — Policy Ingestion &amp; Vector DB Walkthrough</title>
+    <title>Credit Copilot — Policy Ingestion &amp; Vector DB</title>
     <style>
       :root {
-        --bg-outer: #071915;
-        --bg-stage-1: #0b2620;
-        --bg-stage-2: #10372e;
-        --ink: #eefaf5;
-        --ink-soft: #bfe0d4;
-        --muted: #82b3a3;
-        --emerald: #1c856a;
-        --emerald-bright: #4cd29d;
-        --teal-bright: #5ad2e6;
-        --amber-bright: #f5c26b;
-        --red-bright: #ff8a7d;
-        --card-bg: rgba(8, 28, 23, 0.72);
-        --card-border: rgba(110, 231, 191, 0.22);
+        --bg-outer: #061713;
+        --bg-stage-1: #0a241e;
+        --bg-stage-2: #0f342b;
+        --ink: #f0faf6;
+        --ink-soft: #c5e3d8;
+        --muted: #84b3a3;
+        --emerald: #176753;
+        --emerald-bright: #34d399;
+        --amber-bright: #fbbf24;
+        --cyan-bright: #38bdf8;
+        --mint-bright: #4ade80;
+        --red-bright: #fb7185;
         --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         --sans: Inter, 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
       }
@@ -40,41 +39,40 @@
         -webkit-font-smoothing: antialiased;
       }
 
-      /* Fullscreen-friendly deck wrapper */
       .deck {
         width: 100vw;
         height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 16px 20px 64px;
+        padding: 16px 20px 62px;
         background:
-          radial-gradient(circle at 14% 12%, rgba(36, 152, 121, 0.24), transparent 42%),
-          radial-gradient(circle at 86% 86%, rgba(45, 169, 190, 0.2), transparent 44%),
+          radial-gradient(circle at 14% 12%, rgba(36, 152, 121, 0.22), transparent 42%),
+          radial-gradient(circle at 86% 86%, rgba(45, 169, 190, 0.18), transparent 44%),
           var(--bg-outer);
       }
 
       .stage {
         position: relative;
-        width: min(100%, 1400px);
-        height: min(100%, 780px);
+        width: min(100%, 1420px);
+        height: min(100%, 790px);
         border-radius: 20px;
         background:
-          radial-gradient(circle at 76% 20%, rgba(56, 193, 152, 0.16), transparent 44%),
-          radial-gradient(circle at 18% 82%, rgba(36, 146, 165, 0.14), transparent 46%),
-          linear-gradient(140deg, var(--bg-stage-1) 0%, var(--bg-stage-2) 55%, #0c2b24 100%);
-        border: 1px solid rgba(118, 224, 188, 0.2);
+          radial-gradient(circle at 75% 18%, rgba(52, 211, 153, 0.12), transparent 44%),
+          radial-gradient(circle at 18% 84%, rgba(56, 189, 248, 0.1), transparent 46%),
+          linear-gradient(145deg, var(--bg-stage-1) 0%, var(--bg-stage-2) 55%, #0a2720 100%);
+        border: 1px solid rgba(118, 224, 188, 0.18);
         box-shadow:
-          0 32px 90px rgba(0, 0, 0, 0.55),
+          0 32px 90px rgba(0, 0, 0, 0.56),
           inset 0 1px 0 rgba(255, 255, 255, 0.08);
-        padding: 22px 32px 20px;
+        padding: 20px 30px 18px;
         display: grid;
-        grid-template-rows: auto minmax(0, 1.32fr) minmax(0, 0.86fr);
+        grid-template-rows: auto minmax(0, 1fr) auto;
         gap: 14px;
         overflow: hidden;
       }
 
-      /* Top Header */
+      /* Minimal Top Header */
       .topbar {
         display: flex;
         align-items: center;
@@ -86,46 +84,29 @@
       .brand-block {
         display: flex;
         align-items: center;
-        gap: 13px;
+        gap: 12px;
         min-width: 0;
       }
 
-      .title-wrap {
-        min-width: 0;
-      }
-
-      .step-eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
+      .step-label {
         font-family: var(--mono);
         font-size: 11px;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.1em;
         color: var(--emerald-bright);
-        margin-bottom: 3px;
-      }
-
-      .step-eyebrow::before {
-        content: '';
-        width: 14px;
-        height: 2px;
-        border-radius: 2px;
-        background: var(--emerald-bright);
+        margin-bottom: 2px;
       }
 
       .slide-title {
         margin: 0;
-        font-size: clamp(20px, 2.2vw, 28px);
+        font-size: clamp(20px, 2.1vw, 27px);
         font-weight: 800;
         letter-spacing: -0.025em;
         line-height: 1.15;
-        color: #f4fcf9;
-        transition: opacity 0.2s ease;
+        color: #f5fdf9;
       }
 
-      /* Top stage jump pills */
       .stage-pills {
         display: flex;
         align-items: center;
@@ -136,11 +117,11 @@
 
       .stage-pill {
         appearance: none;
-        border: 1px solid rgba(139, 224, 194, 0.22);
-        background: rgba(255, 255, 255, 0.05);
-        color: #b4dbd0;
+        border: 1px solid rgba(139, 224, 194, 0.2);
+        background: rgba(255, 255, 255, 0.04);
+        color: #9ecbbe;
         border-radius: 999px;
-        padding: 5px 11px;
+        padding: 5px 12px;
         font: inherit;
         font-size: 11.5px;
         font-weight: 650;
@@ -149,11 +130,11 @@
           background 0.2s ease,
           border-color 0.2s ease,
           color 0.2s ease,
-          transform 0.15s ease;
+          box-shadow 0.2s ease;
       }
 
       .stage-pill:hover {
-        background: rgba(76, 210, 157, 0.14);
+        background: rgba(52, 211, 153, 0.14);
         border-color: rgba(110, 231, 191, 0.5);
         color: #fff;
       }
@@ -162,33 +143,22 @@
         background: #176753;
         border-color: #6ee7bf;
         color: #ffffff;
-        box-shadow: 0 0 0 3px rgba(76, 210, 157, 0.18);
+        box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.22);
       }
 
-      /* Giant Persistent Master Diagram Canvas */
+      /* Giant Clean Master Diagram Canvas */
       .diagram-shell {
         position: relative;
         min-height: 0;
         border-radius: 16px;
         background:
-          radial-gradient(circle at 50% 50%, rgba(28, 118, 94, 0.18), transparent 68%),
-          rgba(6, 21, 17, 0.62);
-        border: 1px solid rgba(110, 231, 191, 0.2);
+          radial-gradient(circle at 50% 48%, rgba(25, 112, 90, 0.16), transparent 68%),
+          rgba(5, 18, 15, 0.68);
+        border: 1px solid rgba(110, 231, 191, 0.16);
         padding: 10px 14px;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-      }
-
-      .diagram-hint {
-        position: absolute;
-        top: 10px;
-        right: 14px;
-        font-size: 11px;
-        color: rgba(154, 214, 194, 0.72);
-        font-family: var(--mono);
-        pointer-events: none;
       }
 
       .master-svg {
@@ -198,96 +168,126 @@
         display: block;
       }
 
-      /* Interactive SVG Spotlight & Magic-Move Transitions */
+      /* SVG Spotlight System — Crisp Vivid Focus vs Calm Dimmed Context */
       .diag-node {
         cursor: pointer;
+        opacity: 1;
         transition:
-          opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-          transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-          filter 0.42s ease;
+          opacity 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+          transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+          filter 0.4s ease;
         transform-box: fill-box;
         transform-origin: center;
       }
 
       .diag-node:hover {
-        filter: brightness(1.08);
+        filter: brightness(1.1);
       }
 
       .diag-wire {
+        opacity: 0.9;
+        transition: opacity 0.4s ease;
+      }
+
+      .pipeline-frame {
         transition:
-          opacity 0.42s ease,
-          stroke-width 0.35s ease;
+          opacity 0.4s ease,
+          stroke 0.4s ease;
       }
 
       .spotlight-ring {
+        opacity: 0;
+        transition: opacity 0.35s ease;
+        pointer-events: none;
+      }
+
+      .active-overlay {
         opacity: 0;
         transition: opacity 0.38s ease;
         pointer-events: none;
       }
 
-      /* Dim non-focused nodes when a spotlight slide is active */
-      .master-svg[data-focus]:not([data-focus='overview']) .diag-node {
-        opacity: 0.24;
+      /* When ANY focused step is active, smoothly dim unfocused items */
+      .master-svg.is-focused .diag-node {
+        opacity: 0.18;
+        filter: saturate(0.2) brightness(0.8);
       }
 
-      .master-svg[data-focus]:not([data-focus='overview']) .diag-wire {
-        opacity: 0.16;
+      .master-svg.is-focused .diag-wire {
+        opacity: 0.12;
       }
 
-      .master-svg[data-focus]:not([data-focus='overview']) .pipeline-frame {
-        opacity: 0.42;
+      .master-svg.is-focused .pipeline-frame {
+        opacity: 0.25;
       }
 
-      /* Highlight the focused node */
-      .master-svg[data-focus='sources'] .node-sources,
-      .master-svg[data-focus='extract'] .node-extract,
-      .master-svg[data-focus='chunk'] .node-chunk,
-      .master-svg[data-focus='embed'] .node-embed,
-      .master-svg[data-focus='index'] .node-index,
-      .master-svg[data-focus='vectordb'] .node-vectordb {
+      /* Focused stage pops at 100% opacity, vivid color boost, scale & luminous halo */
+      .master-svg.is-focused[data-focus='sources'] .diag-node.node-sources {
+        opacity: 1;
+        transform: scale(1.04);
+        filter: saturate(1.3) brightness(1.12) drop-shadow(0 0 22px rgba(52, 211, 153, 0.55));
+      }
+
+      .master-svg.is-focused[data-focus='extract'] .diag-node.node-extract {
+        opacity: 1;
+        transform: scale(1.055);
+        filter: saturate(1.35) brightness(1.15) drop-shadow(0 0 24px rgba(52, 211, 153, 0.6));
+      }
+
+      .master-svg.is-focused[data-focus='chunk'] .diag-node.node-chunk {
+        opacity: 1;
+        transform: scale(1.055);
+        filter: saturate(1.35) brightness(1.15) drop-shadow(0 0 24px rgba(251, 191, 36, 0.55));
+      }
+
+      .master-svg.is-focused[data-focus='embed'] .diag-node.node-embed {
+        opacity: 1;
+        transform: scale(1.055);
+        filter: saturate(1.35) brightness(1.15) drop-shadow(0 0 24px rgba(56, 189, 248, 0.62));
+      }
+
+      .master-svg.is-focused[data-focus='index'] .diag-node.node-index {
+        opacity: 1;
+        transform: scale(1.055);
+        filter: saturate(1.35) brightness(1.15) drop-shadow(0 0 24px rgba(74, 222, 128, 0.6));
+      }
+
+      .master-svg.is-focused[data-focus='vectordb'] .diag-node.node-vectordb {
         opacity: 1;
         transform: scale(1.045);
-        filter: drop-shadow(0 0 18px rgba(76, 210, 157, 0.42));
+        filter: saturate(1.35) brightness(1.14) drop-shadow(0 0 26px rgba(56, 189, 248, 0.62));
       }
 
-      .master-svg[data-focus='vectordb'] .node-vectordb {
-        filter: drop-shadow(0 0 20px rgba(90, 210, 230, 0.46));
-      }
-
-      .master-svg[data-focus='sources'] .node-sources .spotlight-ring,
-      .master-svg[data-focus='extract'] .node-extract .spotlight-ring,
-      .master-svg[data-focus='chunk'] .node-chunk .spotlight-ring,
-      .master-svg[data-focus='embed'] .node-embed .spotlight-ring,
-      .master-svg[data-focus='index'] .node-index .spotlight-ring,
-      .master-svg[data-focus='vectordb'] .node-vectordb .spotlight-ring {
+      /* Show glowing spotlight ring + vivid color tint overlay on the selected node */
+      .master-svg.is-focused[data-focus='sources'] .node-sources .spotlight-ring,
+      .master-svg.is-focused[data-focus='extract'] .node-extract .spotlight-ring,
+      .master-svg.is-focused[data-focus='chunk'] .node-chunk .spotlight-ring,
+      .master-svg.is-focused[data-focus='embed'] .node-embed .spotlight-ring,
+      .master-svg.is-focused[data-focus='index'] .node-index .spotlight-ring,
+      .master-svg.is-focused[data-focus='vectordb'] .node-vectordb .spotlight-ring,
+      .master-svg.is-focused[data-focus='extract'] .node-extract .active-overlay,
+      .master-svg.is-focused[data-focus='chunk'] .node-chunk .active-overlay,
+      .master-svg.is-focused[data-focus='embed'] .node-embed .active-overlay,
+      .master-svg.is-focused[data-focus='index'] .node-index .active-overlay {
         opacity: 1;
       }
 
-      /* Highlight wires leading into / out of the focused stage */
-      .master-svg[data-focus='sources'] .wire-src-ext,
-      .master-svg[data-focus='sources'] .wire-blocked,
-      .master-svg[data-focus='extract'] .wire-src-ext,
-      .master-svg[data-focus='extract'] .wire-blocked,
-      .master-svg[data-focus='extract'] .wire-ext-chk,
-      .master-svg[data-focus='chunk'] .wire-ext-chk,
-      .master-svg[data-focus='chunk'] .wire-chk-emb,
-      .master-svg[data-focus='embed'] .wire-chk-emb,
-      .master-svg[data-focus='embed'] .wire-emb-idx,
-      .master-svg[data-focus='index'] .wire-emb-idx,
-      .master-svg[data-focus='index'] .wire-idx-db,
-      .master-svg[data-focus='vectordb'] .wire-idx-db {
+      /* Light up active arrows entering & leaving the focused node */
+      .master-svg.is-focused[data-focus='sources'] .diag-wire.wire-src-ext,
+      .master-svg.is-focused[data-focus='sources'] .diag-wire.wire-blocked,
+      .master-svg.is-focused[data-focus='extract'] .diag-wire.wire-src-ext,
+      .master-svg.is-focused[data-focus='extract'] .diag-wire.wire-blocked,
+      .master-svg.is-focused[data-focus='extract'] .diag-wire.wire-ext-chk,
+      .master-svg.is-focused[data-focus='chunk'] .diag-wire.wire-ext-chk,
+      .master-svg.is-focused[data-focus='chunk'] .diag-wire.wire-chk-emb,
+      .master-svg.is-focused[data-focus='embed'] .diag-wire.wire-chk-emb,
+      .master-svg.is-focused[data-focus='embed'] .diag-wire.wire-emb-idx,
+      .master-svg.is-focused[data-focus='index'] .diag-wire.wire-emb-idx,
+      .master-svg.is-focused[data-focus='index'] .diag-wire.wire-idx-db,
+      .master-svg.is-focused[data-focus='vectordb'] .diag-wire.wire-idx-db {
         opacity: 1;
       }
 
-      /* Keep the pipeline container slightly brighter when inspecting an internal stage */
-      .master-svg[data-focus='extract'] .pipeline-frame,
-      .master-svg[data-focus='chunk'] .pipeline-frame,
-      .master-svg[data-focus='embed'] .pipeline-frame,
-      .master-svg[data-focus='index'] .pipeline-frame {
-        opacity: 0.85;
-      }
-
-      /* Subtle animations */
       @keyframes dashFlow {
         from {
           stroke-dashoffset: 36;
@@ -296,43 +296,40 @@
           stroke-dashoffset: 0;
         }
       }
+
       .flow-anim {
         stroke-dasharray: 8 7;
-        animation: dashFlow 1.25s linear infinite;
-      }
-      .flow-anim-slow {
-        stroke-dasharray: 7 7;
-        animation: dashFlow 1.8s linear infinite;
+        animation: dashFlow 1.2s linear infinite;
       }
 
       @keyframes ringPulse {
         0%,
         100% {
-          stroke-opacity: 0.95;
-          stroke-width: 2.6;
+          stroke-opacity: 1;
+          stroke-width: 3;
         }
         50% {
-          stroke-opacity: 0.35;
-          stroke-width: 4.2;
+          stroke-opacity: 0.45;
+          stroke-width: 4.5;
         }
       }
+
       .spotlight-ring {
         animation: ringPulse 2s ease-in-out infinite;
       }
 
-      /* Bottom Focus Detail Drawer */
-      .detail-panel {
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
-        gap: 11px;
-        animation: panelReveal 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+      /* Ultra-Clean Bottom Rules Strip (Zero Repetition) */
+      .rules-strip {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        animation: stripIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
       }
 
-      @keyframes panelReveal {
+      @keyframes stripIn {
         from {
           opacity: 0;
-          transform: translateY(10px);
+          transform: translateY(8px);
         }
         to {
           opacity: 1;
@@ -340,132 +337,49 @@
         }
       }
 
-      .detail-lead {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 14px;
-        flex-wrap: wrap;
-      }
-
-      .detail-lead p {
-        margin: 0;
-        font-size: 13.8px;
-        line-height: 1.45;
-        color: var(--ink-soft);
-        max-width: 920px;
-      }
-
-      .detail-tag {
-        flex: none;
-        font-family: var(--mono);
-        font-size: 11.5px;
-        font-weight: 700;
-        padding: 5px 11px;
-        border-radius: 999px;
-        background: rgba(76, 210, 157, 0.14);
-        border: 1px solid rgba(110, 231, 191, 0.34);
-        color: #8df0ca;
-        white-space: nowrap;
-      }
-
-      .detail-cards {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 13px;
-        flex: 1;
-        min-height: 0;
-      }
-
-      .detail-cards.is-four {
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-      }
-
-      .d-card {
-        background: var(--card-bg);
-        border: 1px solid var(--card-border);
-        border-radius: 13px;
+      .rule-card {
+        background: rgba(7, 25, 20, 0.72);
+        border: 1px solid rgba(110, 231, 191, 0.22);
+        border-top: 3px solid var(--rule-accent, #34d399);
+        border-radius: 12px;
         padding: 13px 16px;
         display: flex;
         flex-direction: column;
-        gap: 6px;
-        min-height: 0;
+        gap: 5px;
       }
 
-      .d-card.is-teal {
-        border-color: rgba(90, 210, 230, 0.34);
-        background: rgba(10, 34, 42, 0.68);
-      }
-
-      .d-card.is-amber {
-        border-color: rgba(245, 194, 107, 0.32);
-        background: rgba(42, 31, 12, 0.56);
-      }
-
-      .d-card.is-red {
-        border-color: rgba(255, 138, 125, 0.34);
-        background: rgba(48, 18, 16, 0.6);
-      }
-
-      .d-card-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-      }
-
-      .d-card h3 {
+      .rule-card h3 {
         margin: 0;
         font-size: 13.8px;
         font-weight: 750;
         color: #f4fcf9;
+        display: flex;
+        align-items: center;
+        gap: 7px;
       }
 
-      .d-card-badge {
-        font-family: var(--mono);
-        font-size: 10px;
-        font-weight: 700;
-        padding: 2px 7px;
+      .rule-dot {
+        width: 7px;
+        height: 7px;
         border-radius: 999px;
-        background: rgba(255, 255, 255, 0.08);
-        color: #8ee5c4;
-        white-space: nowrap;
+        background: var(--rule-accent, #34d399);
+        flex: none;
       }
 
-      .d-card.is-teal .d-card-badge {
-        color: #8ee6f5;
-      }
-      .d-card.is-amber .d-card-badge {
-        color: #fbd48c;
-      }
-      .d-card.is-red .d-card-badge {
-        color: #ffada4;
-      }
-
-      .d-card p {
+      .rule-card p {
         margin: 0;
-        font-size: 12.4px;
+        font-size: 12.6px;
         line-height: 1.48;
-        color: #c2dfd5;
+        color: #c1ded4;
       }
 
-      .d-card code {
+      .rule-card code {
         font-family: var(--mono);
-        font-size: 11.2px;
+        font-size: 11.4px;
         padding: 1px 5px;
         border-radius: 4px;
         background: rgba(255, 255, 255, 0.1);
-        color: #8df0ca;
-      }
-
-      .d-card-foot {
-        margin-top: auto;
-        padding-top: 6px;
-        border-top: 1px solid rgba(255, 255, 255, 0.08);
-        font-family: var(--mono);
-        font-size: 11px;
-        color: #8ec9b6;
-        overflow-wrap: anywhere;
+        color: #9df3d2;
       }
 
       /* Progress bar */
@@ -480,11 +394,11 @@
 
       .progress-fill {
         height: 100%;
-        background: linear-gradient(90deg, #27a37e, #5ad2e6);
+        background: linear-gradient(90deg, #34d399, #38bdf8);
         transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
       }
 
-      /* Bottom Presenter Controls */
+      /* Presenter Controls */
       .deck-controls {
         position: fixed;
         left: 50%;
@@ -496,8 +410,8 @@
         gap: 11px;
         padding: 6px 14px;
         border-radius: 999px;
-        background: rgba(9, 30, 25, 0.92);
-        border: 1px solid rgba(139, 224, 194, 0.26);
+        background: rgba(8, 27, 22, 0.92);
+        border: 1px solid rgba(139, 224, 194, 0.24);
         backdrop-filter: blur(12px);
         color: #dff5ed;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.42);
@@ -549,11 +463,7 @@
 
       .dot-btn.is-active {
         width: 24px;
-        background: #4cd29d;
-      }
-
-      .dot-btn:hover:not(.is-active) {
-        background: rgba(255, 255, 255, 0.55);
+        background: #34d399;
       }
 
       .counter {
@@ -565,14 +475,13 @@
         text-align: center;
       }
 
-      @media (max-width: 1020px) {
+      @media (max-width: 1000px) {
         .stage {
           padding: 16px;
-          grid-template-rows: auto auto 1fr;
+          grid-template-rows: auto auto auto;
           overflow-y: auto;
         }
-        .detail-cards,
-        .detail-cards.is-four {
+        .rules-strip {
           grid-template-columns: 1fr;
         }
         .stage-pills {
@@ -591,507 +500,320 @@
     </style>
   </head>
   <body>
-    <main class="deck" aria-label="Credit Copilot Ingestion and Vector DB Spotlight Presentation">
+    <main class="deck" aria-label="Credit Copilot Ingestion and Vector DB Presentation">
       <div class="stage">
-        <!-- ======================================================= -->
-        <!-- TOP HEADER + STAGE PILLS                                -->
-        <!-- ======================================================= -->
+        <!-- Header -->
         <header class="topbar">
           <div class="brand-block">
-            <svg width="40" height="40" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+            <svg width="38" height="38" viewBox="0 0 36 36" fill="none" aria-hidden="true">
               <rect width="36" height="36" rx="10" fill="#176753" />
               <path d="M18 7L29 12.5H7L18 7Z" fill="#E8F7F1" />
               <rect x="8.5" y="14" width="19" height="1.8" rx="0.9" fill="#9EE2C8" />
               <rect x="10.2" y="17.2" width="2.4" height="8.8" rx="0.8" fill="#E8F7F1" />
               <rect x="16.8" y="17.2" width="2.4" height="8.8" rx="0.8" fill="#E8F7F1" />
               <rect x="23.4" y="17.2" width="2.4" height="8.8" rx="0.8" fill="#E8F7F1" />
-              <rect x="7" y="27.2" width="22" height="2.3" rx="1.15" fill="#4CD29D" />
+              <rect x="7" y="27.2" width="22" height="2.3" rx="1.15" fill="#34D399" />
             </svg>
-            <div class="title-wrap">
-              <div class="step-eyebrow" id="stepEyebrow">STEP 01 OF 07 · FULL ARCHITECTURE</div>
-              <h1 class="slide-title" id="slideTitle">Policy Ingestion &amp; Vector Database Overview</h1>
+            <div>
+              <div class="step-label" id="stepLabel">01 / 07 · OVERVIEW</div>
+              <h1 class="slide-title" id="slideTitle">Policy Ingestion &amp; Vector Database</h1>
             </div>
           </div>
-
-          <div class="stage-pills" id="stagePills" role="tablist" aria-label="Focus stage"></div>
+          <div class="stage-pills" id="stagePills" role="tablist" aria-label="Jump to stage"></div>
         </header>
 
-        <!-- ======================================================= -->
-        <!-- GIANT PERSISTENT MASTER ARCHITECTURE DIAGRAM            -->
-        <!-- ======================================================= -->
-        <section class="diagram-shell" aria-label="Interactive Policy Ingestion and Vector DB Diagram">
-          <span class="diagram-hint">Click any block to focus · ← / → keys · F fullscreen</span>
-
+        <!-- Giant Clean Master Diagram -->
+        <section class="diagram-shell" aria-label="Interactive Ingestion and Vector DB Diagram">
           <svg
             id="masterSvg"
             class="master-svg"
             data-focus="overview"
-            viewBox="0 0 1240 370"
+            viewBox="0 0 1260 400"
             role="img"
-            aria-label="Credit Copilot Policy Ingestion and pgvector Architecture Diagram"
+            aria-label="Policy Ingestion Pipeline into PostgreSQL pgvector"
           >
             <defs>
-              <linearGradient id="gEmeraldCard" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#1b6b56" />
-                <stop offset="100%" stop-color="#104437" />
+              <linearGradient id="gExtract" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#19785f" />
+                <stop offset="100%" stop-color="#0f4c3c" />
               </linearGradient>
-              <linearGradient id="gEmbedCard" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#1f7b7a" />
-                <stop offset="100%" stop-color="#124e52" />
+              <linearGradient id="gChunk" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#8a6116" />
+                <stop offset="100%" stop-color="#52380c" />
+              </linearGradient>
+              <linearGradient id="gEmbed" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#157091" />
+                <stop offset="100%" stop-color="#0d445c" />
+              </linearGradient>
+              <linearGradient id="gIndex" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#1c7d4d" />
+                <stop offset="100%" stop-color="#0f4d2f" />
               </linearGradient>
               <linearGradient id="gDbBody" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#228fa3" />
-                <stop offset="100%" stop-color="#125565" />
+                <stop offset="0%" stop-color="#1e89a8" />
+                <stop offset="100%" stop-color="#0f4e63" />
               </linearGradient>
               <linearGradient id="gDbTop" x1="0" y1="0" x2="1" y2="0">
-                <stop offset="0%" stop-color="#36b8cc" />
-                <stop offset="100%" stop-color="#2290a4" />
+                <stop offset="0%" stop-color="#38bdf8" />
+                <stop offset="100%" stop-color="#1f8aa8" />
               </linearGradient>
-              <marker
-                id="arrowGreen"
-                viewBox="0 0 10 10"
-                refX="8"
-                refY="5"
-                markerWidth="6.5"
-                markerHeight="6.5"
-                orient="auto-start-reverse"
-              >
-                <path d="M1 1.5L8.5 5L1 8.5Z" fill="#5fe0b0" />
+              <marker id="arrGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                <path d="M1 1.5L8.5 5L1 8.5Z" fill="#34d399" />
               </marker>
-              <marker
-                id="arrowTeal"
-                viewBox="0 0 10 10"
-                refX="8"
-                refY="5"
-                markerWidth="6.5"
-                markerHeight="6.5"
-                orient="auto-start-reverse"
-              >
-                <path d="M1 1.5L8.5 5L1 8.5Z" fill="#6ae0f2" />
+              <marker id="arrAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                <path d="M1 1.5L8.5 5L1 8.5Z" fill="#fbbf24" />
               </marker>
-              <marker
-                id="arrowRed"
-                viewBox="0 0 10 10"
-                refX="8"
-                refY="5"
-                markerWidth="6.5"
-                markerHeight="6.5"
-                orient="auto-start-reverse"
-              >
-                <path d="M1 1.5L8.5 5L1 8.5Z" fill="#ff8a7d" />
+              <marker id="arrCyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                <path d="M1 1.5L8.5 5L1 8.5Z" fill="#38bdf8" />
+              </marker>
+              <marker id="arrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+                <path d="M1 1.5L8.5 5L1 8.5Z" fill="#fb7185" />
               </marker>
             </defs>
 
-            <!-- Background Pipeline Frame -->
-            <g class="pipeline-frame" style="transition: opacity 0.4s ease">
+            <!-- Pipeline Container Outline -->
+            <g class="pipeline-frame">
               <rect
                 x="236"
-                y="20"
-                width="712"
-                height="276"
-                rx="18"
-                fill="rgba(16, 62, 50, 0.34)"
-                stroke="rgba(110, 231, 191, 0.3)"
+                y="24"
+                width="724"
+                height="286"
+                rx="20"
+                fill="rgba(14, 54, 43, 0.3)"
+                stroke="rgba(110, 231, 191, 0.28)"
                 stroke-width="1.5"
                 stroke-dasharray="7 5"
               />
               <text
-                x="256"
-                y="45"
+                x="258"
+                y="51"
                 fill="#7be6c1"
-                font-size="12"
+                font-size="12.5"
                 font-weight="800"
                 letter-spacing="1.4"
                 font-family="monospace"
               >
-                4-STAGE LIVE SSE INGESTION PIPELINE (POST /api/v1/knowledge/ingestions/streams)
+                LIVE 4-STAGE INGESTION PIPELINE
               </text>
             </g>
 
             <!-- ===================================================== -->
-            <!-- CONNECTING WIRES WITH ANIMATED FLOW                   -->
+            <!-- ANIMATED FLOW ARROWS                                  -->
             <!-- ===================================================== -->
-            <!-- Sources -> Extract -->
             <g class="diag-wire wire-src-ext">
-              <path
-                d="M192 84 C216 84, 218 156, 250 156"
-                stroke="#5fe0b0"
-                stroke-width="2.4"
-                fill="none"
-                class="flow-anim"
-                marker-end="url(#arrowGreen)"
-              />
-              <path
-                d="M192 156 H250"
-                stroke="#5fe0b0"
-                stroke-width="2.6"
-                fill="none"
-                class="flow-anim"
-                marker-end="url(#arrowGreen)"
-              />
-              <path
-                d="M192 228 C216 228, 218 156, 250 156"
-                stroke="#5fe0b0"
-                stroke-width="2.4"
-                fill="none"
-                class="flow-anim"
-                marker-end="url(#arrowGreen)"
-              />
+              <path d="M196 90 C220 90, 222 170, 252 170" stroke="#34d399" stroke-width="2.6" fill="none" class="flow-anim" marker-end="url(#arrGreen)" />
+              <path d="M196 170 H252" stroke="#34d399" stroke-width="2.8" fill="none" class="flow-anim" marker-end="url(#arrGreen)" />
+              <path d="M196 250 C220 250, 222 170, 252 170" stroke="#34d399" stroke-width="2.6" fill="none" class="flow-anim" marker-end="url(#arrGreen)" />
             </g>
 
-            <!-- Blocked Customer Pack -> Shield -->
             <g class="diag-wire wire-blocked">
-              <path
-                d="M192 318 H326 V266"
-                stroke="#ff8a7d"
-                stroke-width="2.2"
-                stroke-dasharray="5 5"
-                fill="none"
-                marker-end="url(#arrowRed)"
-              />
-              <rect x="206" y="303" width="110" height="22" rx="6" fill="#471815" stroke="#ff8a7d" stroke-width="1" />
-              <text x="261" y="318" text-anchor="middle" fill="#ffb8b0" font-size="10" font-weight="800" font-family="monospace">
+              <path d="M196 344 H332 V290" stroke="#fb7185" stroke-width="2.4" stroke-dasharray="5 5" fill="none" marker-end="url(#arrRed)" />
+              <rect x="208" y="330" width="112" height="24" rx="7" fill="#4c131d" stroke="#fb7185" stroke-width="1.2" />
+              <text x="264" y="346" text-anchor="middle" fill="#fecdd3" font-size="10.5" font-weight="800" font-family="monospace">
                 403 BLOCKED
               </text>
             </g>
 
-            <!-- Extract -> Chunk -->
             <g class="diag-wire wire-ext-chk">
-              <path
-                d="M402 156 H430"
-                stroke="#5fe0b0"
-                stroke-width="2.8"
-                fill="none"
-                class="flow-anim"
-                marker-end="url(#arrowGreen)"
-              />
+              <path d="M408 170 H438" stroke="#fbbf24" stroke-width="3" fill="none" class="flow-anim" marker-end="url(#arrAmber)" />
             </g>
 
-            <!-- Chunk -> Embed -->
             <g class="diag-wire wire-chk-emb">
-              <path
-                d="M582 156 H610"
-                stroke="#5fe0b0"
-                stroke-width="2.8"
-                fill="none"
-                class="flow-anim"
-                marker-end="url(#arrowGreen)"
-              />
+              <path d="M590 170 H620" stroke="#38bdf8" stroke-width="3" fill="none" class="flow-anim" marker-end="url(#arrCyan)" />
             </g>
 
-            <!-- Embed -> Index -->
             <g class="diag-wire wire-emb-idx">
-              <path
-                d="M762 156 H790"
-                stroke="#6ae0f2"
-                stroke-width="2.8"
-                fill="none"
-                class="flow-anim"
-                marker-end="url(#arrowTeal)"
-              />
+              <path d="M772 170 H802" stroke="#34d399" stroke-width="3" fill="none" class="flow-anim" marker-end="url(#arrGreen)" />
             </g>
 
-            <!-- Index -> pgvector DB -->
             <g class="diag-wire wire-idx-db">
-              <path
-                d="M936 156 H986"
-                stroke="#6ae0f2"
-                stroke-width="3"
-                fill="none"
-                class="flow-anim"
-                marker-end="url(#arrowTeal)"
-              />
+              <path d="M948 170 H996" stroke="#38bdf8" stroke-width="3.2" fill="none" class="flow-anim" marker-end="url(#arrCyan)" />
             </g>
 
             <!-- ===================================================== -->
-            <!-- NODE 1: SOURCE DOCUMENTS + BLOCKED CUSTOMER PACK      -->
+            <!-- NODE 1: POLICY SOURCES                                -->
             <!-- ===================================================== -->
             <g class="diag-node node-sources" data-jump="1" tabindex="0" role="button" aria-label="Focus Policy Sources">
-              <rect
-                class="spotlight-ring"
-                x="10"
-                y="34"
-                width="190"
-                height="316"
-                rx="16"
-                fill="none"
-                stroke="#4cd29d"
-                stroke-width="2.8"
-              />
-              <text x="105" y="28" text-anchor="middle" fill="#90d6be" font-size="11.5" font-weight="800" font-family="monospace">
-                POLICY SOURCES
+              <rect class="spotlight-ring" x="10" y="42" width="194" height="338" rx="18" fill="none" stroke="#34d399" />
+              <text x="107" y="34" text-anchor="middle" fill="#8de3c4" font-size="12" font-weight="800" font-family="monospace">
+                SOURCES
               </text>
 
-              <!-- PDF -->
-              <rect x="20" y="48" width="170" height="62" rx="12" fill="#123d32" stroke="#49a88e" stroke-width="1.5" />
-              <rect x="30" y="61" width="38" height="24" rx="6" fill="#1b7d64" />
-              <text x="49" y="77" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="800" font-family="monospace">PDF</text>
-              <text x="78" y="73" fill="#effbf6" font-size="13" font-weight="700">Credit Policy</text>
-              <text x="78" y="92" fill="#9fd3c2" font-size="10.5" font-family="monospace">CP-2025 · PM-4</text>
+              <rect x="20" y="54" width="174" height="68" rx="13" fill="#113e33" stroke="#34d399" stroke-width="1.6" />
+              <rect x="32" y="70" width="42" height="28" rx="7" fill="#10b981" />
+              <text x="53" y="88" text-anchor="middle" fill="#052e22" font-size="11.5" font-weight="900" font-family="monospace">PDF</text>
+              <text x="84" y="83" fill="#f2fcf8" font-size="14" font-weight="750">Policies</text>
+              <text x="84" y="103" fill="#9bd6c2" font-size="11" font-family="monospace">CP · PM</text>
 
-              <!-- Markdown -->
-              <rect x="20" y="124" width="170" height="62" rx="12" fill="#123d32" stroke="#49a88e" stroke-width="1.5" />
-              <rect x="30" y="137" width="38" height="24" rx="6" fill="#1d7a8a" />
-              <text x="49" y="153" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="800" font-family="monospace">MD</text>
-              <text x="78" y="149" fill="#effbf6" font-size="13" font-weight="700">Circulars</text>
-              <text x="78" y="168" fill="#9fd3c2" font-size="10.5" font-family="monospace">Product Sheets</text>
+              <rect x="20" y="136" width="174" height="68" rx="13" fill="#103945" stroke="#38bdf8" stroke-width="1.6" />
+              <rect x="32" y="152" width="42" height="28" rx="7" fill="#38bdf8" />
+              <text x="53" y="170" text-anchor="middle" fill="#062938" font-size="11.5" font-weight="900" font-family="monospace">MD</text>
+              <text x="84" y="165" fill="#f2fcf8" font-size="14" font-weight="750">Circulars</text>
+              <text x="84" y="185" fill="#9cd8e8" font-size="11" font-family="monospace">Sheets</text>
 
-              <!-- CSV -->
-              <rect x="20" y="200" width="170" height="62" rx="12" fill="#123d32" stroke="#49a88e" stroke-width="1.5" />
-              <rect x="30" y="213" width="38" height="24" rx="6" fill="#2c6f53" />
-              <text x="49" y="229" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="800" font-family="monospace">CSV</text>
-              <text x="78" y="225" fill="#effbf6" font-size="13" font-weight="700">Pricing Table</text>
-              <text x="78" y="244" fill="#9fd3c2" font-size="10.5" font-family="monospace">Exact Decimal</text>
+              <rect x="20" y="218" width="174" height="68" rx="13" fill="#163e2d" stroke="#4ade80" stroke-width="1.6" />
+              <rect x="32" y="234" width="42" height="28" rx="7" fill="#4ade80" />
+              <text x="53" y="252" text-anchor="middle" fill="#052e16" font-size="11.5" font-weight="900" font-family="monospace">CSV</text>
+              <text x="84" y="247" fill="#f2fcf8" font-size="14" font-weight="750">Pricing</text>
+              <text x="84" y="267" fill="#a7dfbe" font-size="11" font-family="monospace">Rates</text>
 
-              <!-- Blocked customer pack -->
-              <rect x="20" y="284" width="170" height="56" rx="11" fill="#3a1614" stroke="#e27a70" stroke-width="1.4" stroke-dasharray="5 4" />
-              <text x="34" y="306" fill="#ffada4" font-size="11.5" font-weight="800">✕ Customer Pack</text>
-              <text x="34" y="325" fill="#e8b4ae" font-size="10.5" font-family="monospace">APP-001 / AUTO-*</text>
+              <rect x="20" y="310" width="174" height="60" rx="12" fill="#42121b" stroke="#fb7185" stroke-width="1.6" stroke-dasharray="5 4" />
+              <text x="107" y="335" text-anchor="middle" fill="#fda4af" font-size="12.5" font-weight="800">✕ Customer Packs</text>
+              <text x="107" y="355" text-anchor="middle" fill="#fecdd3" font-size="11" font-family="monospace">APP-* / AUTO-*</text>
             </g>
 
             <!-- ===================================================== -->
-            <!-- NODE 2: STAGE 1 - EXTRACT & TRUST GATE                -->
+            <!-- NODE 2: STAGE 1 - EXTRACT                             -->
             <!-- ===================================================== -->
             <g class="diag-node node-extract" data-jump="2" tabindex="0" role="button" aria-label="Focus Stage 1 Extract">
-              <rect
-                class="spotlight-ring"
-                x="246"
-                y="60"
-                width="162"
-                height="214"
-                rx="16"
-                fill="none"
-                stroke="#4cd29d"
-                stroke-width="2.8"
-              />
-              <rect x="254" y="68" width="146" height="198" rx="14" fill="url(#gEmeraldCard)" stroke="#6ee7bf" stroke-width="1.5" />
-              <rect x="266" y="80" width="26" height="22" rx="6" fill="rgba(0,0,0,0.28)" />
-              <text x="279" y="95" text-anchor="middle" fill="#7be6c1" font-size="12" font-weight="800" font-family="monospace">01</text>
-              <text x="302" y="96" fill="#ffffff" font-size="15.5" font-weight="800">Extract</text>
+              <rect class="spotlight-ring" x="248" y="68" width="166" height="222" rx="18" fill="none" stroke="#34d399" />
+              <rect x="256" y="76" width="150" height="206" rx="15" fill="url(#gExtract)" stroke="#34d399" stroke-width="1.8" />
+              <rect class="active-overlay" x="256" y="76" width="150" height="206" rx="15" fill="rgba(52, 211, 153, 0.14)" stroke="#a7f3d0" stroke-width="2.2" />
 
-              <rect x="266" y="112" width="122" height="32" rx="7" fill="rgba(0,0,0,0.24)" />
-              <text x="327" y="127" text-anchor="middle" fill="#e6fbf3" font-size="11" font-weight="700">Parse &amp; Normalize</text>
-              <text x="327" y="140" text-anchor="middle" fill="#9ed8c4" font-size="9.5" font-family="monospace">pdf.js · AST · CSV</text>
+              <circle cx="282" cy="104" r="14" fill="#34d399" />
+              <text x="282" y="109" text-anchor="middle" fill="#062c22" font-size="12.5" font-weight="900" font-family="monospace">1</text>
+              <text x="306" y="110" fill="#ffffff" font-size="17" font-weight="850">Extract</text>
 
-              <rect x="266" y="152" width="122" height="36" rx="7" fill="rgba(180,58,47,0.34)" stroke="rgba(255,138,125,0.55)" />
-              <text x="327" y="168" text-anchor="middle" fill="#ffd2cc" font-size="11" font-weight="800">Trust Firewall</text>
-              <text x="327" y="182" text-anchor="middle" fill="#ffb3ab" font-size="9.5" font-family="monospace">Reject Customer PII</text>
+              <rect x="270" y="132" width="122" height="34" rx="8" fill="rgba(0,0,0,0.26)" />
+              <text x="331" y="153" text-anchor="middle" fill="#ecfdf5" font-size="12" font-weight="700">Parse &amp; Hash</text>
 
-              <rect x="266" y="196" width="122" height="56" rx="7" fill="rgba(0,0,0,0.24)" />
-              <text x="327" y="213" text-anchor="middle" fill="#7be6c1" font-size="10.5" font-weight="700">Auto-Metadata</text>
-              <text x="327" y="228" text-anchor="middle" fill="#d4f3e8" font-size="9.8" font-family="monospace">SHA-256 Manifest</text>
-              <text x="327" y="242" text-anchor="middle" fill="#d4f3e8" font-size="9.8" font-family="monospace">Header Dates/ID</text>
+              <rect x="270" y="176" width="122" height="36" rx="8" fill="rgba(225, 29, 72, 0.3)" stroke="rgba(251, 113, 133, 0.7)" />
+              <text x="331" y="198" text-anchor="middle" fill="#ffe4e6" font-size="12" font-weight="800">Trust Gate</text>
+
+              <rect x="270" y="222" width="122" height="42" rx="8" fill="rgba(0,0,0,0.26)" />
+              <text x="331" y="241" text-anchor="middle" fill="#6ee7b7" font-size="11.5" font-weight="750">Auto-Metadata</text>
+              <text x="331" y="256" text-anchor="middle" fill="#d1fae5" font-size="10" font-family="monospace">ID · Dates</text>
             </g>
 
             <!-- ===================================================== -->
-            <!-- NODE 3: STAGE 2 - CLAUSE CHUNKING                     -->
+            <!-- NODE 3: STAGE 2 - CHUNK                               -->
             <!-- ===================================================== -->
             <g class="diag-node node-chunk" data-jump="3" tabindex="0" role="button" aria-label="Focus Stage 2 Chunk">
-              <rect
-                class="spotlight-ring"
-                x="426"
-                y="60"
-                width="162"
-                height="214"
-                rx="16"
-                fill="none"
-                stroke="#4cd29d"
-                stroke-width="2.8"
-              />
-              <rect x="434" y="68" width="146" height="198" rx="14" fill="url(#gEmeraldCard)" stroke="#6ee7bf" stroke-width="1.5" />
-              <rect x="446" y="80" width="26" height="22" rx="6" fill="rgba(0,0,0,0.28)" />
-              <text x="459" y="95" text-anchor="middle" fill="#7be6c1" font-size="12" font-weight="800" font-family="monospace">02</text>
-              <text x="482" y="96" fill="#ffffff" font-size="15.5" font-weight="800">Chunk</text>
+              <rect class="spotlight-ring" x="432" y="68" width="166" height="222" rx="18" fill="none" stroke="#fbbf24" />
+              <rect x="440" y="76" width="150" height="206" rx="15" fill="url(#gChunk)" stroke="#fbbf24" stroke-width="1.8" />
+              <rect class="active-overlay" x="440" y="76" width="150" height="206" rx="15" fill="rgba(251, 191, 36, 0.14)" stroke="#fde68a" stroke-width="2.2" />
 
-              <!-- Mini clause stack visual -->
-              <rect x="446" y="112" width="122" height="24" rx="6" fill="#10382e" stroke="#6ee7bf" stroke-width="1" />
-              <text x="507" y="128" text-anchor="middle" fill="#dff9ef" font-size="10.5" font-weight="700" font-family="monospace">CP-3.3 · Income</text>
+              <circle cx="466" cy="104" r="14" fill="#fbbf24" />
+              <text x="466" y="109" text-anchor="middle" fill="#3b2504" font-size="12.5" font-weight="900" font-family="monospace">2</text>
+              <text x="490" y="110" fill="#ffffff" font-size="17" font-weight="850">Chunk</text>
 
-              <rect x="446" y="142" width="122" height="24" rx="6" fill="#10382e" stroke="#6ee7bf" stroke-width="1" />
-              <text x="507" y="158" text-anchor="middle" fill="#dff9ef" font-size="10.5" font-weight="700" font-family="monospace">CP-4.1 · Max DBR</text>
+              <rect x="454" y="132" width="122" height="28" rx="7" fill="rgba(0,0,0,0.28)" stroke="rgba(253,230,138,0.45)" />
+              <text x="515" y="150" text-anchor="middle" fill="#fef3c7" font-size="11.5" font-weight="750" font-family="monospace">CP-3.3</text>
 
-              <rect x="446" y="172" width="122" height="24" rx="6" fill="#10382e" stroke="#6ee7bf" stroke-width="1" />
-              <text x="507" y="188" text-anchor="middle" fill="#dff9ef" font-size="10.5" font-weight="700" font-family="monospace">PS-3 · Limits</text>
+              <rect x="454" y="168" width="122" height="28" rx="7" fill="rgba(0,0,0,0.28)" stroke="rgba(253,230,138,0.45)" />
+              <text x="515" y="186" text-anchor="middle" fill="#fef3c7" font-size="11.5" font-weight="750" font-family="monospace">CP-4.1</text>
 
-              <rect x="446" y="204" width="122" height="48" rx="7" fill="rgba(0,0,0,0.26)" />
-              <text x="507" y="220" text-anchor="middle" fill="#7be6c1" font-size="10" font-weight="700" font-family="monospace">clause-cl100k-v3</text>
-              <text x="507" y="234" text-anchor="middle" fill="#cdeee2" font-size="9.6" font-family="monospace">≤800 tok · 60 ovlp</text>
-              <text x="507" y="246" text-anchor="middle" fill="#9ed8c4" font-size="9.2" font-family="monospace">SHA-256 Chunk ID</text>
+              <rect x="454" y="204" width="122" height="28" rx="7" fill="rgba(0,0,0,0.28)" stroke="rgba(253,230,138,0.45)" />
+              <text x="515" y="222" text-anchor="middle" fill="#fef3c7" font-size="11.5" font-weight="750" font-family="monospace">PS-3 · PM-2</text>
+
+              <text x="515" y="256" text-anchor="middle" fill="#fde68a" font-size="10.8" font-weight="700" font-family="monospace">≤800 tok · SHA-256</text>
             </g>
 
             <!-- ===================================================== -->
-            <!-- NODE 4: STAGE 3 - VECTOR EMBEDDING                    -->
+            <!-- NODE 4: STAGE 3 - EMBED                               -->
             <!-- ===================================================== -->
             <g class="diag-node node-embed" data-jump="4" tabindex="0" role="button" aria-label="Focus Stage 3 Embed">
-              <rect
-                class="spotlight-ring"
-                x="606"
-                y="60"
-                width="162"
-                height="214"
-                rx="16"
-                fill="none"
-                stroke="#5ad2e6"
-                stroke-width="2.8"
-              />
-              <rect x="614" y="68" width="146" height="198" rx="14" fill="url(#gEmbedCard)" stroke="#7be8f6" stroke-width="1.6" />
-              <rect x="626" y="80" width="26" height="22" rx="6" fill="rgba(0,0,0,0.28)" />
-              <text x="639" y="95" text-anchor="middle" fill="#89ecf8" font-size="12" font-weight="800" font-family="monospace">03</text>
-              <text x="662" y="96" fill="#ffffff" font-size="15.5" font-weight="800">Embed</text>
+              <rect class="spotlight-ring" x="614" y="68" width="166" height="222" rx="18" fill="none" stroke="#38bdf8" />
+              <rect x="622" y="76" width="150" height="206" rx="15" fill="url(#gEmbed)" stroke="#38bdf8" stroke-width="1.8" />
+              <rect class="active-overlay" x="622" y="76" width="150" height="206" rx="15" fill="rgba(56, 189, 248, 0.14)" stroke="#bae6fd" stroke-width="2.2" />
 
-              <!-- Vector visualization bars -->
-              <rect x="626" y="112" width="122" height="58" rx="8" fill="rgba(5, 25, 29, 0.52)" stroke="rgba(123,232,246,0.35)" />
-              <text x="687" y="128" text-anchor="middle" fill="#8beaf7" font-size="10" font-weight="700" font-family="monospace">
-                Dense Vector (768d)
-              </text>
-              <text x="687" y="145" text-anchor="middle" fill="#ffffff" font-size="10.2" font-family="monospace">
-                [ 0.04, -0.19,
-              </text>
-              <text x="687" y="160" text-anchor="middle" fill="#ffffff" font-size="10.2" font-family="monospace">
-                0.63, …, 0.09 ]
-              </text>
+              <circle cx="648" cy="104" r="14" fill="#38bdf8" />
+              <text x="648" y="109" text-anchor="middle" fill="#062a3d" font-size="12.5" font-weight="900" font-family="monospace">3</text>
+              <text x="672" y="110" fill="#ffffff" font-size="17" font-weight="850">Embed</text>
 
-              <rect x="626" y="178" width="122" height="32" rx="7" fill="rgba(0,0,0,0.26)" />
-              <text x="687" y="193" text-anchor="middle" fill="#dffbff" font-size="10.5" font-weight="700">Gemini / Ollama</text>
-              <text x="687" y="205" text-anchor="middle" fill="#9ee2ec" font-size="9.4" font-family="monospace">task: "document"</text>
+              <rect x="636" y="132" width="122" height="68" rx="9" fill="rgba(4, 24, 34, 0.54)" stroke="rgba(125,211,252,0.45)" />
+              <text x="697" y="152" text-anchor="middle" fill="#7dd3fc" font-size="10.5" font-weight="800" font-family="monospace">768d Vector</text>
+              <text x="697" y="171" text-anchor="middle" fill="#ffffff" font-size="11" font-family="monospace">[0.04, -0.19,</text>
+              <text x="697" y="188" text-anchor="middle" fill="#ffffff" font-size="11" font-family="monospace">0.63, …, 0.09]</text>
 
-              <rect x="626" y="218" width="122" height="34" rx="7" fill="rgba(0,0,0,0.26)" />
-              <text x="687" y="233" text-anchor="middle" fill="#8beaf7" font-size="10" font-weight="700">Validated Dims</text>
-              <text x="687" y="246" text-anchor="middle" fill="#cdeff4" font-size="9.3" font-family="monospace">Skip if unchanged</text>
+              <rect x="636" y="212" width="122" height="52" rx="8" fill="rgba(0,0,0,0.26)" />
+              <text x="697" y="233" text-anchor="middle" fill="#e0f2fe" font-size="11.5" font-weight="750">Gemini / Ollama</text>
+              <text x="697" y="251" text-anchor="middle" fill="#7dd3fc" font-size="10" font-family="monospace">Multi-Space PK</text>
             </g>
 
             <!-- ===================================================== -->
-            <!-- NODE 5: STAGE 4 - ATOMIC INDEX COMMIT                 -->
+            <!-- NODE 5: STAGE 4 - INDEX                               -->
             <!-- ===================================================== -->
             <g class="diag-node node-index" data-jump="5" tabindex="0" role="button" aria-label="Focus Stage 4 Index">
-              <rect
-                class="spotlight-ring"
-                x="786"
-                y="60"
-                width="156"
-                height="214"
-                rx="16"
-                fill="none"
-                stroke="#4cd29d"
-                stroke-width="2.8"
-              />
-              <rect x="794" y="68" width="140" height="198" rx="14" fill="url(#gEmeraldCard)" stroke="#6ee7bf" stroke-width="1.5" />
-              <rect x="806" y="80" width="26" height="22" rx="6" fill="rgba(0,0,0,0.28)" />
-              <text x="819" y="95" text-anchor="middle" fill="#7be6c1" font-size="12" font-weight="800" font-family="monospace">04</text>
-              <text x="842" y="96" fill="#ffffff" font-size="15.5" font-weight="800">Index</text>
+              <rect class="spotlight-ring" x="796" y="68" width="158" height="222" rx="18" fill="none" stroke="#4ade80" />
+              <rect x="804" y="76" width="142" height="206" rx="15" fill="url(#gIndex)" stroke="#4ade80" stroke-width="1.8" />
+              <rect class="active-overlay" x="804" y="76" width="142" height="206" rx="15" fill="rgba(74, 222, 128, 0.14)" stroke="#bbf7d0" stroke-width="2.2" />
 
-              <rect x="806" y="112" width="116" height="38" rx="7" fill="rgba(0,0,0,0.26)" />
-              <text x="864" y="129" text-anchor="middle" fill="#ffffff" font-size="10.8" font-weight="700">Advisory Lock</text>
-              <text x="864" y="143" text-anchor="middle" fill="#9ed8c4" font-size="9.3" font-family="monospace">409 on conflict</text>
+              <circle cx="830" cy="104" r="14" fill="#4ade80" />
+              <text x="830" y="109" text-anchor="middle" fill="#052e16" font-size="12.5" font-weight="900" font-family="monospace">4</text>
+              <text x="854" y="110" fill="#ffffff" font-size="17" font-weight="850">Index</text>
 
-              <rect x="806" y="158" width="116" height="44" rx="7" fill="rgba(0,0,0,0.26)" />
-              <text x="864" y="175" text-anchor="middle" fill="#7be6c1" font-size="10.8" font-weight="700">Single ACID Tx</text>
-              <text x="864" y="191" text-anchor="middle" fill="#d5f3e9" font-size="9.4">Zero partial chunks</text>
+              <rect x="818" y="132" width="114" height="38" rx="8" fill="rgba(0,0,0,0.26)" />
+              <text x="875" y="155" text-anchor="middle" fill="#f0fdf4" font-size="11.8" font-weight="750">Advisory Lock</text>
 
-              <rect x="806" y="210" width="116" height="42" rx="7" fill="rgba(0,0,0,0.26)" />
-              <text x="864" y="227" text-anchor="middle" fill="#ffffff" font-size="10.5" font-weight="700">Auto-Indexes</text>
-              <text x="864" y="241" text-anchor="middle" fill="#9ed8c4" font-size="9.4" font-family="monospace">Vector + GIN + Date</text>
+              <rect x="818" y="180" width="114" height="38" rx="8" fill="rgba(0,0,0,0.26)" />
+              <text x="875" y="203" text-anchor="middle" fill="#86efac" font-size="11.8" font-weight="800">ACID Commit</text>
+
+              <rect x="818" y="228" width="114" height="36" rx="8" fill="rgba(0,0,0,0.26)" />
+              <text x="875" y="250" text-anchor="middle" fill="#dcfce7" font-size="11" font-family="monospace">Audit Log</text>
             </g>
 
             <!-- ===================================================== -->
-            <!-- NODE 6: PGVECTOR DATABASE (knowledge.* vs cases.*)    -->
+            <!-- NODE 6: PGVECTOR DATABASE                             -->
             <!-- ===================================================== -->
             <g class="diag-node node-vectordb" data-jump="6" tabindex="0" role="button" aria-label="Focus pgvector Database">
-              <rect
-                class="spotlight-ring"
-                x="982"
-                y="24"
-                width="246"
-                height="332"
-                rx="18"
-                fill="none"
-                stroke="#5ad2e6"
-                stroke-width="2.8"
-              />
+              <rect class="spotlight-ring" x="990" y="22" width="256" height="358" rx="20" fill="none" stroke="#38bdf8" />
 
-              <!-- Cylinder -->
               <path
-                d="M994 64 C994 40, 1216 40, 1216 64 V252 C1216 276, 994 276, 994 252 Z"
+                d="M1002 68 C1002 42, 1234 42, 1234 68 V266 C1234 292, 1002 292, 1002 266 Z"
                 fill="url(#gDbBody)"
-                stroke="#8be5f2"
-                stroke-width="1.8"
+                stroke="#7dd3fc"
+                stroke-width="2"
               />
-              <ellipse
-                cx="1105"
-                cy="64"
-                rx="111"
-                ry="22"
-                fill="url(#gDbTop)"
-                stroke="#8be5f2"
-                stroke-width="1.8"
-              />
-              <text x="1105" y="69" text-anchor="middle" fill="#072c33" font-size="12.5" font-weight="800" font-family="monospace">
+              <ellipse cx="1118" cy="68" rx="116" ry="23" fill="url(#gDbTop)" stroke="#bae6fd" stroke-width="2" />
+              <text x="1118" y="73" text-anchor="middle" fill="#052636" font-size="13" font-weight="900" font-family="monospace">
                 PostgreSQL 17 + pgvector
               </text>
 
-              <text x="1105" y="108" text-anchor="middle" fill="#ffffff" font-size="15.5" font-weight="800">
+              <text x="1118" y="114" text-anchor="middle" fill="#ffffff" font-size="17" font-weight="850">
                 knowledge.*
               </text>
 
-              <!-- Internal DB layers -->
-              <rect x="1012" y="120" width="186" height="30" rx="7" fill="rgba(5, 29, 36, 0.45)" stroke="rgba(155,234,247,0.35)" />
-              <text x="1105" y="139" text-anchor="middle" fill="#e9fbff" font-size="11" font-weight="700" font-family="monospace">
-                embeddings (Cosine &lt;=&gt;)
+              <rect x="1020" y="128" width="196" height="34" rx="8" fill="rgba(4, 24, 34, 0.5)" stroke="rgba(125,211,252,0.45)" />
+              <text x="1118" y="149" text-anchor="middle" fill="#f0f9ff" font-size="12" font-weight="750" font-family="monospace">
+                Vector Cosine (&lt;=&gt;)
               </text>
 
-              <rect x="1012" y="156" width="186" height="30" rx="7" fill="rgba(5, 29, 36, 0.45)" stroke="rgba(155,234,247,0.35)" />
-              <text x="1105" y="175" text-anchor="middle" fill="#e9fbff" font-size="11" font-weight="700" font-family="monospace">
-                chunks (GIN BM25 + Dates)
+              <rect x="1020" y="170" width="196" height="34" rx="8" fill="rgba(4, 24, 34, 0.5)" stroke="rgba(125,211,252,0.45)" />
+              <text x="1118" y="191" text-anchor="middle" fill="#f0f9ff" font-size="12" font-weight="750" font-family="monospace">
+                GIN BM25 + Dates
               </text>
 
-              <rect x="1012" y="192" width="186" height="30" rx="7" fill="rgba(5, 29, 36, 0.45)" stroke="rgba(155,234,247,0.35)" />
-              <text x="1105" y="211" text-anchor="middle" fill="#e9fbff" font-size="11" font-weight="700" font-family="monospace">
-                pricing (Exact Decimal)
+              <rect x="1020" y="212" width="196" height="34" rx="8" fill="rgba(4, 24, 34, 0.5)" stroke="rgba(125,211,252,0.45)" />
+              <text x="1118" y="233" text-anchor="middle" fill="#f0f9ff" font-size="12" font-weight="750" font-family="monospace">
+                Exact Pricing Rows
               </text>
 
-              <text x="1105" y="248" text-anchor="middle" fill="#9ff0d6" font-size="11" font-weight="800">
+              <text x="1118" y="272" text-anchor="middle" fill="#99f6e4" font-size="12" font-weight="850">
                 Hybrid RRF Fusion (k = 60)
               </text>
 
-              <!-- Isolated cases.* pill below -->
-              <rect x="994" y="294" width="222" height="52" rx="11" fill="#3a1614" stroke="#e27a70" stroke-width="1.4" stroke-dasharray="5 4" />
-              <text x="1105" y="316" text-anchor="middle" fill="#ffb8b0" font-size="11.5" font-weight="800" font-family="monospace">
+              <rect x="1002" y="310" width="232" height="58" rx="12" fill="#42121b" stroke="#fb7185" stroke-width="1.6" stroke-dasharray="5 4" />
+              <text x="1118" y="335" text-anchor="middle" fill="#fda4af" font-size="12.5" font-weight="850" font-family="monospace">
                 cases.* (ISOLATED)
               </text>
-              <text x="1105" y="334" text-anchor="middle" fill="#e8b8b2" font-size="10.2">
-                No Foreign Key · Zero PII in Vector DB
+              <text x="1118" y="354" text-anchor="middle" fill="#fecdd3" font-size="11">
+                Zero Customer PII in Vector DB
               </text>
             </g>
-
-            <!-- Bottom caption strip inside SVG -->
-            <rect
-              x="362"
-              y="314"
-              width="576"
-              height="34"
-              rx="10"
-              fill="rgba(255, 255, 255, 0.05)"
-              stroke="rgba(110, 231, 191, 0.24)"
-            />
-            <text x="650" y="335" text-anchor="middle" fill="#a8e3cf" font-size="11.5" font-weight="650">
-              Grounded RAG · Dated Editions (CP-2024 / CP-2025 / AUTO-2025) · Zero Customer PII in Vector DB
-            </text>
           </svg>
         </section>
 
-        <!-- ======================================================= -->
-        <!-- BOTTOM FOCUS DETAIL PANEL (DYNAMIC PER SLIDE)           -->
-        <!-- ======================================================= -->
-        <section class="detail-panel" id="detailPanel" aria-live="polite"></section>
+        <!-- Minimal Bottom Key Rules Strip (Zero Repetition) -->
+        <section class="rules-strip" id="rulesStrip" aria-live="polite"></section>
 
-        <!-- Progress bar -->
         <div class="progress-rail" aria-hidden="true">
           <div class="progress-fill" id="progressFill" style="width: 14.28%"></div>
         </div>
       </div>
     </main>
 
-    <!-- Bottom Presenter Controls -->
+    <!-- Controls -->
     <nav class="deck-controls" aria-label="Presentation controls">
       <button type="button" class="nav-btn" id="btnPrev" aria-label="Previous slide" title="Previous (←)">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
@@ -1118,226 +840,157 @@
           {
             focus: 'overview',
             pill: 'Overview',
-            eyebrow: 'STEP 01 OF 07 · FULL ARCHITECTURE',
-            title: 'Policy Ingestion & Vector Database — End-to-End Flow',
-            lead: 'Credit Copilot converts raw lending policies into dated, clause-indexed vectors inside PostgreSQL 17 + pgvector while cryptographically isolating customer data.',
-            tag: '4-Stage Live SSE → pgvector',
-            fourCols: true,
-            cards: [
+            label: '01 / 07 · ARCHITECTURE OVERVIEW',
+            title: 'Policy Ingestion & Vector Database',
+            accent: '#34d399',
+            rules: [
               {
-                title: '1. Extract & Trust',
-                badge: 'PDF / MD / CSV',
-                body: 'Parses policy files, blocks customer packs (<code>403</code>), and auto-reads edition &amp; validity dates.',
-                foot: 'ParserRegistry + policy-metadata.ts',
+                title: 'Zero PII Contamination',
+                text: 'Customer evidence stays in <code>cases.*</code> and is cryptographically blocked from entering <code>knowledge.*</code>.',
               },
               {
-                title: '2. Clause Chunking',
-                badge: 'cl100k-v3',
-                body: 'Splits along banking clauses (<code>CP-*</code>, <code>PM-*</code>, <code>PS-*</code>) with SHA-256 idempotency.',
-                foot: '≤800 tokens · 60 overlap',
+                title: 'Dated & Idempotent',
+                text: 'Every policy chunk carries <code>effective_from/to</code> dates and a deterministic SHA-256 ID.',
               },
               {
-                title: '3. Vector Embedding',
-                badge: '768d · Multi-Model',
-                tone: 'is-teal',
-                body: 'Encodes each clause into validated semantic vectors (Gemini or Ollama) with live SSE progress.',
-                foot: 'PK (chunk_id, model, dimensions)',
-              },
-              {
-                title: '4. Atomic pgvector DB',
-                badge: 'Hybrid RRF',
-                tone: 'is-teal',
-                body: 'Commits vectors, GIN full-text, dates &amp; exact pricing rows in one ACID transaction.',
-                foot: 'Cosine <=> + BM25 + RRF (k=60)',
+                title: 'Single ACID Engine',
+                text: 'PostgreSQL 17 + pgvector serves Cosine search, BM25 full-text, and exact Decimal pricing together.',
               },
             ],
           },
           {
             focus: 'sources',
             pill: 'Sources',
-            eyebrow: 'STEP 02 OF 07 · INPUT CORPUS & SECURITY BOUNDARY',
-            title: 'Spotlight: Policy Sources & Zero-Trust Customer Pack Firewall',
-            lead: 'Only reviewed or structured bank lending policies enter the pipeline — customer application packs and personal identifiers are blocked before ingestion begins.',
-            tag: 'head-credit RBAC · ≤10 MiB / file',
-            cards: [
+            label: '02 / 07 · POLICY SOURCES & FIREWALL',
+            title: 'Input Corpus & Zero-Trust Gate',
+            accent: '#34d399',
+            rules: [
               {
-                title: 'Three Supported Policy Formats',
-                badge: 'PDF · MD · CSV',
-                body: '<strong>PDF</strong> policies &amp; manuals (<code>pdf.js</code> coordinate sort, ≤100 pages), <strong>Markdown</strong> circulars &amp; product sheets (<code>remark</code> AST), and <strong>CSV</strong> interest-rate pricing tables.',
-                foot: 'Validates magic bytes (%PDF-), MIME & UTF-8',
+                title: 'Strict Upload Limits',
+                text: 'Accepts <code>PDF</code> (≤100 pages, text layer only), <code>MD</code> &amp; <code>CSV</code> — max <strong>10 MiB</strong>, 1–20 files/batch.',
               },
               {
-                title: 'Customer Pack Isolation Gate',
-                badge: 'HTTP 403',
-                tone: 'is-red',
-                body: 'Blocks <code>APP-*</code> / <code>AUTO-*</code> filenames, excluded evidence SHA-256 hashes, and documents combining <em>Application reference</em> with salary, bureau, or national ID sections.',
-                foot: 'Error: UntrustedPolicyDocument',
+                title: 'Customer Pack Firewall (403)',
+                text: 'Rejects <code>APP-*</code>/<code>AUTO-*</code>, excluded SHA-256 hashes &amp; customer evidence markers before parsing proceeds.',
+                accent: '#fb7185',
               },
               {
-                title: 'Strict Ingestion RBAC',
-                badge: 'can_ingest = true',
-                tone: 'is-amber',
-                body: 'Standard loan &amp; credit officers have read-only access to the Policy Library. Only <code>head-credit</code> can upload, index, or delete policy sources.',
-                foot: 'Enforced server-side by IngestionGuard',
+                title: 'Server-Enforced RBAC',
+                text: 'Only <code>head-credit</code> (<code>can_ingest = true</code>) may upload or delete policy documents.',
               },
             ],
           },
           {
             focus: 'extract',
             pill: '1. Extract',
-            eyebrow: 'STEP 03 OF 07 · STAGE 1 — EXTRACT & METADATA',
-            title: 'Spotlight: Parsing, Normalization & Automatic Metadata Resolution',
-            lead: 'Stage 1 turns raw bytes into clean NFKC-normalized text blocks with page/row provenance and resolves edition, product, and effective dates automatically.',
-            tag: 'Stage 1 · Extract',
-            cards: [
+            label: '03 / 07 · STAGE 1 — EXTRACT',
+            title: 'Stage 1: Extraction & Auto-Metadata',
+            accent: '#34d399',
+            rules: [
               {
-                title: 'Deterministic Normalization',
-                badge: 'SHA-256 Hash',
-                body: 'Extracts text with exact page numbers (PDF) or row numbers (CSV), applies <code>NFKC</code> normalization, and hashes raw bytes with <code>SHA-256</code> for version conflict checks.',
-                foot: 'No OCR · encrypted or empty PDFs rejected',
+                title: 'Byte & Encoding Safety',
+                text: 'Verifies <code>%PDF-</code> signature, MIME match &amp; UTF-8, normalizes via <code>NFKC</code>, and hashes with <code>SHA-256</code>.',
               },
               {
                 title: '3-Tier Metadata Resolution',
-                badge: 'Auto-Header',
-                tone: 'is-teal',
-                body: '<strong>1)</strong> Matches <code>corpus-manifest.json</code> by SHA-256 · <strong>2)</strong> Parses <code>Document ID</code>, <code>Edition/Version</code>, <code>Effective/Superseded</code> dates &amp; product from headers · <strong>3)</strong> Merges optional UI overrides.',
-                foot: 'Supports PL-100 & AL-200 dated editions',
+                text: 'Matches SHA-256 manifest first → reads PDF/MD/CSV headers automatically → merges optional overrides.',
               },
               {
-                title: 'Date Integrity & Structured Pricing',
-                badge: '422 Guard',
-                tone: 'is-amber',
-                body: 'Validates <code>effectiveTo &gt; effectiveFrom</code> via Zod schemas and extracts CSV rate tables into typed rows for deterministic 50-digit Decimal underwriting math.',
-                foot: 'Headerless junk files safely rejected (403)',
+                title: 'Validity Guard (422 / 403)',
+                text: 'Requires <code>effectiveTo &gt; effectiveFrom</code> and rejects untagged non-policy files without edition/date.',
               },
             ],
           },
           {
             focus: 'chunk',
             pill: '2. Chunk',
-            eyebrow: 'STEP 04 OF 07 · STAGE 2 — CLAUSE-AWARE CHUNKING',
-            title: 'Spotlight: Banking Clause Segmentation & Deterministic Idempotency',
-            lead: 'Instead of cutting rules mid-sentence with fixed character windows, Credit Copilot chunks along legal policy clauses so every vector keeps complete rule meaning.',
-            tag: 'Stage 2 · clause-cl100k-v3',
-            cards: [
+            label: '04 / 07 · STAGE 2 — CHUNK',
+            title: 'Stage 2: Clause-Aware Chunking',
+            accent: '#fbbf24',
+            rules: [
               {
-                title: 'Clause & Row Boundaries',
-                badge: 'CP · PM · PS · C',
-                body: 'Detects formal clause headings (<code>CP-4.1</code>, <code>PM-2</code>, <code>PS-9</code>, <code>C-1</code>) and CSV pricing rows. Comparison tables (e.g. <code>CP-13</code> referencing earlier clauses) stay intact inside their parent chunk.',
-                foot: 'Preserves pageStart, pageEnd, row & section',
+                title: 'Banking Clause Boundaries',
+                text: 'Splits at <code>CP-*</code>, <code>PM-*</code>, <code>PS-*</code>, <code>C-*</code> &amp; CSV rows — keeps comparison tables intact.',
               },
               {
-                title: 'cl100k Token Window + Overlap',
-                badge: '800 / 60 tok',
-                tone: 'is-teal',
-                body: 'Counts tokens via <code>js-tiktoken (cl100k_base)</code>. Clauses ≤ <strong>800 tokens</strong> stay whole; oversized sections split cleanly with a <strong>60-token overlap</strong>.',
-                foot: 'Every chunk carries edition, product & dates',
+                title: 'Token Budget (cl100k_base)',
+                text: 'Clauses ≤ <strong>800 tokens</strong> stay whole; oversized sections split cleanly with a <strong>60-token</strong> overlap.',
               },
               {
-                title: 'Zero-Waste Re-Ingestion',
-                badge: 'Idempotent',
-                tone: 'is-amber',
-                body: 'Each chunk ID is <code>SHA-256(docId:docHash:version:ordinal:contentHash)</code>. Re-uploading an unchanged policy skips Embed &amp; Index immediately with <strong>0 API calls</strong>.',
-                foot: 'Same ID + different hash → HTTP 409 Conflict',
+                title: 'Zero-Waste Idempotency',
+                text: '<code>SHA-256(docId:hash:v3:ordinal:text)</code> skips Embed &amp; Index on unchanged re-uploads (0 API cost).',
               },
             ],
           },
           {
             focus: 'embed',
             pill: '3. Embed',
-            eyebrow: 'STEP 05 OF 07 · STAGE 3 — VECTOR EMBEDDING',
-            title: 'Spotlight: Dense Semantic Embeddings & Multi-Space Isolation',
-            lead: 'Stage 3 maps each policy clause into a dense numeric vector so natural-language underwriting questions match relevant clauses by cosine geometry.',
-            tag: 'Stage 3 · EmbeddingPort (768d)',
-            cards: [
+            label: '05 / 07 · STAGE 3 — EMBED',
+            title: 'Stage 3: Dense Vector Embeddings',
+            accent: '#38bdf8',
+            rules: [
               {
-                title: 'Meaning as Vector Coordinates',
-                badge: 'Cosine Space',
-                tone: 'is-teal',
-                body: 'Encodes text with <code>task="document"</code> into dense float arrays (e.g. <code>[0.04, -0.19, 0.63…]</code>). Paraphrased queries like <em>"max debt burden"</em> land right next to <code>CP-4.1 (DBR 40%)</code>.',
-                foot: 'Query-time PII masked before embedding',
+                title: 'Semantic Vector Space',
+                text: 'Encodes each clause (<code>task="document"</code>) into a <strong>768d</strong> vector so paraphrases match by cosine angle.',
               },
               {
-                title: 'Strict Dimension Validation & SSE',
-                badge: 'Live Progress',
-                body: 'Streams per-chunk progress (<code>Embedded k of N</code>) to the browser. Every vector must match expected <code>dimensions</code> with finite numbers — failing cleanly with zero partial writes.',
-                foot: 'DB constraint: CHECK(vector_dims = dimensions)',
+                title: 'Strict Dimension Check',
+                text: 'Validates <code>vector_dims(embedding) = dimensions</code> &amp; finite floats while streaming live SSE progress.',
               },
               {
-                title: 'Gemini Cloud ↔ Local Ollama Safe',
-                badge: 'Multi-Space PK',
-                tone: 'is-amber',
-                body: 'Composite key <code>PRIMARY KEY (chunk_id, model, dimensions)</code> lets multiple embedding models and vector sizes coexist cleanly in <code>knowledge.embeddings</code> without mixing spaces.',
-                foot: 'Zero downtime when switching providers',
+                title: 'Multi-Provider Isolation',
+                text: '<code>PRIMARY KEY (chunk_id, model, dimensions)</code> lets Gemini cloud &amp; local Ollama coexist safely.',
               },
             ],
           },
           {
             focus: 'index',
             pill: '4. Index',
-            eyebrow: 'STEP 06 OF 07 · STAGE 4 — ATOMIC INDEX COMMIT',
-            title: 'Spotlight: Concurrency Locking & Single-Transaction ACID Commit',
-            lead: 'Stage 4 publishes documents, chunks, full-text search vectors, embeddings, and pricing rows atomically — ensuring the Vector DB is never left half-indexed.',
-            tag: 'Stage 4 · ACID Transaction',
-            cards: [
+            label: '06 / 07 · STAGE 4 — INDEX',
+            title: 'Stage 4: Atomic ACID Commit',
+            accent: '#4ade80',
+            rules: [
               {
                 title: 'Per-Document Advisory Lock',
-                badge: 'Concurrency Safe',
-                body: 'Acquires <code>pg_advisory_xact_lock(hashtext(docId))</code> inside the transaction to serialize concurrent uploads for the same policy ID and re-verify hash conflicts.',
-                foot: 'Prevents race conditions on parallel batches',
+                text: '<code>pg_advisory_xact_lock</code> prevents race conditions; same ID with different bytes returns <code>409</code>.',
               },
               {
                 title: 'All-or-Nothing Publishing',
-                badge: 'Zero Partial Chunks',
-                tone: 'is-teal',
-                body: 'Writes <code>documents</code>, <code>index_revisions</code>, deactivates old rows, upserts active <code>chunks</code> + <code>embeddings</code> + <code>pricing</code>. If anything fails, PostgreSQL rolls back cleanly.',
-                foot: 'Stored GENERATED tsvector updated automatically',
+                text: 'Commits documents, chunks, stored <code>tsvector</code>, vectors &amp; pricing in one transaction — zero partial indexes.',
               },
               {
-                title: 'Full Lifecycle Auditability',
-                badge: 'Audit Trail',
-                tone: 'is-amber',
-                body: 'Records every attempt in <code>knowledge.ingestion_attempts</code> (<code>processing → succeeded | skipped | failed | deleted</code>) and supports full cascading policy deletion.',
-                foot: 'DELETE /knowledge/documents/:id removes vectors',
+                title: 'Full Audit &amp; Clean Delete',
+                text: 'Logs every attempt in <code>ingestion_attempts</code>; deleting a policy cascades cleanly across chunks &amp; vectors.',
               },
             ],
           },
           {
             focus: 'vectordb',
             pill: 'Vector DB',
-            eyebrow: 'STEP 07 OF 07 · POSTGRESQL 17 + PGVECTOR RETRIEVAL',
-            title: 'Spotlight: Inside knowledge.* & Hybrid Search (Cosine + BM25 + RRF)',
-            lead: 'PostgreSQL + pgvector powers both semantic vector search and exact keyword BM25 inside one isolated schema — filtering by product and date before ranking.',
-            tag: 'Hybrid: Cosine <=> + BM25 + RRF (k=60)',
-            cards: [
+            label: '07 / 07 · POSTGRESQL + PGVECTOR',
+            title: 'Hybrid Retrieval inside knowledge.*',
+            accent: '#38bdf8',
+            rules: [
               {
-                title: 'Unified Schema, Isolated from PII',
-                badge: 'knowledge.*',
-                tone: 'is-teal',
-                body: 'Holds <code>documents</code>, <code>chunks</code> (<code>GIN(search_vector)</code> + date B-tree), <code>embeddings</code> (<code>pgvector</code>), and <code>pricing</code> — zero foreign keys to customer <code>cases.*</code>.',
-                foot: 'One ACID engine · no sync drift across DBs',
+                title: 'Hard SQL Date &amp; Product Filter',
+                text: 'Filters <code>active</code>, <code>product</code> &amp; <code>effective_from/to</code> <em>before</em> scoring — expired policies never leak.',
               },
               {
-                title: 'Hard SQL Date & Product Filter',
-                badge: 'Time-Travel Safe',
-                body: 'An <code>eligible</code> CTE enforces <code>c.active</code>, <code>product = $2</code>, and <code>effective_from &lt;= asOfDate &lt; effective_to</code> <em>before</em> scoring — expired policies (<code>CP-2024</code>) can never leak.',
-                foot: 'B-tree index: (product, effective_from, to)',
+                title: 'Hybrid RRF Fusion (k=60)',
+                text: 'Merges Top-20 pgvector Cosine (<code>&lt;=&gt;</code>) + Top-20 GIN Okapi BM25 (<code>k1=1.2, b=0.75</code>) in one SQL snapshot.',
               },
               {
-                title: 'Reciprocal Rank Fusion (RRF)',
-                badge: 'k=60 · Single SQL',
-                tone: 'is-amber',
-                body: 'Fuses Top-20 <strong>pgvector Cosine</strong> (<code>1 - (embedding &lt;=&gt; $1)</code>) + Top-20 in-SQL <strong>Okapi BM25</strong> (<code>k1=1.2, b=0.75</code>) via <code>1/(60+rV) + 1/(60+rB)</code> + optional similarity-floored rewrite.',
-                foot: 'Catches both paraphrases & exact clause IDs',
+                title: 'Zero-Hallucination Math',
+                text: 'Rate CSVs live in <code>knowledge.pricing</code> for exact 50-digit Decimal calculations — never LLM guesswork.',
               },
             ],
           },
         ];
 
         const masterSvg = document.getElementById('masterSvg');
-        const stepEyebrow = document.getElementById('stepEyebrow');
+        const stepLabel = document.getElementById('stepLabel');
         const slideTitle = document.getElementById('slideTitle');
-        const detailPanel = document.getElementById('detailPanel');
+        const rulesStrip = document.getElementById('rulesStrip');
         const stagePillsWrap = document.getElementById('stagePills');
         const dotsWrap = document.getElementById('dots');
         const counter = document.getElementById('counter');
@@ -1348,7 +1001,6 @@
 
         let current = 0;
 
-        // Build top pills & bottom dots
         STEPS.forEach((step, idx) => {
           const pill = document.createElement('button');
           pill.type = 'button';
@@ -1361,7 +1013,7 @@
           dot.type = 'button';
           dot.className = 'dot-btn';
           dot.title = `${idx + 1}. ${step.pill}`;
-          dot.setAttribute('aria-label', `Go to step ${idx + 1}: ${step.pill}`);
+          dot.setAttribute('aria-label', `Go to slide ${idx + 1}: ${step.pill}`);
           dot.addEventListener('click', () => goTo(idx));
           dotsWrap.appendChild(dot);
         });
@@ -1369,7 +1021,6 @@
         const pills = Array.from(stagePillsWrap.querySelectorAll('.stage-pill'));
         const dots = Array.from(dotsWrap.querySelectorAll('.dot-btn'));
 
-        // Clickable SVG diagram nodes jump directly to their slide
         document.querySelectorAll('[data-jump]').forEach((node) => {
           const jumpIndex = Number(node.getAttribute('data-jump'));
           node.addEventListener('click', () => goTo(jumpIndex));
@@ -1381,47 +1032,33 @@
           });
         });
 
-        function renderDetail(step) {
-          // Re-trigger smooth fade-up animation
-          detailPanel.style.animation = 'none';
-          void detailPanel.offsetHeight;
-          detailPanel.style.animation = '';
-
-          const cardsHtml = step.cards
-            .map(
-              (c) => `
-              <article class="d-card ${c.tone || ''}">
-                <div class="d-card-head">
-                  <h3>${c.title}</h3>
-                  <span class="d-card-badge">${c.badge}</span>
-                </div>
-                <p>${c.body}</p>
-                <div class="d-card-foot">${c.foot}</div>
-              </article>
-            `,
-            )
+        function renderRules(step) {
+          rulesStrip.style.animation = 'none';
+          void rulesStrip.offsetHeight;
+          rulesStrip.style.animation = '';
+          rulesStrip.innerHTML = step.rules
+            .map((r) => {
+              const accent = r.accent || step.accent;
+              return `
+                <article class="rule-card" style="--rule-accent: ${accent}">
+                  <h3><span class="rule-dot"></span>${r.title}</h3>
+                  <p>${r.text}</p>
+                </article>
+              `;
+            })
             .join('');
-
-          detailPanel.innerHTML = `
-            <div class="detail-lead">
-              <p>${step.lead}</p>
-              <span class="detail-tag">${step.tag}</span>
-            </div>
-            <div class="detail-cards${step.fourCols ? ' is-four' : ''}">
-              ${cardsHtml}
-            </div>
-          `;
         }
 
         function goTo(index) {
-          const next = Math.max(0, Math.min(STEPS.length - 1, index));
-          current = next;
+          current = Math.max(0, Math.min(STEPS.length - 1, index));
           const step = STEPS[current];
 
           masterSvg.setAttribute('data-focus', step.focus);
-          stepEyebrow.textContent = step.eyebrow;
+          masterSvg.classList.toggle('is-focused', step.focus !== 'overview');
+          stepLabel.textContent = step.label;
+          stepLabel.style.color = step.accent;
           slideTitle.textContent = step.title;
-          renderDetail(step);
+          renderRules(step);
 
           pills.forEach((p, idx) => p.classList.toggle('is-active', idx === current));
           dots.forEach((d, idx) => d.classList.toggle('is-active', idx === current));
