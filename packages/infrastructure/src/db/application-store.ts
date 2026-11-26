@@ -147,11 +147,13 @@ export class PostgresApplicationStore implements ApplicationStore {
   list(actor: Actor) {
     return this.db.query(
       `SELECT a.id,a.reference,a.synthetic,a.created_at,a.latest_assessment_id,r.status,
+              u.username AS preparer_username,
               (a.latest_assessment_id IS NULL
                AND NOT EXISTS (SELECT 1 FROM cases.assessment_runs ar WHERE ar.application_id=a.id)
                AND NOT EXISTS (SELECT 1 FROM cases.assessment_jobs aj WHERE aj.application_id=a.id)
                AND (a.preparer_id=$1 OR $3)) AS can_delete
          FROM cases.applications a
+         JOIN cases.users u ON u.id=a.preparer_id
          LEFT JOIN cases.assessment_runs r ON r.id=a.latest_assessment_id
         WHERE a.preparer_id=$1 OR $2
         ORDER BY a.created_at DESC

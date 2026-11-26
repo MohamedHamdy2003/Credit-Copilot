@@ -44,6 +44,91 @@ export function Toast({
     </div>
   );
 }
+export function ConfirmDialog({
+  title,
+  description,
+  confirmLabel,
+  busyLabel = 'Working…',
+  busy = false,
+  danger = true,
+  onConfirm,
+  onCancel,
+}: {
+  title: string;
+  description: ReactNode;
+  confirmLabel: string;
+  busyLabel?: string;
+  busy?: boolean;
+  danger?: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !busy) onCancel();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [busy, onCancel]);
+
+  return (
+    <div
+      className="modal-backdrop"
+      role="presentation"
+      onClick={(event) => {
+        if (event.target === event.currentTarget && !busy) onCancel();
+      }}
+    >
+      <div
+        className="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirm-dialog-title"
+        aria-describedby="confirm-dialog-desc"
+      >
+        <div className="modal-body">
+          <div className={`modal-icon${danger ? ' is-danger' : ''}`} aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path
+                d="M7.5 3.5H12.5M3.5 5.5H16.5M15 5.5L14.3 15.1C14.2 16.2 13.3 17 12.2 17H7.8C6.7 17 5.8 16.2 5.7 15.1L5 5.5M8.25 9V13.5M11.75 9V13.5"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </div>
+          <div className="modal-copy">
+            <h2 id="confirm-dialog-title">{title}</h2>
+            <p id="confirm-dialog-desc">{description}</p>
+          </div>
+          <button
+            type="button"
+            className="modal-close"
+            aria-label="Close dialog"
+            disabled={busy}
+            onClick={onCancel}
+          >
+            ×
+          </button>
+        </div>
+        <div className="modal-footer">
+          <button type="button" disabled={busy} autoFocus onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className={danger ? 'danger-button' : 'primary'}
+            disabled={busy}
+            onClick={onConfirm}
+          >
+            {busy ? busyLabel : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 export function ErrorNotice({ error }: { error: unknown }) {
   if (!error) return null;
   return (

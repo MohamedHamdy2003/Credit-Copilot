@@ -292,11 +292,15 @@ test('real multipart upload, duplicate registration, draft delete and mixed know
   await add(page, 'APP-001');
   await add(page, 'APP-001');
   await expect(page.getByRole('row').filter({ hasText: 'Synthetic pack' })).toHaveCount(1);
-  // Upload a second draft pack and delete it before assessment; once assessed, PM-8 blocks deletion.
+  // Upload a second draft pack and delete it via the confirmation modal; once assessed, PM-8 blocks deletion.
   await add(page, 'APP-002');
   const draftRow = page.getByRole('row').filter({ hasText: 'APP-002' });
   await draftRow.getByRole('button', { name: 'Delete APP-002', exact: true }).click();
-  await draftRow.getByRole('button', { name: 'Confirm delete', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText('APP-002');
+  await dialog.getByRole('button', { name: 'Delete application', exact: true }).click();
+  await expect(dialog).toHaveCount(0);
   await expect(page.getByText('Deleted draft application APP-002.', { exact: true })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: 'APP-002' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Open APP-001', exact: true }).click();

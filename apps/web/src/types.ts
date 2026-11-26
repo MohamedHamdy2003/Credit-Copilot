@@ -12,6 +12,7 @@ export interface ApplicationRow {
   synthetic: boolean;
   status: string | null;
   latest_assessment_id: string | null;
+  preparer_username: string;
   can_delete: boolean;
 }
 export interface ApplicationDetail {

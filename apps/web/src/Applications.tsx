@@ -6,7 +6,16 @@ import {
 } from '../../../packages/contracts/src/streams';
 import { api, ApiError } from './api';
 import type { Actor, ApplicationDetail, ApplicationRow, Run } from './types';
-import { Empty, ErrorNotice, Money, ResourceState, Status, Toast, useResource } from './components';
+import {
+  ConfirmDialog,
+  Empty,
+  ErrorNotice,
+  Money,
+  ResourceState,
+  Status,
+  Toast,
+  useResource,
+} from './components';
 import { Assessment } from './Assessment';
 
 const stageLabels = {
@@ -328,28 +337,29 @@ export function Applications({ actor }: { actor: Actor }) {
   );
   const [selected, setSelected] = useState<string | null>(null),
     [adding, setAdding] = useState(false),
-    [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null),
-    [deletingId, setDeletingId] = useState<string | null>(null),
+    [pendingDelete, setPendingDelete] = useState<ApplicationRow | null>(null),
+    [deleting, setDeleting] = useState(false),
     [deleteError, setDeleteError] = useState<unknown>(),
     [deleteNotice, setDeleteNotice] = useState<string | null>(null);
 
   async function removeDraft(row: ApplicationRow) {
     setDeleteError(undefined);
     setDeleteNotice(null);
-    setDeletingId(row.id);
+    setDeleting(true);
     try {
       await api.request<{ deleted: true; id: string; reference: string }>(
         `applications/${encodeURIComponent(row.id)}`,
         { method: 'DELETE' },
       );
-      setConfirmDeleteId(null);
+      setPendingDelete(null);
       if (selected === row.id) setSelected(null);
       setDeleteNotice(`Deleted draft application ${row.reference}.`);
       applications.refresh();
     } catch (e) {
+      setPendingDelete(null);
       setDeleteError(e);
     } finally {
-      setDeletingId(null);
+      setDeleting(false);
     }
   }
 
@@ -375,6 +385,23 @@ export function Applications({ actor }: { actor: Actor }) {
         />
       )}
       {deleteNotice && <Toast message={deleteNotice} onDone={() => setDeleteNotice(null)} />}
+      {pendingDelete && (
+        <ConfirmDialog
+          title={`Delete ${pendingDelete.reference}?`}
+          description={
+            <>
+              This will permanently remove draft application{' '}
+              <strong>{pendingDelete.reference}</strong> and its uploaded PDF. This action cannot be
+              undone.
+            </>
+          }
+          confirmLabel="Delete application"
+          busyLabel="Deleting…"
+          busy={deleting}
+          onConfirm={() => void removeDraft(pendingDelete)}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
       <ErrorNotice error={deleteError} />
       <ResourceState {...applications} retry={applications.refresh} />
       {applications.data && (
@@ -384,6 +411,7 @@ export function Applications({ actor }: { actor: Actor }) {
               <tr>
                 <th>Reference</th>
                 <th>Status</th>
+                <th>Prepared by</th>
                 <th>Evidence</th>
                 <th>Action</th>
               </tr>
@@ -395,6 +423,7 @@ export function Applications({ actor }: { actor: Actor }) {
                   <td>
                     <Status value={row.status} />
                   </td>
+                  <td>{row.preparer_username}</td>
                   <td>{row.synthetic ? 'Synthetic pack' : 'Uploaded PDF'}</td>
                   <td>
                     <div className="table-actions">
@@ -404,39 +433,20 @@ export function Applications({ actor }: { actor: Actor }) {
                       >
                         Open
                       </button>
-                      {row.can_delete &&
-                        (confirmDeleteId === row.id ? (
-                          <div className="inline-confirm">
-                            <button
-                              type="button"
-                              className="danger-button"
-                              disabled={deletingId === row.id}
-                              onClick={() => void removeDraft(row)}
-                            >
-                              {deletingId === row.id ? 'Deleting…' : 'Confirm delete'}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={deletingId === row.id}
-                              onClick={() => setConfirmDeleteId(null)}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            className="danger-outline"
-                            aria-label={`Delete ${row.reference}`}
-                            disabled={deletingId !== null}
-                            onClick={() => {
-                              setConfirmDeleteId(row.id);
-                              setDeleteError(undefined);
-                            }}
-                          >
-                            Delete
-                          </button>
-                        ))}
+                      {row.can_delete && (
+                        <button
+                          type="button"
+                          className="danger-outline"
+                          aria-label={`Delete ${row.reference}`}
+                          disabled={deleting}
+                          onClick={() => {
+                            setPendingDelete(row);
+                            setDeleteError(undefined);
+                          }}
+                        >
+                          Delete
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
