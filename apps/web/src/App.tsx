@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, ApiError } from './api';
 import type { Session } from './types';
 import { ErrorNotice } from './components';
@@ -81,7 +81,76 @@ export function App() {
     [page, setPage] = useState<Page>('Applications'),
     [logoutBusy, setLogoutBusy] = useState(false),
     [error, setError] = useState<unknown>(),
-    [restoreRevision, setRestoreRevision] = useState(0);
+    [restoreRevision, setRestoreRevision] = useState(0),
+    [fullscreen, setFullscreen] = useState(false),
+    [showExitButton, setShowExitButton] = useState(false);
+  const exitHideTimer = useRef<number | null>(null);
+
+  const exitFullscreen = useCallback(async () => {
+    setShowExitButton(false);
+    setFullscreen(false);
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch {
+        // Ignore if browser already exited fullscreen.
+      }
+    }
+  }, []);
+
+  async function enterFullscreen() {
+    setFullscreen(true);
+    setShowExitButton(false);
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      try {
+        await document.documentElement.requestFullscreen();
+      } catch {
+        // Fall back gracefully to viewport full-height mode if native fullscreen is blocked.
+      }
+    }
+  }
+
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setFullscreen(false);
+        setShowExitButton(false);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    const clearHide = () => {
+      if (exitHideTimer.current !== null) {
+        window.clearTimeout(exitHideTimer.current);
+        exitHideTimer.current = null;
+      }
+    };
+    const onMouseMove = (event: MouseEvent) => {
+      if (event.clientY <= 36) {
+        clearHide();
+        setShowExitButton(true);
+      } else if (event.clientY > 92 && exitHideTimer.current === null) {
+        exitHideTimer.current = window.setTimeout(() => {
+          setShowExitButton(false);
+          exitHideTimer.current = null;
+        }, 260);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') void exitFullscreen();
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      clearHide();
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [fullscreen, exitFullscreen]);
   function accept(s: Session) {
     api.setCsrf(s.csrfToken);
     setSession(s);
@@ -149,7 +218,26 @@ export function App() {
     );
   if (!session) return <Login onLogin={accept} expired={expired} />;
   return (
-    <div className="workspace">
+    <div className={`workspace${fullscreen ? ' is-fullscreen' : ''}`}>
+      {fullscreen && (
+        <button
+          type="button"
+          className={`fullscreen-exit${showExitButton ? ' is-visible' : ''}`}
+          aria-label="Exit full screen"
+          title="Exit full screen (Esc)"
+          onMouseEnter={() => setShowExitButton(true)}
+          onClick={() => void exitFullscreen()}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+            <path
+              d="M4.5 4.5L13.5 13.5M13.5 4.5L4.5 13.5"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </button>
+      )}
       <aside className="sidebar">
         <div className="brand">Credit Copilot</div>
         <p className="muted">Lending workspace</p>
@@ -176,6 +264,27 @@ export function App() {
         </div>
       </aside>
       <main className="content">
+        {!fullscreen && (
+          <div className="workspace-utilities">
+            <button
+              type="button"
+              className="fullscreen-trigger"
+              aria-label="Enter full screen"
+              title="Full screen"
+              onClick={() => void enterFullscreen()}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path
+                  d="M2.5 6V3.5C2.5 2.95 2.95 2.5 3.5 2.5H6M10 2.5H12.5C13.05 2.5 13.5 2.95 13.5 3.5V6M13.5 10V12.5C13.5 13.05 13.05 13.5 12.5 13.5H10M6 13.5H3.5C2.95 13.5 2.5 13.05 2.5 12.5V10"
+                  stroke="currentColor"
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+        )}
         <ErrorNotice error={error} />
         {page === 'Applications' && <Applications actor={session.user} />}{' '}
         {page === 'Delta Copilot' && <Questions />}
