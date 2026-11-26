@@ -86,40 +86,15 @@ export function App() {
     [showExitButton, setShowExitButton] = useState(false);
   const exitHideTimer = useRef<number | null>(null);
 
-  const exitFullscreen = useCallback(async () => {
+  const exitFullscreen = useCallback(() => {
     setShowExitButton(false);
     setFullscreen(false);
-    if (document.fullscreenElement) {
-      try {
-        await document.exitFullscreen();
-      } catch {
-        // Ignore if browser already exited fullscreen.
-      }
-    }
   }, []);
 
-  async function enterFullscreen() {
+  function enterFullscreen() {
     setFullscreen(true);
     setShowExitButton(false);
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-      try {
-        await document.documentElement.requestFullscreen();
-      } catch {
-        // Fall back gracefully to viewport full-height mode if native fullscreen is blocked.
-      }
-    }
   }
-
-  useEffect(() => {
-    const onFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        setFullscreen(false);
-        setShowExitButton(false);
-      }
-    };
-    document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
-  }, []);
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -141,7 +116,7 @@ export function App() {
       }
     };
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') void exitFullscreen();
+      if (event.key === 'Escape') exitFullscreen();
     };
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('keydown', onKeyDown);
@@ -226,7 +201,7 @@ export function App() {
           aria-label="Exit full screen"
           title="Exit full screen (Esc)"
           onMouseEnter={() => setShowExitButton(true)}
-          onClick={() => void exitFullscreen()}
+          onClick={exitFullscreen}
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
             <path
@@ -271,7 +246,7 @@ export function App() {
               className="fullscreen-trigger"
               aria-label="Enter full screen"
               title="Full screen"
-              onClick={() => void enterFullscreen()}
+              onClick={enterFullscreen}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path

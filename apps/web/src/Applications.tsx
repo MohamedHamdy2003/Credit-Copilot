@@ -28,6 +28,9 @@ const stageLabels = {
   prepare_memo: 'Prepared credit memo',
   record_pending_review: 'Recorded for human review',
 };
+function formatPreparer(username: string) {
+  return username.startsWith('fixture-review-') ? 'CLI review' : username;
+}
 function AddApplication({
   onAdded,
   onCancel,
@@ -423,7 +426,7 @@ export function Applications({ actor }: { actor: Actor }) {
                   <td>
                     <Status value={row.status} />
                   </td>
-                  <td>{row.preparer_username}</td>
+                  <td title={row.preparer_username}>{formatPreparer(row.preparer_username)}</td>
                   <td>{row.synthetic ? 'Synthetic pack' : 'Uploaded PDF'}</td>
                   <td>
                     <div className="table-actions">

@@ -30,28 +30,34 @@ try {
   const form = parseApplicationForm(document);
   const catalog = await loadProductCatalog(parser);
   // This CLI is local synthetic-fixture tooling, not a public authenticated endpoint.
-  const actorId = randomUUID(),
-    applicationId = randomUUID(),
-    runId = randomUUID();
-  await db.transaction(async (manager) => {
+  const runId = randomUUID();
+  const { actorId, applicationId } = await db.transaction(async (manager) => {
+    const newActorId = randomUUID();
     await manager.query(
-      'INSERT INTO cases.users(id,username,password_hash,role,tier) VALUES($1,$2,$3,$4,$5)',
-      [
-        actorId,
-        `fixture-review-${actorId}`,
-        'DISABLED_LOCAL_FIXTURE_ACCOUNT',
-        'loan_officer',
-        'none',
-      ],
+      'INSERT INTO cases.users(id,username,password_hash,role,tier,active) VALUES($1,$2,$3,$4,$5,false) ON CONFLICT(username) DO NOTHING',
+      [newActorId, 'cli-assessor', 'DISABLED_LOCAL_FIXTURE_ACCOUNT', 'loan_officer', 'none'],
     );
-    await manager.query(
-      'INSERT INTO cases.applications(id,reference,preparer_id,filename,hash,normalized,synthetic) VALUES($1,$2,$3,$4,$5,$6,true)',
-      [applicationId, form.reference, actorId, document.filename, document.hash, document],
-    );
-    await manager.query(
-      'INSERT INTO cases.evidence_documents(id,application_id,requirement,original_bytes,hash) VALUES($1,$2,$3,$4,$5)',
-      [randomUUID(), applicationId, 'application_pack', bytes, document.hash],
-    );
+    const actorRows = (await manager.query('SELECT id FROM cases.users WHERE username=$1', [
+      'cli-assessor',
+    ])) as { id: string }[];
+    const resolvedActorId = actorRows[0]!.id;
+    const newAppId = randomUUID();
+    const inserted = (await manager.query(
+      'INSERT INTO cases.applications(id,reference,preparer_id,filename,hash,normalized,synthetic) VALUES($1,$2,$3,$4,$5,$6,true) ON CONFLICT(preparer_id,hash) DO NOTHING RETURNING id',
+      [newAppId, form.reference, resolvedActorId, document.filename, document.hash, document],
+    )) as { id: string }[];
+    if (inserted.length) {
+      await manager.query(
+        'INSERT INTO cases.evidence_documents(id,application_id,requirement,original_bytes,hash) VALUES($1,$2,$3,$4,$5)',
+        [randomUUID(), newAppId, 'application_pack', bytes, document.hash],
+      );
+      return { actorId: resolvedActorId, applicationId: newAppId };
+    }
+    const existingRows = (await manager.query(
+      'SELECT id FROM cases.applications WHERE preparer_id=$1 AND hash=$2',
+      [resolvedActorId, document.hash],
+    )) as { id: string }[];
+    return { actorId: resolvedActorId, applicationId: existingRows[0]!.id };
   });
   const workflow = createDocumentAssessmentWorkflow({
     provider,
