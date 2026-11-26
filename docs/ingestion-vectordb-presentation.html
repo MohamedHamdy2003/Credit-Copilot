@@ -3,30 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Credit Copilot — Policy Ingestion &amp; Vector Database Architecture</title>
+    <title>Credit Copilot — Policy Ingestion &amp; Vector DB Walkthrough</title>
     <style>
       :root {
-        --bg: #f4f7f6;
-        --surface: #ffffff;
-        --surface-soft: #f8fbfa;
-        --ink: #102a24;
-        --ink-soft: #35504a;
-        --muted: #5b716c;
-        --border: #d5e2df;
-        --border-strong: #b6ccc6;
-        --emerald: #176753;
-        --emerald-dark: #0e4a3b;
-        --emerald-deep: #0b2d24;
-        --emerald-soft: #e7f4ef;
-        --emerald-glow: rgba(23, 103, 83, 0.16);
-        --teal: #1d7a8a;
-        --teal-soft: #e8f5f8;
-        --amber: #b97a16;
-        --amber-soft: #fff7e6;
-        --amber-border: #e8c77b;
-        --red: #b43a2f;
-        --red-soft: #fff1ef;
-        --red-border: #e5ada6;
+        --bg-outer: #071915;
+        --bg-stage-1: #0b2620;
+        --bg-stage-2: #10372e;
+        --ink: #eefaf5;
+        --ink-soft: #bfe0d4;
+        --muted: #82b3a3;
+        --emerald: #1c856a;
+        --emerald-bright: #4cd29d;
+        --teal-bright: #5ad2e6;
+        --amber-bright: #f5c26b;
+        --red-bright: #ff8a7d;
+        --card-bg: rgba(8, 28, 23, 0.72);
+        --card-border: rgba(110, 231, 191, 0.22);
         --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
         --sans: Inter, 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
       }
@@ -44,956 +36,480 @@
         overflow: hidden;
         font-family: var(--sans);
         color: var(--ink);
-        background: #0d241f;
+        background: var(--bg-outer);
         -webkit-font-smoothing: antialiased;
       }
 
-      /* Deck stage */
+      /* Fullscreen-friendly deck wrapper */
       .deck {
-        position: relative;
         width: 100vw;
         height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
+        padding: 16px 20px 64px;
         background:
-          radial-gradient(circle at 12% 15%, rgba(30, 126, 102, 0.22), transparent 42%),
-          radial-gradient(circle at 88% 85%, rgba(29, 122, 138, 0.18), transparent 45%),
-          #0a1f1a;
-        padding: 18px 20px 68px;
+          radial-gradient(circle at 14% 12%, rgba(36, 152, 121, 0.24), transparent 42%),
+          radial-gradient(circle at 86% 86%, rgba(45, 169, 190, 0.2), transparent 44%),
+          var(--bg-outer);
       }
 
       .stage {
         position: relative;
-        width: min(100%, 1340px);
-        height: min(100%, 760px);
-        border-radius: 18px;
-        background: var(--surface);
+        width: min(100%, 1400px);
+        height: min(100%, 780px);
+        border-radius: 20px;
+        background:
+          radial-gradient(circle at 76% 20%, rgba(56, 193, 152, 0.16), transparent 44%),
+          radial-gradient(circle at 18% 82%, rgba(36, 146, 165, 0.14), transparent 46%),
+          linear-gradient(140deg, var(--bg-stage-1) 0%, var(--bg-stage-2) 55%, #0c2b24 100%);
+        border: 1px solid rgba(118, 224, 188, 0.2);
         box-shadow:
-          0 30px 80px rgba(0, 0, 0, 0.42),
-          0 0 0 1px rgba(255, 255, 255, 0.12);
+          0 32px 90px rgba(0, 0, 0, 0.55),
+          inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        padding: 22px 32px 20px;
+        display: grid;
+        grid-template-rows: auto minmax(0, 1.32fr) minmax(0, 0.86fr);
+        gap: 14px;
         overflow: hidden;
       }
 
-      /* Slides */
-      .slide {
-        position: absolute;
-        inset: 0;
-        padding: 30px 44px 24px;
+      /* Top Header */
+      .topbar {
         display: flex;
-        flex-direction: column;
+        align-items: center;
+        justify-content: space-between;
         gap: 16px;
-        opacity: 0;
-        visibility: hidden;
-        transform: translateX(28px) scale(0.99);
-        transition:
-          opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-          transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-          visibility 0.42s;
-        overflow-y: auto;
-        background: var(--surface);
+        min-width: 0;
       }
 
-      .slide.is-prev {
-        transform: translateX(-28px) scale(0.99);
-      }
-
-      .slide.is-active {
-        opacity: 1;
-        visibility: visible;
-        transform: translateX(0) scale(1);
-        z-index: 2;
-      }
-
-      /* Dark hero slide */
-      .slide.is-hero {
-        background:
-          radial-gradient(circle at 80% 24%, rgba(56, 193, 152, 0.2), transparent 46%),
-          radial-gradient(circle at 15% 88%, rgba(36, 146, 165, 0.18), transparent 46%),
-          linear-gradient(135deg, #0b2620 0%, #11392f 58%, #0f2f28 100%);
-        color: #f2faf7;
-        justify-content: space-between;
-        padding: 48px 56px 42px;
-      }
-
-      /* Top slide header */
-      .slide-top {
+      .brand-block {
         display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 20px;
-        flex: none;
+        align-items: center;
+        gap: 13px;
+        min-width: 0;
       }
 
-      .eyebrow {
+      .title-wrap {
+        min-width: 0;
+      }
+
+      .step-eyebrow {
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        font-size: 11.5px;
+        font-family: var(--mono);
+        font-size: 11px;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: 0.11em;
-        color: var(--emerald);
-        margin-bottom: 6px;
+        letter-spacing: 0.1em;
+        color: var(--emerald-bright);
+        margin-bottom: 3px;
       }
 
-      .eyebrow::before {
+      .step-eyebrow::before {
         content: '';
-        width: 18px;
+        width: 14px;
         height: 2px;
         border-radius: 2px;
-        background: var(--emerald);
+        background: var(--emerald-bright);
       }
 
-      .slide.is-hero .eyebrow {
-        color: #6ee7bf;
-      }
-      .slide.is-hero .eyebrow::before {
-        background: #6ee7bf;
-      }
-
-      h1 {
+      .slide-title {
         margin: 0;
-        font-size: clamp(32px, 3.8vw, 48px);
+        font-size: clamp(20px, 2.2vw, 28px);
         font-weight: 800;
-        letter-spacing: -0.03em;
-        line-height: 1.1;
-      }
-
-      h2 {
-        margin: 0;
-        font-size: clamp(22px, 2.3vw, 30px);
-        font-weight: 750;
         letter-spacing: -0.025em;
-        line-height: 1.2;
-        color: var(--ink);
+        line-height: 1.15;
+        color: #f4fcf9;
+        transition: opacity 0.2s ease;
       }
 
-      .subtitle {
-        margin: 6px 0 0;
-        font-size: 14.5px;
-        color: var(--muted);
-        max-width: 760px;
-        line-height: 1.5;
-      }
-
-      .slide.is-hero .subtitle {
-        color: #bfe0d5;
-        font-size: 16.5px;
-        max-width: 620px;
-      }
-
-      .slide-tag {
-        flex: none;
-        padding: 6px 13px;
-        border-radius: 999px;
-        background: var(--emerald-soft);
-        border: 1px solid #bfe0d1;
-        color: var(--emerald-dark);
-        font-size: 12px;
-        font-weight: 700;
-        font-family: var(--mono);
-        white-space: nowrap;
-      }
-
-      /* Staggered reveal on active slide */
-      .reveal {
-        opacity: 0;
-        transform: translateY(14px);
-        transition:
-          opacity 0.48s cubic-bezier(0.22, 1, 0.36, 1),
-          transform 0.48s cubic-bezier(0.22, 1, 0.36, 1);
-      }
-      .slide.is-active .reveal {
-        opacity: 1;
-        transform: translateY(0);
-      }
-      .slide.is-active .d1 {
-        transition-delay: 0.08s;
-      }
-      .slide.is-active .d2 {
-        transition-delay: 0.16s;
-      }
-      .slide.is-active .d3 {
-        transition-delay: 0.24s;
-      }
-      .slide.is-active .d4 {
-        transition-delay: 0.32s;
-      }
-      .slide.is-active .d5 {
-        transition-delay: 0.4s;
-      }
-
-      /* Hero layout */
-      .hero-brand {
+      /* Top stage jump pills */
+      .stage-pills {
         display: flex;
         align-items: center;
-        gap: 12px;
-      }
-      .hero-brand-name {
-        font-weight: 700;
-        font-size: 15px;
-        letter-spacing: -0.01em;
-        color: #e8f7f1;
-      }
-      .hero-brand-sub {
-        font-size: 12px;
-        color: #88bca9;
-      }
-      .hero-grid {
-        display: grid;
-        grid-template-columns: 1.12fr 0.88fr;
-        gap: 36px;
-        align-items: center;
-        flex: 1;
-      }
-      .hero-pills {
-        display: flex;
+        gap: 5px;
         flex-wrap: wrap;
-        gap: 9px;
-        margin-top: 24px;
-      }
-      .hero-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        padding: 7px 13px;
-        border-radius: 999px;
-        background: rgba(255, 255, 255, 0.08);
-        border: 1px solid rgba(139, 224, 194, 0.28);
-        color: #dff7ee;
-        font-size: 12.5px;
-        font-weight: 600;
-      }
-      .hero-pill .dot {
-        width: 7px;
-        height: 7px;
-        border-radius: 999px;
-        background: #4cd29d;
-      }
-      .hero-visual {
-        background: rgba(8, 25, 21, 0.52);
-        border: 1px solid rgba(110, 231, 191, 0.2);
-        border-radius: 16px;
-        padding: 20px;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-      }
-      .hero-foot {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 12.5px;
-        color: #86b7a6;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        padding-top: 14px;
+        justify-content: flex-end;
       }
 
-      /* SVG flow animations */
+      .stage-pill {
+        appearance: none;
+        border: 1px solid rgba(139, 224, 194, 0.22);
+        background: rgba(255, 255, 255, 0.05);
+        color: #b4dbd0;
+        border-radius: 999px;
+        padding: 5px 11px;
+        font: inherit;
+        font-size: 11.5px;
+        font-weight: 650;
+        cursor: pointer;
+        transition:
+          background 0.2s ease,
+          border-color 0.2s ease,
+          color 0.2s ease,
+          transform 0.15s ease;
+      }
+
+      .stage-pill:hover {
+        background: rgba(76, 210, 157, 0.14);
+        border-color: rgba(110, 231, 191, 0.5);
+        color: #fff;
+      }
+
+      .stage-pill.is-active {
+        background: #176753;
+        border-color: #6ee7bf;
+        color: #ffffff;
+        box-shadow: 0 0 0 3px rgba(76, 210, 157, 0.18);
+      }
+
+      /* Giant Persistent Master Diagram Canvas */
+      .diagram-shell {
+        position: relative;
+        min-height: 0;
+        border-radius: 16px;
+        background:
+          radial-gradient(circle at 50% 50%, rgba(28, 118, 94, 0.18), transparent 68%),
+          rgba(6, 21, 17, 0.62);
+        border: 1px solid rgba(110, 231, 191, 0.2);
+        padding: 10px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      }
+
+      .diagram-hint {
+        position: absolute;
+        top: 10px;
+        right: 14px;
+        font-size: 11px;
+        color: rgba(154, 214, 194, 0.72);
+        font-family: var(--mono);
+        pointer-events: none;
+      }
+
+      .master-svg {
+        width: 100%;
+        height: 100%;
+        max-height: 100%;
+        display: block;
+      }
+
+      /* Interactive SVG Spotlight & Magic-Move Transitions */
+      .diag-node {
+        cursor: pointer;
+        transition:
+          opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+          transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+          filter 0.42s ease;
+        transform-box: fill-box;
+        transform-origin: center;
+      }
+
+      .diag-node:hover {
+        filter: brightness(1.08);
+      }
+
+      .diag-wire {
+        transition:
+          opacity 0.42s ease,
+          stroke-width 0.35s ease;
+      }
+
+      .spotlight-ring {
+        opacity: 0;
+        transition: opacity 0.38s ease;
+        pointer-events: none;
+      }
+
+      /* Dim non-focused nodes when a spotlight slide is active */
+      .master-svg[data-focus]:not([data-focus='overview']) .diag-node {
+        opacity: 0.24;
+      }
+
+      .master-svg[data-focus]:not([data-focus='overview']) .diag-wire {
+        opacity: 0.16;
+      }
+
+      .master-svg[data-focus]:not([data-focus='overview']) .pipeline-frame {
+        opacity: 0.42;
+      }
+
+      /* Highlight the focused node */
+      .master-svg[data-focus='sources'] .node-sources,
+      .master-svg[data-focus='extract'] .node-extract,
+      .master-svg[data-focus='chunk'] .node-chunk,
+      .master-svg[data-focus='embed'] .node-embed,
+      .master-svg[data-focus='index'] .node-index,
+      .master-svg[data-focus='vectordb'] .node-vectordb {
+        opacity: 1;
+        transform: scale(1.045);
+        filter: drop-shadow(0 0 18px rgba(76, 210, 157, 0.42));
+      }
+
+      .master-svg[data-focus='vectordb'] .node-vectordb {
+        filter: drop-shadow(0 0 20px rgba(90, 210, 230, 0.46));
+      }
+
+      .master-svg[data-focus='sources'] .node-sources .spotlight-ring,
+      .master-svg[data-focus='extract'] .node-extract .spotlight-ring,
+      .master-svg[data-focus='chunk'] .node-chunk .spotlight-ring,
+      .master-svg[data-focus='embed'] .node-embed .spotlight-ring,
+      .master-svg[data-focus='index'] .node-index .spotlight-ring,
+      .master-svg[data-focus='vectordb'] .node-vectordb .spotlight-ring {
+        opacity: 1;
+      }
+
+      /* Highlight wires leading into / out of the focused stage */
+      .master-svg[data-focus='sources'] .wire-src-ext,
+      .master-svg[data-focus='sources'] .wire-blocked,
+      .master-svg[data-focus='extract'] .wire-src-ext,
+      .master-svg[data-focus='extract'] .wire-blocked,
+      .master-svg[data-focus='extract'] .wire-ext-chk,
+      .master-svg[data-focus='chunk'] .wire-ext-chk,
+      .master-svg[data-focus='chunk'] .wire-chk-emb,
+      .master-svg[data-focus='embed'] .wire-chk-emb,
+      .master-svg[data-focus='embed'] .wire-emb-idx,
+      .master-svg[data-focus='index'] .wire-emb-idx,
+      .master-svg[data-focus='index'] .wire-idx-db,
+      .master-svg[data-focus='vectordb'] .wire-idx-db {
+        opacity: 1;
+      }
+
+      /* Keep the pipeline container slightly brighter when inspecting an internal stage */
+      .master-svg[data-focus='extract'] .pipeline-frame,
+      .master-svg[data-focus='chunk'] .pipeline-frame,
+      .master-svg[data-focus='embed'] .pipeline-frame,
+      .master-svg[data-focus='index'] .pipeline-frame {
+        opacity: 0.85;
+      }
+
+      /* Subtle animations */
       @keyframes dashFlow {
         from {
-          stroke-dashoffset: 32;
+          stroke-dashoffset: 36;
         }
         to {
           stroke-dashoffset: 0;
         }
       }
-      .flow-line {
-        stroke-dasharray: 6 6;
-        animation: dashFlow 1.2s linear infinite;
+      .flow-anim {
+        stroke-dasharray: 8 7;
+        animation: dashFlow 1.25s linear infinite;
       }
-      .flow-line-slow {
+      .flow-anim-slow {
         stroke-dasharray: 7 7;
-        animation: dashFlow 2s linear infinite;
+        animation: dashFlow 1.8s linear infinite;
       }
-      @keyframes pulseRing {
-        0% {
-          transform: scale(1);
-          opacity: 0.7;
-        }
-        100% {
-          transform: scale(1.65);
-          opacity: 0;
-        }
-      }
-      @keyframes floatSoft {
+
+      @keyframes ringPulse {
         0%,
         100% {
-          transform: translateY(0);
+          stroke-opacity: 0.95;
+          stroke-width: 2.6;
         }
         50% {
-          transform: translateY(-4px);
+          stroke-opacity: 0.35;
+          stroke-width: 4.2;
         }
       }
-      .float-soft {
-        animation: floatSoft 3.6s ease-in-out infinite;
-      }
-      .float-soft-2 {
-        animation: floatSoft 4.2s ease-in-out 0.6s infinite;
+      .spotlight-ring {
+        animation: ringPulse 2s ease-in-out infinite;
       }
 
-      /* Interactive toolbar */
-      .sim-bar {
+      /* Bottom Focus Detail Drawer */
+      .detail-panel {
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 11px;
+        animation: panelReveal 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+
+      @keyframes panelReveal {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .detail-lead {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        gap: 12px;
+        gap: 14px;
         flex-wrap: wrap;
-        padding: 10px 14px;
-        border-radius: 12px;
-        background: var(--surface-soft);
-        border: 1px solid var(--border);
-      }
-      .sim-controls {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-      .btn {
-        appearance: none;
-        border: 1px solid var(--border-strong);
-        background: #fff;
-        color: var(--ink);
-        border-radius: 8px;
-        padding: 7px 14px;
-        font: inherit;
-        font-size: 12.5px;
-        font-weight: 650;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        transition:
-          background 0.15s,
-          border-color 0.15s,
-          transform 0.12s;
-      }
-      .btn:hover {
-        background: var(--emerald-soft);
-        border-color: var(--emerald);
-      }
-      .btn:active {
-        transform: scale(0.98);
-      }
-      .btn-primary {
-        background: var(--emerald);
-        border-color: var(--emerald);
-        color: #fff;
-      }
-      .btn-primary:hover {
-        background: var(--emerald-dark);
-        border-color: var(--emerald-dark);
-      }
-      .btn-danger {
-        background: var(--red-soft);
-        border-color: var(--red-border);
-        color: var(--red);
-      }
-      .btn-danger:hover {
-        background: #ffe4e0;
-        border-color: var(--red);
-      }
-      .sim-status {
-        font-family: var(--mono);
-        font-size: 12px;
-        color: var(--emerald-dark);
-        font-weight: 600;
-      }
-      .sim-status.is-error {
-        color: var(--red);
       }
 
-      /* Slide 2 Pipeline cards */
-      .pipeline-wrap {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        gap: 16px;
-      }
-      .pipeline-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 16px;
-        position: relative;
-      }
-      .pipe-card {
-        position: relative;
-        background: #fff;
-        border: 1.5px solid var(--border);
-        border-radius: 14px;
-        padding: 18px 18px 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        transition:
-          border-color 0.25s,
-          box-shadow 0.25s,
-          background 0.25s,
-          transform 0.25s;
-      }
-      .pipe-card.is-running {
-        border-color: var(--teal);
-        background: #f2fafc;
-        box-shadow: 0 0 0 4px rgba(29, 122, 138, 0.14);
-        transform: translateY(-3px);
-      }
-      .pipe-card.is-done {
-        border-color: var(--emerald);
-        background: #f3fbf7;
-      }
-      .pipe-card.is-failed {
-        border-color: var(--red);
-        background: var(--red-soft);
-        box-shadow: 0 0 0 4px rgba(180, 58, 47, 0.14);
-      }
-      .pipe-head {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-      }
-      .pipe-step {
-        width: 30px;
-        height: 30px;
-        border-radius: 10px;
-        display: grid;
-        place-items: center;
-        font-weight: 800;
-        font-size: 13px;
-        background: var(--emerald-soft);
-        color: var(--emerald-dark);
-        transition:
-          background 0.2s,
-          color 0.2s;
-      }
-      .pipe-card.is-running .pipe-step {
-        background: var(--teal);
-        color: #fff;
-      }
-      .pipe-card.is-done .pipe-step {
-        background: var(--emerald);
-        color: #fff;
-      }
-      .pipe-card.is-failed .pipe-step {
-        background: var(--red);
-        color: #fff;
-      }
-      .pipe-badge {
-        font-family: var(--mono);
-        font-size: 10.5px;
-        font-weight: 700;
-        text-transform: uppercase;
-        padding: 3px 8px;
-        border-radius: 999px;
-        background: #eef3f4;
-        color: var(--muted);
-      }
-      .pipe-card.is-running .pipe-badge {
-        background: #d8f0f5;
-        color: #0e5866;
-      }
-      .pipe-card.is-done .pipe-badge {
-        background: #d5efe4;
-        color: #0f523f;
-      }
-      .pipe-card.is-failed .pipe-badge {
-        background: #ffd9d4;
-        color: var(--red);
-      }
-      .pipe-card h3 {
+      .detail-lead p {
         margin: 0;
-        font-size: 16px;
-        font-weight: 750;
-        color: var(--ink);
-      }
-      .pipe-card p {
-        margin: 0;
-        font-size: 12.8px;
-        line-height: 1.5;
+        font-size: 13.8px;
+        line-height: 1.45;
         color: var(--ink-soft);
+        max-width: 920px;
       }
-      .pipe-list {
-        list-style: none;
-        margin: 2px 0 0;
-        padding: 0;
+
+      .detail-tag {
+        flex: none;
+        font-family: var(--mono);
+        font-size: 11.5px;
+        font-weight: 700;
+        padding: 5px 11px;
+        border-radius: 999px;
+        background: rgba(76, 210, 157, 0.14);
+        border: 1px solid rgba(110, 231, 191, 0.34);
+        color: #8df0ca;
+        white-space: nowrap;
+      }
+
+      .detail-cards {
         display: grid;
-        gap: 5px;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 13px;
+        flex: 1;
+        min-height: 0;
       }
-      .pipe-list li {
-        font-size: 12px;
-        color: var(--muted);
+
+      .detail-cards.is-four {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .d-card {
+        background: var(--card-bg);
+        border: 1px solid var(--card-border);
+        border-radius: 13px;
+        padding: 13px 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        min-height: 0;
+      }
+
+      .d-card.is-teal {
+        border-color: rgba(90, 210, 230, 0.34);
+        background: rgba(10, 34, 42, 0.68);
+      }
+
+      .d-card.is-amber {
+        border-color: rgba(245, 194, 107, 0.32);
+        background: rgba(42, 31, 12, 0.56);
+      }
+
+      .d-card.is-red {
+        border-color: rgba(255, 138, 125, 0.34);
+        background: rgba(48, 18, 16, 0.6);
+      }
+
+      .d-card-head {
         display: flex;
         align-items: center;
-        gap: 6px;
+        justify-content: space-between;
+        gap: 8px;
       }
-      .pipe-list li::before {
-        content: '';
-        width: 5px;
-        height: 5px;
+
+      .d-card h3 {
+        margin: 0;
+        font-size: 13.8px;
+        font-weight: 750;
+        color: #f4fcf9;
+      }
+
+      .d-card-badge {
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 7px;
         border-radius: 999px;
-        background: var(--emerald);
-        flex: none;
+        background: rgba(255, 255, 255, 0.08);
+        color: #8ee5c4;
+        white-space: nowrap;
       }
-      .pipe-progress {
+
+      .d-card.is-teal .d-card-badge {
+        color: #8ee6f5;
+      }
+      .d-card.is-amber .d-card-badge {
+        color: #fbd48c;
+      }
+      .d-card.is-red .d-card-badge {
+        color: #ffada4;
+      }
+
+      .d-card p {
+        margin: 0;
+        font-size: 12.4px;
+        line-height: 1.48;
+        color: #c2dfd5;
+      }
+
+      .d-card code {
+        font-family: var(--mono);
+        font-size: 11.2px;
+        padding: 1px 5px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.1);
+        color: #8df0ca;
+      }
+
+      .d-card-foot {
         margin-top: auto;
-        height: 5px;
-        border-radius: 999px;
-        background: #e3ecea;
-        overflow: hidden;
-      }
-      .pipe-progress-fill {
-        height: 100%;
-        width: 0%;
-        border-radius: 999px;
-        background: var(--emerald);
-        transition: width 0.4s ease;
-      }
-      .pipe-card.is-running .pipe-progress-fill {
-        background: var(--teal);
-      }
-      .pipe-card.is-failed .pipe-progress-fill {
-        background: var(--red);
-      }
-      .pipe-detail {
+        padding-top: 6px;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
         font-family: var(--mono);
         font-size: 11px;
-        color: var(--muted);
-        min-height: 16px;
-      }
-      .pipe-card.is-failed .pipe-detail {
-        color: var(--red);
-        font-weight: 600;
-      }
-
-      /* Generic panels / grids */
-      .cols-3 {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-        flex: 1;
-        min-height: 0;
-        align-items: stretch;
-      }
-      .cols-2 {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 18px;
-        flex: 1;
-        min-height: 0;
-        align-items: stretch;
-      }
-      .card {
-        background: var(--surface-soft);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 16px 18px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        min-height: 0;
-      }
-      .card-white {
-        background: #fff;
-      }
-      .card-title {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 15.5px;
-        font-weight: 750;
-        color: var(--ink);
-        margin: 0;
-      }
-      .icon-box {
-        width: 34px;
-        height: 34px;
-        border-radius: 9px;
-        display: grid;
-        place-items: center;
-        background: var(--emerald-soft);
-        color: var(--emerald);
-        flex: none;
-      }
-      .icon-box.is-red {
-        background: var(--red-soft);
-        color: var(--red);
-      }
-      .icon-box.is-teal {
-        background: var(--teal-soft);
-        color: var(--teal);
-      }
-      .icon-box.is-amber {
-        background: var(--amber-soft);
-        color: var(--amber);
-      }
-
-      /* Code chips */
-      code {
-        font-family: var(--mono);
-        font-size: 0.9em;
-        padding: 2px 6px;
-        border-radius: 5px;
-        background: #eaf1ef;
-        color: #114336;
-      }
-
-      /* Slide 3 Trust gate */
-      .format-pill-row {
-        display: grid;
-        gap: 9px;
-      }
-      .format-item {
-        background: #fff;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 11px 13px;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-      .format-ext {
-        width: 44px;
-        height: 32px;
-        border-radius: 7px;
-        display: grid;
-        place-items: center;
-        font-family: var(--mono);
-        font-size: 11.5px;
-        font-weight: 800;
-        background: var(--emerald);
-        color: #fff;
-        flex: none;
-      }
-      .format-ext.is-md {
-        background: var(--teal);
-      }
-      .format-ext.is-csv {
-        background: #2e6b4f;
-      }
-      .format-item strong {
-        display: block;
-        font-size: 13px;
-      }
-      .format-item small {
-        color: var(--muted);
-        font-size: 11.8px;
-      }
-
-      .gate-box {
-        border-radius: 12px;
-        padding: 12px 14px;
-        border: 1px solid var(--border);
-        background: #fff;
-        display: grid;
-        gap: 4px;
-      }
-      .gate-box.is-allow {
-        border-color: #9ecdbc;
-        background: #eff9f4;
-      }
-      .gate-box.is-block {
-        border-color: var(--red-border);
-        background: var(--red-soft);
-      }
-      .gate-box strong {
-        font-size: 13px;
-      }
-      .gate-box small {
-        font-size: 12px;
-        color: var(--ink-soft);
-      }
-
-      .tier-step {
-        display: flex;
-        gap: 10px;
-        align-items: flex-start;
-        background: #fff;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 8px 11px;
-      }
-      .tier-num {
-        width: 24px;
-        height: 24px;
-        border-radius: 999px;
-        background: var(--emerald);
-        color: #fff;
-        font-size: 12px;
-        font-weight: 800;
-        display: grid;
-        place-items: center;
-        flex: none;
-        margin-top: 1px;
-      }
-      .tier-step strong {
-        display: block;
-        font-size: 12.6px;
-        margin-bottom: 1px;
-      }
-      .tier-step small {
-        font-size: 11.4px;
-        color: var(--muted);
-        line-height: 1.38;
-      }
-
-      /* Slide 4 Chunking */
-      .chunk-visual {
-        display: grid;
-        gap: 8px;
-      }
-      .chunk-bad {
-        border: 1px dashed var(--red-border);
-        background: var(--red-soft);
-        border-radius: 10px;
-        padding: 9px 12px;
-        font-size: 12px;
-        color: #6b2620;
-        line-height: 1.4;
-      }
-      .chunk-good-list {
-        display: grid;
-        gap: 7px;
-      }
-      .chunk-box {
-        background: #fff;
-        border: 1.5px solid #a9d3c3;
-        border-left: 5px solid var(--emerald);
-        border-radius: 10px;
-        padding: 8px 12px;
-        display: grid;
-        gap: 3px;
-      }
-      .chunk-box-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 8px;
-      }
-      .chunk-box-head strong {
-        font-family: var(--mono);
-        font-size: 12px;
-        color: var(--emerald-dark);
-      }
-      .chunk-box-head span {
-        font-size: 10.5px;
-        font-family: var(--mono);
-        color: var(--muted);
-        background: var(--surface-soft);
-        padding: 1px 7px;
-        border-radius: 999px;
-        border: 1px solid var(--border);
-      }
-      .chunk-box p {
-        margin: 0;
-        font-size: 12px;
-        color: var(--ink-soft);
-        line-height: 1.38;
-      }
-
-      .hash-card {
-        background: #0f2c25;
-        color: #e4f5ef;
-        border-radius: 12px;
-        padding: 12px 15px;
-        display: grid;
-        gap: 6px;
-        margin-top: auto;
-      }
-      .hash-card small {
-        color: #79d2b2;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        font-size: 10px;
-      }
-      .hash-formula {
-        font-family: var(--mono);
-        font-size: 11.5px;
-        color: #ffffff;
-        background: rgba(255, 255, 255, 0.08);
-        padding: 7px 10px;
-        border-radius: 7px;
+        color: #8ec9b6;
         overflow-wrap: anywhere;
       }
-      .hash-card p {
-        margin: 0;
-        font-size: 11.8px;
-        color: #b7dbd0;
-        line-height: 1.4;
+
+      /* Progress bar */
+      .progress-rail {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.08);
       }
 
-      /* Slide 5 Vector Space */
-      .vec-strip {
-        display: flex;
-        gap: 5px;
-        flex-wrap: wrap;
-        font-family: var(--mono);
-        font-size: 11.5px;
-      }
-      .vec-num {
-        padding: 4px 7px;
-        border-radius: 6px;
-        background: var(--emerald-soft);
-        color: var(--emerald-dark);
-        border: 1px solid #bce0d2;
-        font-weight: 700;
-      }
-      .vec-num.neg {
-        background: var(--teal-soft);
-        color: #125866;
-        border-color: #b7dce4;
-      }
-
-      /* Slide 7 Hybrid Retrieval */
-      .hybrid-grid {
-        display: grid;
-        grid-template-columns: 1.35fr 0.65fr;
-        gap: 16px;
-        flex: 1;
-        min-height: 0;
-        align-items: stretch;
-      }
-      .rrf-bars {
-        display: grid;
-        gap: 7px;
-      }
-      .rrf-item {
-        background: #fff;
-        border: 1px solid var(--border);
-        border-radius: 9px;
-        padding: 7px 10px;
-        display: grid;
-        gap: 4px;
-      }
-      .rrf-item.is-top {
-        border-color: var(--emerald);
-        background: #eff9f4;
-      }
-      .rrf-head {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 8px;
-        font-size: 12.5px;
-      }
-      .rrf-head strong {
-        font-family: var(--mono);
-        color: var(--ink);
-      }
-      .rrf-score {
-        font-family: var(--mono);
-        font-size: 11.5px;
-        font-weight: 700;
-        color: var(--emerald-dark);
-      }
-      .rrf-track {
-        height: 8px;
-        border-radius: 999px;
-        background: #e5eeec;
-        overflow: hidden;
-        display: flex;
-      }
-      .rrf-seg-vec {
-        background: var(--teal);
+      .progress-fill {
         height: 100%;
-        transition: width 0.5s ease;
-      }
-      .rrf-seg-bm25 {
-        background: var(--emerald);
-        height: 100%;
-        transition: width 0.5s ease;
-      }
-      .rrf-legend {
-        display: flex;
-        gap: 12px;
-        font-size: 11.5px;
-        color: var(--muted);
-      }
-      .rrf-legend span {
-        display: inline-flex;
-        align-items: center;
-        gap: 5px;
-      }
-      .swatch {
-        width: 9px;
-        height: 9px;
-        border-radius: 3px;
-        display: inline-block;
-      }
-
-      /* Slide 8 Summary Grid */
-      .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 16px;
-        flex: 1;
-      }
-      .summary-card {
-        background: var(--surface-soft);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        padding: 20px;
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        transition:
-          transform 0.2s,
-          border-color 0.2s,
-          box-shadow 0.2s;
-      }
-      .summary-card:hover {
-        transform: translateY(-3px);
-        border-color: #96c5b5;
-        box-shadow: 0 10px 24px rgba(16, 42, 36, 0.08);
-      }
-      .summary-card h3 {
-        margin: 0;
-        font-size: 15.5px;
-        font-weight: 750;
-      }
-      .summary-card p {
-        margin: 0;
-        font-size: 13px;
-        line-height: 1.55;
-        color: var(--ink-soft);
-      }
-      .summary-metric {
-        margin-top: auto;
-        font-family: var(--mono);
-        font-size: 11.5px;
-        font-weight: 700;
-        color: var(--emerald-dark);
-        padding-top: 8px;
-        border-top: 1px solid var(--border);
+        background: linear-gradient(90deg, #27a37e, #5ad2e6);
+        transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
       }
 
       /* Bottom Presenter Controls */
       .deck-controls {
         position: fixed;
         left: 50%;
-        bottom: 14px;
+        bottom: 12px;
         transform: translateX(-50%);
         z-index: 20;
         display: flex;
         align-items: center;
-        gap: 12px;
-        padding: 7px 14px;
+        gap: 11px;
+        padding: 6px 14px;
         border-radius: 999px;
-        background: rgba(11, 35, 29, 0.88);
-        border: 1px solid rgba(145, 214, 191, 0.22);
+        background: rgba(9, 30, 25, 0.92);
+        border: 1px solid rgba(139, 224, 194, 0.26);
         backdrop-filter: blur(12px);
         color: #dff5ed;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.42);
       }
 
       .nav-btn {
-        width: 32px;
-        height: 32px;
+        width: 31px;
+        height: 31px;
         border-radius: 999px;
-        border: 1px solid rgba(255, 255, 255, 0.16);
+        border: 1px solid rgba(255, 255, 255, 0.18);
         background: rgba(255, 255, 255, 0.06);
-        color: #eaf9f3;
+        color: #eefaf5;
         display: grid;
         place-items: center;
         cursor: pointer;
@@ -1001,12 +517,14 @@
           background 0.15s,
           border-color 0.15s;
       }
+
       .nav-btn:hover:not(:disabled) {
-        background: var(--emerald);
-        border-color: #53c79e;
+        background: #176753;
+        border-color: #6ee7bf;
       }
+
       .nav-btn:disabled {
-        opacity: 0.32;
+        opacity: 0.3;
         cursor: not-allowed;
       }
 
@@ -1015,6 +533,7 @@
         align-items: center;
         gap: 6px;
       }
+
       .dot-btn {
         width: 9px;
         height: 9px;
@@ -1027,10 +546,12 @@
           width 0.22s ease,
           background 0.22s ease;
       }
+
       .dot-btn.is-active {
         width: 24px;
         background: #4cd29d;
       }
+
       .dot-btn:hover:not(.is-active) {
         background: rgba(255, 255, 255, 0.55);
       }
@@ -1044,36 +565,18 @@
         text-align: center;
       }
 
-      .progress-rail {
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        height: 3px;
-        background: rgba(16, 42, 36, 0.08);
-        z-index: 10;
-      }
-      .progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, var(--emerald), #35b98b);
-        transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
-      }
-
-      /* Responsive */
-      @media (max-width: 1060px) {
-        .slide {
-          padding: 28px 28px 24px;
+      @media (max-width: 1020px) {
+        .stage {
+          padding: 16px;
+          grid-template-rows: auto auto 1fr;
+          overflow-y: auto;
         }
-        .hero-grid,
-        .cols-3,
-        .cols-2,
-        .pipeline-grid,
-        .hybrid-grid,
-        .summary-grid {
+        .detail-cards,
+        .detail-cards.is-four {
           grid-template-columns: 1fr;
         }
-        .stage {
-          height: 100%;
+        .stage-pills {
+          display: none;
         }
       }
 
@@ -1088,14 +591,14 @@
     </style>
   </head>
   <body>
-    <main class="deck" aria-label="Credit Copilot Ingestion and Vector DB Presentation">
+    <main class="deck" aria-label="Credit Copilot Ingestion and Vector DB Spotlight Presentation">
       <div class="stage">
         <!-- ======================================================= -->
-        <!-- SLIDE 1: HERO / TITLE                                   -->
+        <!-- TOP HEADER + STAGE PILLS                                -->
         <!-- ======================================================= -->
-        <section class="slide is-hero is-active" data-title="Overview">
-          <div class="hero-brand reveal d1">
-            <svg width="38" height="38" viewBox="0 0 36 36" fill="none" aria-hidden="true">
+        <header class="topbar">
+          <div class="brand-block">
+            <svg width="40" height="40" viewBox="0 0 36 36" fill="none" aria-hidden="true">
               <rect width="36" height="36" rx="10" fill="#176753" />
               <path d="M18 7L29 12.5H7L18 7Z" fill="#E8F7F1" />
               <rect x="8.5" y="14" width="19" height="1.8" rx="0.9" fill="#9EE2C8" />
@@ -1104,1077 +607,491 @@
               <rect x="23.4" y="17.2" width="2.4" height="8.8" rx="0.8" fill="#E8F7F1" />
               <rect x="7" y="27.2" width="22" height="2.3" rx="1.15" fill="#4CD29D" />
             </svg>
-            <div>
-              <div class="hero-brand-name">Credit Copilot · Delta Commercial Bank</div>
-              <div class="hero-brand-sub">RAG Knowledge Architecture Deep-Dive</div>
+            <div class="title-wrap">
+              <div class="step-eyebrow" id="stepEyebrow">STEP 01 OF 07 · FULL ARCHITECTURE</div>
+              <h1 class="slide-title" id="slideTitle">Policy Ingestion &amp; Vector Database Overview</h1>
             </div>
           </div>
 
-          <div class="hero-grid">
-            <div>
-              <div class="eyebrow reveal d1">Knowledge Layer Architecture</div>
-              <h1 class="reveal d2">Policy Ingestion &amp; Vector Database</h1>
-              <p class="subtitle reveal d3">
-                How Credit Copilot transforms dated banking policies (PDF, Markdown &amp; CSV) into
-                tamper-proof, clause-indexed vectors inside <strong>PostgreSQL 17 + pgvector</strong>
-                for grounded hybrid retrieval.
-              </p>
-              <div class="hero-pills reveal d4">
-                <span class="hero-pill"><span class="dot"></span>4-Stage Live SSE Pipeline</span>
-                <span class="hero-pill"><span class="dot"></span>Clause-Aware Chunking</span>
-                <span class="hero-pill"><span class="dot"></span>PostgreSQL + pgvector</span>
-                <span class="hero-pill"><span class="dot"></span>Cosine + BM25 + RRF (k=60)</span>
-              </div>
-            </div>
-
-            <div class="hero-visual reveal d3" aria-label="High-level data flow diagram">
-              <svg viewBox="0 0 470 310" style="width: 100%; height: auto; display: block" role="img">
-                <defs>
-                  <linearGradient id="gEmerald" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stop-color="#229678" />
-                    <stop offset="100%" stop-color="#145a48" />
-                  </linearGradient>
-                  <linearGradient id="gTeal" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stop-color="#2ca1b5" />
-                    <stop offset="100%" stop-color="#196978" />
-                  </linearGradient>
-                </defs>
-
-                <!-- Connectors -->
-                <path
-                  d="M115 72 H175 M115 155 H175 M115 238 H175"
-                  stroke="#4cd29d"
-                  stroke-width="2"
-                  fill="none"
-                  class="flow-line"
-                />
-                <path
-                  d="M275 155 H330"
-                  stroke="#6be4c2"
-                  stroke-width="2.4"
-                  fill="none"
-                  class="flow-line"
-                />
-
-                <!-- Source docs -->
-                <g class="float-soft">
-                  <rect
-                    x="14"
-                    y="46"
-                    width="102"
-                    height="52"
-                    rx="10"
-                    fill="#123a30"
-                    stroke="#3b8f78"
-                    stroke-width="1.3"
-                  />
-                  <text x="65" y="69" text-anchor="middle" fill="#6ee7bf" font-size="11" font-weight="700" font-family="monospace">
-                    PDF Policy
-                  </text>
-                  <text x="65" y="86" text-anchor="middle" fill="#b7dcd0" font-size="10">
-                    CP-2025 · PM-4
-                  </text>
-                </g>
-
-                <g class="float-soft-2">
-                  <rect
-                    x="14"
-                    y="129"
-                    width="102"
-                    height="52"
-                    rx="10"
-                    fill="#123a30"
-                    stroke="#3b8f78"
-                    stroke-width="1.3"
-                  />
-                  <text x="65" y="152" text-anchor="middle" fill="#6ee7bf" font-size="11" font-weight="700" font-family="monospace">
-                    Markdown
-                  </text>
-                  <text x="65" y="169" text-anchor="middle" fill="#b7dcd0" font-size="10">
-                    Circulars &amp; Sheets
-                  </text>
-                </g>
-
-                <g class="float-soft">
-                  <rect
-                    x="14"
-                    y="212"
-                    width="102"
-                    height="52"
-                    rx="10"
-                    fill="#123a30"
-                    stroke="#3b8f78"
-                    stroke-width="1.3"
-                  />
-                  <text x="65" y="235" text-anchor="middle" fill="#6ee7bf" font-size="11" font-weight="700" font-family="monospace">
-                    Pricing CSV
-                  </text>
-                  <text x="65" y="252" text-anchor="middle" fill="#b7dcd0" font-size="10">
-                    Exact Decimal Rows
-                  </text>
-                </g>
-
-                <!-- Pipeline Engine -->
-                <rect
-                  x="175"
-                  y="74"
-                  width="100"
-                  height="162"
-                  rx="14"
-                  fill="url(#gEmerald)"
-                  stroke="#72e4be"
-                  stroke-width="1.5"
-                />
-                <text x="225" y="102" text-anchor="middle" fill="#ffffff" font-size="11.5" font-weight="800">
-                  INGESTION
-                </text>
-                <rect x="187" y="114" width="76" height="22" rx="6" fill="rgba(0,0,0,0.22)" />
-                <text x="225" y="129" text-anchor="middle" fill="#dff8ef" font-size="10" font-weight="600">
-                  1. Extract
-                </text>
-                <rect x="187" y="142" width="76" height="22" rx="6" fill="rgba(0,0,0,0.22)" />
-                <text x="225" y="157" text-anchor="middle" fill="#dff8ef" font-size="10" font-weight="600">
-                  2. Chunk
-                </text>
-                <rect x="187" y="170" width="76" height="22" rx="6" fill="rgba(0,0,0,0.22)" />
-                <text x="225" y="185" text-anchor="middle" fill="#dff8ef" font-size="10" font-weight="600">
-                  3. Embed
-                </text>
-                <rect x="187" y="198" width="76" height="22" rx="6" fill="rgba(0,0,0,0.22)" />
-                <text x="225" y="213" text-anchor="middle" fill="#dff8ef" font-size="10" font-weight="600">
-                  4. Index
-                </text>
-
-                <!-- Vector DB cylinder -->
-                <g>
-                  <path
-                    d="M332 95 C332 78, 452 78, 452 95 V215 C452 232, 332 232, 332 215 Z"
-                    fill="url(#gTeal)"
-                    stroke="#8be5f2"
-                    stroke-width="1.5"
-                  />
-                  <ellipse
-                    cx="392"
-                    cy="95"
-                    rx="60"
-                    ry="16"
-                    fill="#2db0c4"
-                    stroke="#8be5f2"
-                    stroke-width="1.5"
-                  />
-                  <text x="392" y="138" text-anchor="middle" fill="#fff" font-size="12" font-weight="800">
-                    pgvector DB
-                  </text>
-                  <text x="392" y="156" text-anchor="middle" fill="#d9f6fb" font-size="10" font-family="monospace">
-                    knowledge.*
-                  </text>
-                  <rect x="348" y="168" width="88" height="19" rx="5" fill="rgba(0,0,0,0.22)" />
-                  <text x="392" y="181" text-anchor="middle" fill="#e6fbff" font-size="9.5" font-family="monospace">
-                    Vector + GIN
-                  </text>
-                  <rect x="348" y="192" width="88" height="19" rx="5" fill="rgba(0,0,0,0.22)" />
-                  <text x="392" y="205" text-anchor="middle" fill="#e6fbff" font-size="9.5" font-family="monospace">
-                    Dated Clauses
-                  </text>
-                </g>
-
-                <!-- Bottom security badge -->
-                <rect
-                  x="130"
-                  y="268"
-                  width="322"
-                  height="28"
-                  rx="8"
-                  fill="rgba(255,255,255,0.06)"
-                  stroke="rgba(110,231,191,0.28)"
-                />
-                <text x="291" y="286" text-anchor="middle" fill="#9ee5cd" font-size="10.5" font-weight="600">
-                  Zero Customer PII in Vector DB · Strictly Separated from cases.*
-                </text>
-              </svg>
-            </div>
-          </div>
-
-          <div class="hero-foot reveal d5">
-            <span>Use <strong>← / →</strong> or <strong>Space</strong> to navigate · Press <strong>F</strong> for fullscreen</span>
-            <span>8 Interactive Slides</span>
-          </div>
-        </section>
+          <div class="stage-pills" id="stagePills" role="tablist" aria-label="Focus stage"></div>
+        </header>
 
         <!-- ======================================================= -->
-        <!-- SLIDE 2: 4-STAGE LIVE INGESTION PIPELINE                -->
+        <!-- GIANT PERSISTENT MASTER ARCHITECTURE DIAGRAM            -->
         <!-- ======================================================= -->
-        <section class="slide" data-title="4-Stage Ingestion Pipeline">
-          <div class="slide-top">
-            <div>
-              <div class="eyebrow">End-to-End Flow</div>
-              <h2>The 4-Stage Live Policy Ingestion Pipeline</h2>
-              <p class="subtitle">
-                Every policy upload streams real-time progress over Server-Sent Events (SSE) through
-                four deterministic stages — click below to watch both a valid policy and a blocked
-                customer pack.
-              </p>
-            </div>
-            <span class="slide-tag">POST /knowledge/ingestions/streams</span>
-          </div>
+        <section class="diagram-shell" aria-label="Interactive Policy Ingestion and Vector DB Diagram">
+          <span class="diagram-hint">Click any block to focus · ← / → keys · F fullscreen</span>
 
-          <div class="sim-bar reveal d1">
-            <div class="sim-controls">
-              <button type="button" class="btn btn-primary" id="btnSimPolicy">
-                ▶ Simulate Policy Upload (credit-policy-2025.pdf)
-              </button>
-              <button type="button" class="btn btn-danger" id="btnSimBlocked">
-                ✕ Simulate Customer Pack (APP-001.pdf)
-              </button>
-              <button type="button" class="btn" id="btnSimReset">↺ Reset</button>
-            </div>
-            <span class="sim-status" id="simStatus">Ready · Click to run live simulation</span>
-          </div>
+          <svg
+            id="masterSvg"
+            class="master-svg"
+            data-focus="overview"
+            viewBox="0 0 1240 370"
+            role="img"
+            aria-label="Credit Copilot Policy Ingestion and pgvector Architecture Diagram"
+          >
+            <defs>
+              <linearGradient id="gEmeraldCard" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#1b6b56" />
+                <stop offset="100%" stop-color="#104437" />
+              </linearGradient>
+              <linearGradient id="gEmbedCard" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#1f7b7a" />
+                <stop offset="100%" stop-color="#124e52" />
+              </linearGradient>
+              <linearGradient id="gDbBody" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#228fa3" />
+                <stop offset="100%" stop-color="#125565" />
+              </linearGradient>
+              <linearGradient id="gDbTop" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#36b8cc" />
+                <stop offset="100%" stop-color="#2290a4" />
+              </linearGradient>
+              <marker
+                id="arrowGreen"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="6.5"
+                markerHeight="6.5"
+                orient="auto-start-reverse"
+              >
+                <path d="M1 1.5L8.5 5L1 8.5Z" fill="#5fe0b0" />
+              </marker>
+              <marker
+                id="arrowTeal"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="6.5"
+                markerHeight="6.5"
+                orient="auto-start-reverse"
+              >
+                <path d="M1 1.5L8.5 5L1 8.5Z" fill="#6ae0f2" />
+              </marker>
+              <marker
+                id="arrowRed"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="6.5"
+                markerHeight="6.5"
+                orient="auto-start-reverse"
+              >
+                <path d="M1 1.5L8.5 5L1 8.5Z" fill="#ff8a7d" />
+              </marker>
+            </defs>
 
-          <div class="pipeline-wrap">
-            <!-- Animated connector rail -->
-            <svg viewBox="0 0 1160 36" width="100%" height="26" aria-hidden="true" class="reveal d2">
-              <line
-                x1="120"
-                y1="18"
-                x2="1040"
-                y2="18"
-                stroke="#cfe0dc"
+            <!-- Background Pipeline Frame -->
+            <g class="pipeline-frame" style="transition: opacity 0.4s ease">
+              <rect
+                x="236"
+                y="20"
+                width="712"
+                height="276"
+                rx="18"
+                fill="rgba(16, 62, 50, 0.34)"
+                stroke="rgba(110, 231, 191, 0.3)"
+                stroke-width="1.5"
+                stroke-dasharray="7 5"
+              />
+              <text
+                x="256"
+                y="45"
+                fill="#7be6c1"
+                font-size="12"
+                font-weight="800"
+                letter-spacing="1.4"
+                font-family="monospace"
+              >
+                4-STAGE LIVE SSE INGESTION PIPELINE (POST /api/v1/knowledge/ingestions/streams)
+              </text>
+            </g>
+
+            <!-- ===================================================== -->
+            <!-- CONNECTING WIRES WITH ANIMATED FLOW                   -->
+            <!-- ===================================================== -->
+            <!-- Sources -> Extract -->
+            <g class="diag-wire wire-src-ext">
+              <path
+                d="M192 84 C216 84, 218 156, 250 156"
+                stroke="#5fe0b0"
+                stroke-width="2.4"
+                fill="none"
+                class="flow-anim"
+                marker-end="url(#arrowGreen)"
+              />
+              <path
+                d="M192 156 H250"
+                stroke="#5fe0b0"
+                stroke-width="2.6"
+                fill="none"
+                class="flow-anim"
+                marker-end="url(#arrowGreen)"
+              />
+              <path
+                d="M192 228 C216 228, 218 156, 250 156"
+                stroke="#5fe0b0"
+                stroke-width="2.4"
+                fill="none"
+                class="flow-anim"
+                marker-end="url(#arrowGreen)"
+              />
+            </g>
+
+            <!-- Blocked Customer Pack -> Shield -->
+            <g class="diag-wire wire-blocked">
+              <path
+                d="M192 318 H326 V266"
+                stroke="#ff8a7d"
+                stroke-width="2.2"
+                stroke-dasharray="5 5"
+                fill="none"
+                marker-end="url(#arrowRed)"
+              />
+              <rect x="206" y="303" width="110" height="22" rx="6" fill="#471815" stroke="#ff8a7d" stroke-width="1" />
+              <text x="261" y="318" text-anchor="middle" fill="#ffb8b0" font-size="10" font-weight="800" font-family="monospace">
+                403 BLOCKED
+              </text>
+            </g>
+
+            <!-- Extract -> Chunk -->
+            <g class="diag-wire wire-ext-chk">
+              <path
+                d="M402 156 H430"
+                stroke="#5fe0b0"
+                stroke-width="2.8"
+                fill="none"
+                class="flow-anim"
+                marker-end="url(#arrowGreen)"
+              />
+            </g>
+
+            <!-- Chunk -> Embed -->
+            <g class="diag-wire wire-chk-emb">
+              <path
+                d="M582 156 H610"
+                stroke="#5fe0b0"
+                stroke-width="2.8"
+                fill="none"
+                class="flow-anim"
+                marker-end="url(#arrowGreen)"
+              />
+            </g>
+
+            <!-- Embed -> Index -->
+            <g class="diag-wire wire-emb-idx">
+              <path
+                d="M762 156 H790"
+                stroke="#6ae0f2"
+                stroke-width="2.8"
+                fill="none"
+                class="flow-anim"
+                marker-end="url(#arrowTeal)"
+              />
+            </g>
+
+            <!-- Index -> pgvector DB -->
+            <g class="diag-wire wire-idx-db">
+              <path
+                d="M936 156 H986"
+                stroke="#6ae0f2"
                 stroke-width="3"
-                stroke-linecap="round"
+                fill="none"
+                class="flow-anim"
+                marker-end="url(#arrowTeal)"
               />
-              <line
-                id="pipeTrackFill"
-                x1="120"
-                y1="18"
-                x2="120"
-                y2="18"
-                stroke="#176753"
-                stroke-width="3.5"
-                stroke-linecap="round"
-                style="transition: x2 0.45s ease, stroke 0.25s ease"
+            </g>
+
+            <!-- ===================================================== -->
+            <!-- NODE 1: SOURCE DOCUMENTS + BLOCKED CUSTOMER PACK      -->
+            <!-- ===================================================== -->
+            <g class="diag-node node-sources" data-jump="1" tabindex="0" role="button" aria-label="Focus Policy Sources">
+              <rect
+                class="spotlight-ring"
+                x="10"
+                y="34"
+                width="190"
+                height="316"
+                rx="16"
+                fill="none"
+                stroke="#4cd29d"
+                stroke-width="2.8"
               />
-              <circle cx="120" cy="18" r="7" fill="#176753" />
-              <circle cx="426" cy="18" r="7" fill="#176753" />
-              <circle cx="733" cy="18" r="7" fill="#176753" />
-              <circle cx="1040" cy="18" r="7" fill="#176753" />
-              <circle id="pipePulse" cx="120" cy="18" r="5" fill="#4cd29d" opacity="0" />
-            </svg>
-
-            <div class="pipeline-grid reveal d3">
-              <article class="pipe-card" data-pipe="0">
-                <div class="pipe-head">
-                  <span class="pipe-step">1</span>
-                  <span class="pipe-badge" data-badge>QUEUED</span>
-                </div>
-                <h3>Extract &amp; Verify</h3>
-                <p>Parse PDF/MD/CSV, reject customer packs, and resolve edition &amp; validity dates.</p>
-                <ul class="pipe-list">
-                  <li>SHA-256 content hash</li>
-                  <li>Anti-PII / customer gate</li>
-                  <li>Header metadata extraction</li>
-                </ul>
-                <div class="pipe-progress"><div class="pipe-progress-fill" data-bar></div></div>
-                <div class="pipe-detail" data-detail>Waiting for file…</div>
-              </article>
-
-              <article class="pipe-card" data-pipe="1">
-                <div class="pipe-head">
-                  <span class="pipe-step">2</span>
-                  <span class="pipe-badge" data-badge>QUEUED</span>
-                </div>
-                <h3>Clause Chunking</h3>
-                <p>Split along banking clause boundaries (<code>CP-*</code>, <code>PM-*</code>, <code>PS-*</code>) with overlap.</p>
-                <ul class="pipe-list">
-                  <li><code>clause-cl100k-v3</code></li>
-                  <li>Max 800 tokens / 60 overlap</li>
-                  <li>Idempotent SHA-256 chunk IDs</li>
-                </ul>
-                <div class="pipe-progress"><div class="pipe-progress-fill" data-bar></div></div>
-                <div class="pipe-detail" data-detail>Waiting for extraction…</div>
-              </article>
-
-              <article class="pipe-card" data-pipe="2">
-                <div class="pipe-head">
-                  <span class="pipe-step">3</span>
-                  <span class="pipe-badge" data-badge>QUEUED</span>
-                </div>
-                <h3>Vector Embedding</h3>
-                <p>Encode each chunk into a validated dense semantic vector (Gemini or Ollama).</p>
-                <ul class="pipe-list">
-                  <li>Finite-number dimension check</li>
-                  <li>Live per-chunk SSE progress</li>
-                  <li>Skipped automatically if unchanged</li>
-                </ul>
-                <div class="pipe-progress"><div class="pipe-progress-fill" data-bar></div></div>
-                <div class="pipe-detail" data-detail>Waiting for chunks…</div>
-              </article>
-
-              <article class="pipe-card" data-pipe="3">
-                <div class="pipe-head">
-                  <span class="pipe-step">4</span>
-                  <span class="pipe-badge" data-badge>QUEUED</span>
-                </div>
-                <h3>Atomic DB Index</h3>
-                <p>Commit documents, chunks, tsvectors, embeddings &amp; pricing rows in one transaction.</p>
-                <ul class="pipe-list">
-                  <li><code>pg_advisory_xact_lock</code></li>
-                  <li>GIN + pgvector + date B-tree</li>
-                  <li>Zero partial chunks on failure</li>
-                </ul>
-                <div class="pipe-progress"><div class="pipe-progress-fill" data-bar></div></div>
-                <div class="pipe-detail" data-detail>Waiting for vectors…</div>
-              </article>
-            </div>
-          </div>
-        </section>
-
-        <!-- ======================================================= -->
-        <!-- SLIDE 3: STAGE 1 - PARSING, TRUST GATE & AUTO-METADATA  -->
-        <!-- ======================================================= -->
-        <section class="slide" data-title="Extract & Trust Gate">
-          <div class="slide-top">
-            <div>
-              <div class="eyebrow">Stage 1 · Extract &amp; Governance</div>
-              <h2>Multi-Format Parsing, Trust Firewall &amp; Metadata Resolution</h2>
-              <p class="subtitle">
-                Before any text is chunked or embedded, Credit Copilot validates file integrity,
-                enforces strict policy-only isolation, and extracts edition &amp; effective dates
-                directly from the document.
-              </p>
-            </div>
-            <span class="slide-tag">ParserRegistry + policy-metadata.ts</span>
-          </div>
-
-          <div class="cols-3">
-            <!-- Col 1: Parsers -->
-            <div class="card reveal d1">
-              <h3 class="card-title">
-                <span class="icon-box">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <path d="M5 3H12L16 7V17H5V3Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
-                    <path d="M12 3V7H16M7.5 11H13.5M7.5 14H11.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                  </svg>
-                </span>
-                Normalized Parsers
-              </h3>
-              <div class="format-pill-row">
-                <div class="format-item">
-                  <span class="format-ext">PDF</span>
-                  <div>
-                    <strong>pdf.js Coordinate Sort</strong>
-                    <small>Verifies <code>%PDF-</code> header, ≤100 pages, preserves page numbers (no OCR).</small>
-                  </div>
-                </div>
-                <div class="format-item">
-                  <span class="format-ext is-md">MD</span>
-                  <div>
-                    <strong>remark AST Parser</strong>
-                    <small>Strict UTF-8 decode, tracks Markdown heading hierarchy per section.</small>
-                  </div>
-                </div>
-                <div class="format-item">
-                  <span class="format-ext is-csv">CSV</span>
-                  <div>
-                    <strong>Structured Row Blocks</strong>
-                    <small>Unique headers, row numbers preserved, feeds exact rows to <code>knowledge.pricing</code>.</small>
-                  </div>
-                </div>
-              </div>
-              <small style="color: var(--muted); margin-top: auto">
-                All text normalized with <code>NFKC</code> + deterministic SHA-256 file hash.
-              </small>
-            </div>
-
-            <!-- Col 2: Trust Firewall -->
-            <div class="card reveal d2">
-              <h3 class="card-title">
-                <span class="icon-box is-red">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <path d="M10 2.5L16.5 5V10C16.5 13.9 13.7 16.9 10 18C6.3 16.9 3.5 13.9 3.5 10V5L10 2.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
-                    <path d="M7.5 10L9.2 11.7L12.8 8.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </span>
-                Zero-Trust Policy Gate
-              </h3>
-              <p style="margin: 0; font-size: 13px; color: var(--ink-soft); line-height: 1.5">
-                Guarantees customer personal data can <strong>never</strong> leak into the shared
-                bank policy Vector DB.
-              </p>
-              <div class="gate-box is-block">
-                <strong style="color: var(--red)">✕ Always Blocked · HTTP 403</strong>
-                <small>
-                  <code>APP-*</code> / <code>AUTO-*</code> filenames, excluded evidence SHA-256
-                  hashes, or docs containing <em>Application reference + Salary / Bureau / ID</em>.
-                </small>
-              </div>
-              <div class="gate-box is-allow">
-                <strong style="color: var(--emerald-dark)">✓ Allowed · Policy Corpus Only</strong>
-                <small>
-                  Lending policies, circulars, product sheets, procedures manuals, and pricing
-                  tables with verified metadata.
-                </small>
-              </div>
-              <small style="color: var(--muted); margin-top: auto">
-                RBAC-gated: only <code>head-credit</code> (<code>can_ingest = true</code>) may
-                upload or delete policies.
-              </small>
-            </div>
-
-            <!-- Col 3: 3-tier Metadata -->
-            <div class="card reveal d3">
-              <h3 class="card-title">
-                <span class="icon-box is-teal">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <rect x="3" y="4" width="14" height="13" rx="2" stroke="currentColor" stroke-width="1.6" />
-                    <path d="M3 8.5H17M7 2.5V5.5M13 2.5V5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-                  </svg>
-                </span>
-                Automatic Metadata Resolution
-              </h3>
-              <div class="tier-step">
-                <span class="tier-num">1</span>
-                <div>
-                  <strong>Reviewed Bank Manifest (SHA-256)</strong>
-                  <small>Exact filename + SHA-256 match resolves canonical ID, edition &amp; dates instantly.</small>
-                </div>
-              </div>
-              <div class="tier-step">
-                <span class="tier-num">2</span>
-                <div>
-                  <strong>Server Header Extractor</strong>
-                  <small>Reads <code>Document ID</code>, <code>Edition/Version</code>, <code>Effective/Superseded</code> dates &amp; <code>PL-100/AL-200</code> directly from PDF/MD/CSV.</small>
-                </div>
-              </div>
-              <div class="tier-step">
-                <span class="tier-num">3</span>
-                <div>
-                  <strong>Optional Collapsible Override</strong>
-                  <small>Merges partial overrides (e.g. adding <code>Effective to</code>) for custom or headerless docs.</small>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ======================================================= -->
-        <!-- SLIDE 4: STAGE 2 - CLAUSE-AWARE CHUNKING & IDEMPOTENCY  -->
-        <!-- ======================================================= -->
-        <section class="slide" data-title="Clause-Aware Chunking">
-          <div class="slide-top">
-            <div>
-              <div class="eyebrow">Stage 2 · Semantic Segmentation</div>
-              <h2>Clause-Aware Chunking &amp; Deterministic Idempotency</h2>
-              <p class="subtitle">
-                Generic fixed-size chunking splits banking rules in half. Credit Copilot chunks
-                along legal clause boundaries so every retrieved vector preserves full rule context
-                and exact page provenance.
-              </p>
-            </div>
-            <span class="slide-tag">clause-cl100k-v3</span>
-          </div>
-
-          <div class="cols-2">
-            <!-- Left: Visual Comparison -->
-            <div class="card card-white reveal d1">
-              <h3 class="card-title">
-                <span class="icon-box">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <rect x="3" y="3" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="1.5" />
-                    <rect x="3" y="9" width="14" height="4" rx="1.5" stroke="currentColor" stroke-width="1.5" />
-                    <rect x="3" y="15" width="9" height="2.5" rx="1.2" stroke="currentColor" stroke-width="1.5" />
-                  </svg>
-                </span>
-                Why Clause Boundaries Matter
-              </h3>
-
-              <div class="chunk-visual">
-                <div class="chunk-bad">
-                  <strong>✕ Naive fixed-size split (500 chars):</strong> Cuts right between
-                  <em>"CP-4.1 Max DBR"</em> and <em>"40% of verified net monthly income"</em> →
-                  broken retrieval &amp; hallucinated limits.
-                </div>
-
-                <div class="chunk-good-list">
-                  <div class="chunk-box">
-                    <div class="chunk-box-head">
-                      <strong>Chunk #4 · Section CP-3.3</strong>
-                      <span>p. 3 · 112 tokens</span>
-                    </div>
-                    <p>Minimum verified net monthly income requirement (EGP 12,000 under CP-2025) kept completely intact.</p>
-                  </div>
-
-                  <div class="chunk-box">
-                    <div class="chunk-box-head">
-                      <strong>Chunk #7 · Section CP-4.1</strong>
-                      <span>p. 4–5 · 164 tokens</span>
-                    </div>
-                    <p>Maximum Debt Burden Ratio (DBR ≤ 40%) including exact obligations formula and effective edition metadata.</p>
-                  </div>
-
-                  <div class="chunk-box">
-                    <div class="chunk-box-head">
-                      <strong>Chunk #14 · Section CP-13 (Comparison Table)</strong>
-                      <span>p. 11 · Table-Protected</span>
-                    </div>
-                    <p>References lower numbers (<code>CP-4.1</code>, <code>CP-3.3</code>) without falsely breaking the parent table chunk.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Right: Rules & Deterministic ID -->
-            <div class="card reveal d2">
-              <h3 class="card-title">
-                <span class="icon-box is-amber">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <path d="M10 3V17M3 10H17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-                    <circle cx="10" cy="10" r="7" stroke="currentColor" stroke-width="1.5" />
-                  </svg>
-                </span>
-                Token Window &amp; Re-Ingestion Safety
-              </h3>
-
-              <div class="tier-step">
-                <span class="tier-num">1</span>
-                <div>
-                  <strong>Regex Clause &amp; CSV Row Boundaries</strong>
-                  <small>Detects <code>CP-*</code>, <code>PM-*</code>, <code>PS-*</code>, <code>C-*</code> headings and one chunk per CSV pricing row.</small>
-                </div>
-              </div>
-
-              <div class="tier-step">
-                <span class="tier-num">2</span>
-                <div>
-                  <strong>Bounded Token Sliding Window (<code>cl100k_base</code>)</strong>
-                  <small>Only clauses exceeding <strong>800 tokens</strong> split further, keeping a <strong>60-token overlap</strong> for continuity.</small>
-                </div>
-              </div>
-
-              <div class="tier-step">
-                <span class="tier-num">3</span>
-                <div>
-                  <strong>Full Provenance Attached to Every Chunk</strong>
-                  <small><code>edition</code> · <code>product</code> · <code>effectiveFrom</code> · <code>effectiveTo</code> · <code>pageStart/End</code> · <code>row</code>.</small>
-                </div>
-              </div>
-
-              <div class="hash-card">
-                <small>Deterministic Idempotency Key</small>
-                <div class="hash-formula">
-                  chunk.id = SHA-256(docId : docHash : "clause-cl100k-v3" : ordinal : contentHash)
-                </div>
-                <p>
-                  Re-uploading an identical policy matches existing active chunks + vectors →
-                  stages 3 &amp; 4 are <strong>SKIPPED</strong> with <strong>0 embedding cost</strong>.
-                  Different content under the same ID triggers <strong>HTTP 409 Conflict</strong>.
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- ======================================================= -->
-        <!-- SLIDE 5: STAGE 3 - EMBEDDINGS & VECTOR SPACE            -->
-        <!-- ======================================================= -->
-        <section class="slide" data-title="Vector Embeddings">
-          <div class="slide-top">
-            <div>
-              <div class="eyebrow">Stage 3 · Semantic Encoding</div>
-              <h2>Transforming Policy Clauses into Dense Vectors</h2>
-              <p class="subtitle">
-                Each policy chunk is mapped into a high-dimensional numeric vector where semantic
-                meaning becomes geometric proximity — enabling cosine similarity matching across
-                paraphrased questions.
-              </p>
-            </div>
-            <span class="slide-tag">knowledge.embeddings</span>
-          </div>
-
-          <div class="cols-2">
-            <!-- Left: Text -> Vector transformation -->
-            <div class="card card-white reveal d1">
-              <h3 class="card-title">
-                <span class="icon-box is-teal">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <path d="M4 14L8 7L12 12L16 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </span>
-                From Clause Text to Vector Coordinates
-              </h3>
-
-              <div class="chunk-box">
-                <div class="chunk-box-head">
-                  <strong>Input Chunk · CP-4.1 (CP-2025)</strong>
-                  <span>task: "document"</span>
-                </div>
-                <p>
-                  "Total monthly debt obligations including the proposed instalment must not exceed
-                  <strong>40%</strong> of verified net monthly income."
-                </p>
-              </div>
-
-              <div style="display: flex; align-items: center; gap: 10px; padding: 2px 4px">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 4V20M12 20L7 15M12 20L17 15" stroke="#176753" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <span style="font-size: 12.5px; font-weight: 700; color: var(--emerald-dark)">
-                  Embedding Model (Gemini <code>gemini-embedding-001</code> or Local Ollama)
-                </span>
-              </div>
-
-              <div class="vec-strip" aria-label="Sample embedding vector">
-                <span class="vec-num">0.0418</span>
-                <span class="vec-num neg">-0.1872</span>
-                <span class="vec-num">0.6314</span>
-                <span class="vec-num neg">-0.0925</span>
-                <span class="vec-num">0.2740</span>
-                <span class="vec-num">0.5109</span>
-                <span class="vec-num neg">-0.3381</span>
-                <span class="vec-num">… 768 dims</span>
-              </div>
-
-              <div class="hash-card" style="margin-top: auto">
-                <small>Multi-Model &amp; Multi-Dimension Isolation</small>
-                <div class="hash-formula">
-                  PRIMARY KEY (chunk_id, model, dimensions) · CHECK (vector_dims(embedding) = dimensions)
-                </div>
-                <p>
-                  Gemini cloud vectors and local Ollama vectors coexist safely in the same table
-                  without colliding or mixing incompatible vector spaces.
-                </p>
-              </div>
-            </div>
-
-            <!-- Right: Animated 2D Semantic Space SVG -->
-            <div class="card reveal d2" style="padding: 18px">
-              <h3 class="card-title">
-                <span class="icon-box">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <circle cx="6" cy="6" r="2.2" fill="currentColor" />
-                    <circle cx="14.5" cy="7.5" r="2.2" fill="currentColor" />
-                    <circle cx="9.5" cy="14" r="2.2" fill="currentColor" />
-                    <path d="M7.8 6.8L12.5 7.3M7.2 7.8L8.8 12.1" stroke="currentColor" stroke-width="1.3" />
-                  </svg>
-                </span>
-                Cosine Similarity in Vector Space
-              </h3>
-
-              <svg viewBox="0 0 480 315" style="width: 100%; max-height: 100%; flex: 1; min-height: 0; display: block" role="img">
-                <!-- Subtle grid -->
-                <rect x="10" y="10" width="460" height="295" rx="12" fill="#ffffff" stroke="#d5e2df" />
-                <g stroke="#eef4f2" stroke-width="1">
-                  <line x1="10" y1="84" x2="470" y2="84" />
-                  <line x1="10" y1="158" x2="470" y2="158" />
-                  <line x1="10" y1="232" x2="470" y2="232" />
-                  <line x1="125" y1="10" x2="125" y2="305" />
-                  <line x1="240" y1="10" x2="240" y2="305" />
-                  <line x1="355" y1="10" x2="355" y2="305" />
-                </g>
-
-                <!-- Cluster 1: Affordability / DBR -->
-                <ellipse cx="165" cy="112" rx="112" ry="66" fill="rgba(23,103,83,0.08)" stroke="#95cbb7" stroke-dasharray="5 5" />
-                <text x="82" y="64" fill="#145b47" font-size="10.5" font-weight="700">
-                  Affordability &amp; DBR Cluster
-                </text>
-
-                <!-- Cluster 2: Auto finance -->
-                <ellipse cx="368" cy="230" rx="82" ry="48" fill="rgba(29,122,138,0.08)" stroke="#9bcad4" stroke-dasharray="5 5" />
-                <text x="315" y="196" fill="#145b68" font-size="10.5" font-weight="700">
-                  Auto Loan Cluster
-                </text>
-
-                <!-- Cosine distance lines from Query -->
-                <line x1="148" y1="118" x2="212" y2="92" stroke="#176753" stroke-width="2.2" class="flow-line" />
-                <line x1="148" y1="118" x2="112" y2="144" stroke="#176753" stroke-width="1.6" stroke-dasharray="4 4" />
-                <line x1="148" y1="118" x2="365" y2="232" stroke="#cbd8d5" stroke-width="1.2" stroke-dasharray="3 5" />
-
-                <!-- Similarity labels -->
-                <rect x="166" y="79" width="60" height="17" rx="8" fill="#176753" />
-                <text x="196" y="91" text-anchor="middle" fill="#fff" font-size="9.5" font-weight="700" font-family="monospace">
-                  cos 0.91
-                </text>
-                <rect x="236" y="168" width="60" height="17" rx="8" fill="#eef3f4" />
-                <text x="266" y="180" text-anchor="middle" fill="#6b7f7a" font-size="9.5" font-family="monospace">
-                  cos 0.24
-                </text>
-
-                <!-- Query point -->
-                <g>
-                  <circle cx="148" cy="118" r="14" fill="rgba(23,103,83,0.16)" />
-                  <circle cx="148" cy="118" r="7.5" fill="#176753" stroke="#fff" stroke-width="2" />
-                  <text x="148" y="102" text-anchor="middle" fill="#0d3d30" font-size="10.5" font-weight="800">
-                    Query: "max debt ratio?"
-                  </text>
-                </g>
-
-                <!-- Chunk points -->
-                <circle cx="222" cy="92" r="6.5" fill="#239b78" stroke="#fff" stroke-width="1.8" />
-                <text x="234" y="96" fill="#102a24" font-size="10.5" font-weight="700" font-family="monospace">CP-4.1 (DBR 40%)</text>
-
-                <circle cx="106" cy="146" r="6" fill="#239b78" stroke="#fff" stroke-width="1.8" />
-                <text x="58" y="163" fill="#2f4d47" font-size="10" font-family="monospace">CP-4.2 (Obligations)</text>
-
-                <circle cx="368" cy="232" r="6" fill="#1d7a8a" stroke="#fff" stroke-width="1.8" />
-                <text x="368" y="251" text-anchor="middle" fill="#145b68" font-size="10" font-family="monospace">PS-9 (20% Down Payment)</text>
-
-                <circle cx="395" cy="92" r="5.5" fill="#c98c24" stroke="#fff" stroke-width="1.8" />
-                <text x="395" y="111" text-anchor="middle" fill="#8c5c0d" font-size="10" font-family="monospace">PM-2 (Four-Eyes)</text>
-
-                <!-- Operator badge -->
-                <rect x="24" y="266" width="234" height="26" rx="7" fill="#f3f8f6" stroke="#cfe0dc" />
-                <text x="141" y="283" text-anchor="middle" fill="#145b47" font-size="10.5" font-weight="700" font-family="monospace">
-                  pgvector: 1 - (embedding &lt;=&gt; $1)
-                </text>
-              </svg>
-            </div>
-          </div>
-        </section>
-
-        <!-- ======================================================= -->
-        <!-- SLIDE 6: VECTOR DB SCHEMA (POSTGRESQL 17 + PGVECTOR)    -->
-        <!-- ======================================================= -->
-        <section class="slide" data-title="PostgreSQL + pgvector Schema">
-          <div class="slide-top">
-            <div>
-              <div class="eyebrow">Stage 4 · Storage &amp; ACID Indexing</div>
-              <h2>Inside the Vector Database (<code>PostgreSQL 17 + pgvector</code>)</h2>
-              <p class="subtitle">
-                Rather than maintaining a fragile separate vector store, Credit Copilot stores
-                policies, full-text GIN indexes, pgvector embeddings, and exact pricing tables in
-                one ACID PostgreSQL schema — completely isolated from customer <code>cases.*</code>.
-              </p>
-            </div>
-            <span class="slide-tag">Schema: knowledge.*</span>
-          </div>
-
-          <div class="card card-white reveal d1" style="flex: 1; min-height: 0; padding: 12px 14px; justify-content: center">
-            <svg viewBox="0 0 1160 390" style="width: 100%; height: 100%; max-height: 100%; display: block" role="img" aria-label="PostgreSQL knowledge schema entity relationship diagram">
-              <!-- Schema boundary: knowledge.* -->
-              <rect x="8" y="8" width="882" height="374" rx="14" fill="#f7fbf9" stroke="#9ecdbc" stroke-width="1.6" />
-              <text x="26" y="34" fill="#145b47" font-size="13" font-weight="800" font-family="monospace">
-                SCHEMA knowledge.* (Bank Policy Corpus Only)
+              <text x="105" y="28" text-anchor="middle" fill="#90d6be" font-size="11.5" font-weight="800" font-family="monospace">
+                POLICY SOURCES
               </text>
 
-              <!-- Schema boundary: cases.* (isolated) -->
-              <rect x="912" y="8" width="240" height="374" rx="14" fill="#fff6f5" stroke="#e5ada6" stroke-width="1.6" stroke-dasharray="7 5" />
-              <text x="930" y="34" fill="#9c2f25" font-size="12.5" font-weight="800" font-family="monospace">
-                SCHEMA cases.* (Isolated)
+              <!-- PDF -->
+              <rect x="20" y="48" width="170" height="62" rx="12" fill="#123d32" stroke="#49a88e" stroke-width="1.5" />
+              <rect x="30" y="61" width="38" height="24" rx="6" fill="#1b7d64" />
+              <text x="49" y="77" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="800" font-family="monospace">PDF</text>
+              <text x="78" y="73" fill="#effbf6" font-size="13" font-weight="700">Credit Policy</text>
+              <text x="78" y="92" fill="#9fd3c2" font-size="10.5" font-family="monospace">CP-2025 · PM-4</text>
+
+              <!-- Markdown -->
+              <rect x="20" y="124" width="170" height="62" rx="12" fill="#123d32" stroke="#49a88e" stroke-width="1.5" />
+              <rect x="30" y="137" width="38" height="24" rx="6" fill="#1d7a8a" />
+              <text x="49" y="153" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="800" font-family="monospace">MD</text>
+              <text x="78" y="149" fill="#effbf6" font-size="13" font-weight="700">Circulars</text>
+              <text x="78" y="168" fill="#9fd3c2" font-size="10.5" font-family="monospace">Product Sheets</text>
+
+              <!-- CSV -->
+              <rect x="20" y="200" width="170" height="62" rx="12" fill="#123d32" stroke="#49a88e" stroke-width="1.5" />
+              <rect x="30" y="213" width="38" height="24" rx="6" fill="#2c6f53" />
+              <text x="49" y="229" text-anchor="middle" fill="#fff" font-size="10.5" font-weight="800" font-family="monospace">CSV</text>
+              <text x="78" y="225" fill="#effbf6" font-size="13" font-weight="700">Pricing Table</text>
+              <text x="78" y="244" fill="#9fd3c2" font-size="10.5" font-family="monospace">Exact Decimal</text>
+
+              <!-- Blocked customer pack -->
+              <rect x="20" y="284" width="170" height="56" rx="11" fill="#3a1614" stroke="#e27a70" stroke-width="1.4" stroke-dasharray="5 4" />
+              <text x="34" y="306" fill="#ffada4" font-size="11.5" font-weight="800">✕ Customer Pack</text>
+              <text x="34" y="325" fill="#e8b4ae" font-size="10.5" font-family="monospace">APP-001 / AUTO-*</text>
+            </g>
+
+            <!-- ===================================================== -->
+            <!-- NODE 2: STAGE 1 - EXTRACT & TRUST GATE                -->
+            <!-- ===================================================== -->
+            <g class="diag-node node-extract" data-jump="2" tabindex="0" role="button" aria-label="Focus Stage 1 Extract">
+              <rect
+                class="spotlight-ring"
+                x="246"
+                y="60"
+                width="162"
+                height="214"
+                rx="16"
+                fill="none"
+                stroke="#4cd29d"
+                stroke-width="2.8"
+              />
+              <rect x="254" y="68" width="146" height="198" rx="14" fill="url(#gEmeraldCard)" stroke="#6ee7bf" stroke-width="1.5" />
+              <rect x="266" y="80" width="26" height="22" rx="6" fill="rgba(0,0,0,0.28)" />
+              <text x="279" y="95" text-anchor="middle" fill="#7be6c1" font-size="12" font-weight="800" font-family="monospace">01</text>
+              <text x="302" y="96" fill="#ffffff" font-size="15.5" font-weight="800">Extract</text>
+
+              <rect x="266" y="112" width="122" height="32" rx="7" fill="rgba(0,0,0,0.24)" />
+              <text x="327" y="127" text-anchor="middle" fill="#e6fbf3" font-size="11" font-weight="700">Parse &amp; Normalize</text>
+              <text x="327" y="140" text-anchor="middle" fill="#9ed8c4" font-size="9.5" font-family="monospace">pdf.js · AST · CSV</text>
+
+              <rect x="266" y="152" width="122" height="36" rx="7" fill="rgba(180,58,47,0.34)" stroke="rgba(255,138,125,0.55)" />
+              <text x="327" y="168" text-anchor="middle" fill="#ffd2cc" font-size="11" font-weight="800">Trust Firewall</text>
+              <text x="327" y="182" text-anchor="middle" fill="#ffb3ab" font-size="9.5" font-family="monospace">Reject Customer PII</text>
+
+              <rect x="266" y="196" width="122" height="56" rx="7" fill="rgba(0,0,0,0.24)" />
+              <text x="327" y="213" text-anchor="middle" fill="#7be6c1" font-size="10.5" font-weight="700">Auto-Metadata</text>
+              <text x="327" y="228" text-anchor="middle" fill="#d4f3e8" font-size="9.8" font-family="monospace">SHA-256 Manifest</text>
+              <text x="327" y="242" text-anchor="middle" fill="#d4f3e8" font-size="9.8" font-family="monospace">Header Dates/ID</text>
+            </g>
+
+            <!-- ===================================================== -->
+            <!-- NODE 3: STAGE 2 - CLAUSE CHUNKING                     -->
+            <!-- ===================================================== -->
+            <g class="diag-node node-chunk" data-jump="3" tabindex="0" role="button" aria-label="Focus Stage 2 Chunk">
+              <rect
+                class="spotlight-ring"
+                x="426"
+                y="60"
+                width="162"
+                height="214"
+                rx="16"
+                fill="none"
+                stroke="#4cd29d"
+                stroke-width="2.8"
+              />
+              <rect x="434" y="68" width="146" height="198" rx="14" fill="url(#gEmeraldCard)" stroke="#6ee7bf" stroke-width="1.5" />
+              <rect x="446" y="80" width="26" height="22" rx="6" fill="rgba(0,0,0,0.28)" />
+              <text x="459" y="95" text-anchor="middle" fill="#7be6c1" font-size="12" font-weight="800" font-family="monospace">02</text>
+              <text x="482" y="96" fill="#ffffff" font-size="15.5" font-weight="800">Chunk</text>
+
+              <!-- Mini clause stack visual -->
+              <rect x="446" y="112" width="122" height="24" rx="6" fill="#10382e" stroke="#6ee7bf" stroke-width="1" />
+              <text x="507" y="128" text-anchor="middle" fill="#dff9ef" font-size="10.5" font-weight="700" font-family="monospace">CP-3.3 · Income</text>
+
+              <rect x="446" y="142" width="122" height="24" rx="6" fill="#10382e" stroke="#6ee7bf" stroke-width="1" />
+              <text x="507" y="158" text-anchor="middle" fill="#dff9ef" font-size="10.5" font-weight="700" font-family="monospace">CP-4.1 · Max DBR</text>
+
+              <rect x="446" y="172" width="122" height="24" rx="6" fill="#10382e" stroke="#6ee7bf" stroke-width="1" />
+              <text x="507" y="188" text-anchor="middle" fill="#dff9ef" font-size="10.5" font-weight="700" font-family="monospace">PS-3 · Limits</text>
+
+              <rect x="446" y="204" width="122" height="48" rx="7" fill="rgba(0,0,0,0.26)" />
+              <text x="507" y="220" text-anchor="middle" fill="#7be6c1" font-size="10" font-weight="700" font-family="monospace">clause-cl100k-v3</text>
+              <text x="507" y="234" text-anchor="middle" fill="#cdeee2" font-size="9.6" font-family="monospace">≤800 tok · 60 ovlp</text>
+              <text x="507" y="246" text-anchor="middle" fill="#9ed8c4" font-size="9.2" font-family="monospace">SHA-256 Chunk ID</text>
+            </g>
+
+            <!-- ===================================================== -->
+            <!-- NODE 4: STAGE 3 - VECTOR EMBEDDING                    -->
+            <!-- ===================================================== -->
+            <g class="diag-node node-embed" data-jump="4" tabindex="0" role="button" aria-label="Focus Stage 3 Embed">
+              <rect
+                class="spotlight-ring"
+                x="606"
+                y="60"
+                width="162"
+                height="214"
+                rx="16"
+                fill="none"
+                stroke="#5ad2e6"
+                stroke-width="2.8"
+              />
+              <rect x="614" y="68" width="146" height="198" rx="14" fill="url(#gEmbedCard)" stroke="#7be8f6" stroke-width="1.6" />
+              <rect x="626" y="80" width="26" height="22" rx="6" fill="rgba(0,0,0,0.28)" />
+              <text x="639" y="95" text-anchor="middle" fill="#89ecf8" font-size="12" font-weight="800" font-family="monospace">03</text>
+              <text x="662" y="96" fill="#ffffff" font-size="15.5" font-weight="800">Embed</text>
+
+              <!-- Vector visualization bars -->
+              <rect x="626" y="112" width="122" height="58" rx="8" fill="rgba(5, 25, 29, 0.52)" stroke="rgba(123,232,246,0.35)" />
+              <text x="687" y="128" text-anchor="middle" fill="#8beaf7" font-size="10" font-weight="700" font-family="monospace">
+                Dense Vector (768d)
               </text>
-              <rect x="932" y="64" width="200" height="218" rx="10" fill="#ffffff" stroke="#e8bdb8" />
-              <text x="1032" y="92" text-anchor="middle" fill="#8f2d23" font-size="12" font-weight="700">Customer Case Tables</text>
-              <text x="950" y="120" fill="#5b3c39" font-size="11.5" font-family="monospace">• cases.applications</text>
-              <text x="950" y="144" fill="#5b3c39" font-size="11.5" font-family="monospace">• cases.evidence_docs</text>
-              <text x="950" y="168" fill="#5b3c39" font-size="11.5" font-family="monospace">• cases.assessment_runs</text>
-              <text x="950" y="192" fill="#5b3c39" font-size="11.5" font-family="monospace">• cases.approvals</text>
-              <text x="950" y="216" fill="#5b3c39" font-size="11.5" font-family="monospace">• cases.offers</text>
-              <text x="950" y="240" fill="#5b3c39" font-size="11.5" font-family="monospace">• cases.audit_events</text>
-              <rect x="932" y="302" width="200" height="58" rx="9" fill="#ffe9e6" stroke="#e5ada6" />
-              <text x="1032" y="326" text-anchor="middle" fill="#9c2f25" font-size="11.5" font-weight="800">NO FOREIGN KEY</text>
-              <text x="1032" y="345" text-anchor="middle" fill="#7d322a" font-size="10.5">Never indexed into pgvector</text>
+              <text x="687" y="145" text-anchor="middle" fill="#ffffff" font-size="10.2" font-family="monospace">
+                [ 0.04, -0.19,
+              </text>
+              <text x="687" y="160" text-anchor="middle" fill="#ffffff" font-size="10.2" font-family="monospace">
+                0.63, …, 0.09 ]
+              </text>
 
-              <!-- Relationship lines inside knowledge.* -->
-              <path d="M258 128 H318" stroke="#176753" stroke-width="2.2" class="flow-line-slow" />
-              <path d="M582 128 H636" stroke="#1d7a8a" stroke-width="2.2" class="flow-line-slow" />
-              <path d="M140 218 V264" stroke="#176753" stroke-width="1.8" stroke-dasharray="4 4" />
-              <path d="M258 175 L340 288" stroke="#2e6b4f" stroke-width="1.8" stroke-dasharray="4 4" />
+              <rect x="626" y="178" width="122" height="32" rx="7" fill="rgba(0,0,0,0.26)" />
+              <text x="687" y="193" text-anchor="middle" fill="#dffbff" font-size="10.5" font-weight="700">Gemini / Ollama</text>
+              <text x="687" y="205" text-anchor="middle" fill="#9ee2ec" font-size="9.4" font-family="monospace">task: "document"</text>
 
-              <!-- Table 1: knowledge.documents -->
-              <g>
-                <rect x="26" y="56" width="232" height="162" rx="10" fill="#ffffff" stroke="#176753" stroke-width="1.6" />
-                <rect x="26" y="56" width="232" height="32" rx="10" fill="#176753" />
-                <rect x="26" y="76" width="232" height="12" fill="#176753" />
-                <text x="40" y="77" fill="#ffffff" font-size="12" font-weight="700" font-family="monospace">knowledge.documents</text>
-                <text x="40" y="108" fill="#102a24" font-size="11.5" font-family="monospace">PK id (e.g. CP-2025)</text>
-                <text x="40" y="128" fill="#35504a" font-size="11.5" font-family="monospace">   filename, hash (SHA-256)</text>
-                <text x="40" y="148" fill="#35504a" font-size="11.5" font-family="monospace">   metadata (jsonb)</text>
-                <text x="40" y="168" fill="#35504a" font-size="11.5" font-family="monospace">   normalized (jsonb)</text>
-                <text x="40" y="188" fill="#35504a" font-size="11.5" font-family="monospace">   pipeline_version</text>
-              </g>
+              <rect x="626" y="218" width="122" height="34" rx="7" fill="rgba(0,0,0,0.26)" />
+              <text x="687" y="233" text-anchor="middle" fill="#8beaf7" font-size="10" font-weight="700">Validated Dims</text>
+              <text x="687" y="246" text-anchor="middle" fill="#cdeff4" font-size="9.3" font-family="monospace">Skip if unchanged</text>
+            </g>
 
-              <!-- Table 2: knowledge.chunks -->
-              <g>
-                <rect x="318" y="56" width="264" height="196" rx="10" fill="#ffffff" stroke="#176753" stroke-width="1.6" />
-                <rect x="318" y="56" width="264" height="32" rx="10" fill="#176753" />
-                <rect x="318" y="76" width="264" height="12" fill="#176753" />
-                <text x="332" y="77" fill="#ffffff" font-size="12" font-weight="700" font-family="monospace">knowledge.chunks</text>
-                <text x="332" y="108" fill="#102a24" font-size="11.5" font-family="monospace">PK id (SHA-256 deterministic)</text>
-                <text x="332" y="128" fill="#35504a" font-size="11.5" font-family="monospace">FK document_id, ordinal, active</text>
-                <text x="332" y="148" fill="#35504a" font-size="11.5" font-family="monospace">   edition, product</text>
-                <text x="332" y="168" fill="#145b47" font-size="11.5" font-weight="700" font-family="monospace">   effective_from, effective_to</text>
-                <text x="332" y="188" fill="#145b47" font-size="11.5" font-weight="700" font-family="monospace">   search_vector (GENERATED)</text>
-                <rect x="330" y="202" width="240" height="38" rx="6" fill="#edf7f2" stroke="#bfe0d1" />
-                <text x="340" y="218" fill="#145b47" font-size="10.2" font-weight="700" font-family="monospace">IDX: GIN(search_vector)</text>
-                <text x="340" y="233" fill="#145b47" font-size="10.2" font-weight="700" font-family="monospace">IDX: (product, effective_from/to)</text>
-              </g>
+            <!-- ===================================================== -->
+            <!-- NODE 5: STAGE 4 - ATOMIC INDEX COMMIT                 -->
+            <!-- ===================================================== -->
+            <g class="diag-node node-index" data-jump="5" tabindex="0" role="button" aria-label="Focus Stage 4 Index">
+              <rect
+                class="spotlight-ring"
+                x="786"
+                y="60"
+                width="156"
+                height="214"
+                rx="16"
+                fill="none"
+                stroke="#4cd29d"
+                stroke-width="2.8"
+              />
+              <rect x="794" y="68" width="140" height="198" rx="14" fill="url(#gEmeraldCard)" stroke="#6ee7bf" stroke-width="1.5" />
+              <rect x="806" y="80" width="26" height="22" rx="6" fill="rgba(0,0,0,0.28)" />
+              <text x="819" y="95" text-anchor="middle" fill="#7be6c1" font-size="12" font-weight="800" font-family="monospace">04</text>
+              <text x="842" y="96" fill="#ffffff" font-size="15.5" font-weight="800">Index</text>
 
-              <!-- Table 3: knowledge.embeddings -->
-              <g>
-                <rect x="636" y="56" width="236" height="196" rx="10" fill="#ffffff" stroke="#1d7a8a" stroke-width="1.8" />
-                <rect x="636" y="56" width="236" height="32" rx="10" fill="#1d7a8a" />
-                <rect x="636" y="76" width="236" height="12" fill="#1d7a8a" />
-                <text x="650" y="77" fill="#ffffff" font-size="12" font-weight="700" font-family="monospace">knowledge.embeddings</text>
-                <text x="650" y="108" fill="#102a24" font-size="11.5" font-family="monospace">PK (chunk_id, model,</text>
-                <text x="650" y="124" fill="#102a24" font-size="11.5" font-family="monospace">    dimensions)</text>
-                <text x="650" y="148" fill="#145b68" font-size="11.5" font-weight="700" font-family="monospace">   embedding vector NOT NULL</text>
-                <rect x="648" y="164" width="212" height="74" rx="7" fill="#e8f5f8" stroke="#b3dce5" />
-                <text x="658" y="184" fill="#125563" font-size="10.5" font-weight="700">pgvector Guarantees:</text>
-                <text x="658" y="202" fill="#235b66" font-size="10.2" font-family="monospace">CHECK vector_dims = dims</text>
-                <text x="658" y="218" fill="#235b66" font-size="10.2" font-family="monospace">Cosine operator &lt;=&gt;</text>
-                <text x="658" y="232" fill="#235b66" font-size="10.2" font-family="monospace">Multi-provider safe</text>
-              </g>
+              <rect x="806" y="112" width="116" height="38" rx="7" fill="rgba(0,0,0,0.26)" />
+              <text x="864" y="129" text-anchor="middle" fill="#ffffff" font-size="10.8" font-weight="700">Advisory Lock</text>
+              <text x="864" y="143" text-anchor="middle" fill="#9ed8c4" font-size="9.3" font-family="monospace">409 on conflict</text>
 
-              <!-- Bottom Row Satellite Tables -->
-              <g>
-                <rect x="26" y="266" width="248" height="96" rx="10" fill="#ffffff" stroke="#b6ccc6" />
-                <text x="40" y="290" fill="#176753" font-size="12" font-weight="800" font-family="monospace">knowledge.index_revisions</text>
-                <text x="40" y="312" fill="#435e58" font-size="11">Immutable snapshot per pipeline</text>
-                <text x="40" y="328" fill="#435e58" font-size="11">version + source SHA-256 hash.</text>
-                <text x="40" y="348" fill="#145b47" font-size="10.5" font-weight="700">Full auditability on re-indexing</text>
-              </g>
+              <rect x="806" y="158" width="116" height="44" rx="7" fill="rgba(0,0,0,0.26)" />
+              <text x="864" y="175" text-anchor="middle" fill="#7be6c1" font-size="10.8" font-weight="700">Single ACID Tx</text>
+              <text x="864" y="191" text-anchor="middle" fill="#d5f3e9" font-size="9.4">Zero partial chunks</text>
 
-              <g>
-                <rect x="300" y="266" width="276" height="96" rx="10" fill="#ffffff" stroke="#b6ccc6" />
-                <text x="314" y="290" fill="#176753" font-size="12" font-weight="800" font-family="monospace">knowledge.pricing</text>
-                <text x="314" y="312" fill="#435e58" font-size="11">Structured CSV interest-rate rows</text>
-                <text x="314" y="328" fill="#435e58" font-size="11">(<code>document_id</code>, <code>row_number</code>, <code>data</code>).</text>
-                <text x="314" y="348" fill="#145b47" font-size="10.5" font-weight="700">Exact Decimal lookup · zero LLM math</text>
-              </g>
+              <rect x="806" y="210" width="116" height="42" rx="7" fill="rgba(0,0,0,0.26)" />
+              <text x="864" y="227" text-anchor="middle" fill="#ffffff" font-size="10.5" font-weight="700">Auto-Indexes</text>
+              <text x="864" y="241" text-anchor="middle" fill="#9ed8c4" font-size="9.4" font-family="monospace">Vector + GIN + Date</text>
+            </g>
 
-              <g>
-                <rect x="602" y="266" width="270" height="96" rx="10" fill="#ffffff" stroke="#b6ccc6" />
-                <text x="616" y="290" fill="#176753" font-size="12" font-weight="800" font-family="monospace">knowledge.ingestion_attempts</text>
-                <text x="616" y="312" fill="#435e58" font-size="11">Append-only status log:</text>
-                <text x="616" y="328" fill="#435e58" font-size="11"><code>processing → succeeded | skipped | failed | deleted</code></text>
-                <text x="616" y="348" fill="#145b47" font-size="10.5" font-weight="700">Single ACID tx + advisory lock</text>
-              </g>
-            </svg>
-          </div>
+            <!-- ===================================================== -->
+            <!-- NODE 6: PGVECTOR DATABASE (knowledge.* vs cases.*)    -->
+            <!-- ===================================================== -->
+            <g class="diag-node node-vectordb" data-jump="6" tabindex="0" role="button" aria-label="Focus pgvector Database">
+              <rect
+                class="spotlight-ring"
+                x="982"
+                y="24"
+                width="246"
+                height="332"
+                rx="18"
+                fill="none"
+                stroke="#5ad2e6"
+                stroke-width="2.8"
+              />
+
+              <!-- Cylinder -->
+              <path
+                d="M994 64 C994 40, 1216 40, 1216 64 V252 C1216 276, 994 276, 994 252 Z"
+                fill="url(#gDbBody)"
+                stroke="#8be5f2"
+                stroke-width="1.8"
+              />
+              <ellipse
+                cx="1105"
+                cy="64"
+                rx="111"
+                ry="22"
+                fill="url(#gDbTop)"
+                stroke="#8be5f2"
+                stroke-width="1.8"
+              />
+              <text x="1105" y="69" text-anchor="middle" fill="#072c33" font-size="12.5" font-weight="800" font-family="monospace">
+                PostgreSQL 17 + pgvector
+              </text>
+
+              <text x="1105" y="108" text-anchor="middle" fill="#ffffff" font-size="15.5" font-weight="800">
+                knowledge.*
+              </text>
+
+              <!-- Internal DB layers -->
+              <rect x="1012" y="120" width="186" height="30" rx="7" fill="rgba(5, 29, 36, 0.45)" stroke="rgba(155,234,247,0.35)" />
+              <text x="1105" y="139" text-anchor="middle" fill="#e9fbff" font-size="11" font-weight="700" font-family="monospace">
+                embeddings (Cosine &lt;=&gt;)
+              </text>
+
+              <rect x="1012" y="156" width="186" height="30" rx="7" fill="rgba(5, 29, 36, 0.45)" stroke="rgba(155,234,247,0.35)" />
+              <text x="1105" y="175" text-anchor="middle" fill="#e9fbff" font-size="11" font-weight="700" font-family="monospace">
+                chunks (GIN BM25 + Dates)
+              </text>
+
+              <rect x="1012" y="192" width="186" height="30" rx="7" fill="rgba(5, 29, 36, 0.45)" stroke="rgba(155,234,247,0.35)" />
+              <text x="1105" y="211" text-anchor="middle" fill="#e9fbff" font-size="11" font-weight="700" font-family="monospace">
+                pricing (Exact Decimal)
+              </text>
+
+              <text x="1105" y="248" text-anchor="middle" fill="#9ff0d6" font-size="11" font-weight="800">
+                Hybrid RRF Fusion (k = 60)
+              </text>
+
+              <!-- Isolated cases.* pill below -->
+              <rect x="994" y="294" width="222" height="52" rx="11" fill="#3a1614" stroke="#e27a70" stroke-width="1.4" stroke-dasharray="5 4" />
+              <text x="1105" y="316" text-anchor="middle" fill="#ffb8b0" font-size="11.5" font-weight="800" font-family="monospace">
+                cases.* (ISOLATED)
+              </text>
+              <text x="1105" y="334" text-anchor="middle" fill="#e8b8b2" font-size="10.2">
+                No Foreign Key · Zero PII in Vector DB
+              </text>
+            </g>
+
+            <!-- Bottom caption strip inside SVG -->
+            <rect
+              x="362"
+              y="314"
+              width="576"
+              height="34"
+              rx="10"
+              fill="rgba(255, 255, 255, 0.05)"
+              stroke="rgba(110, 231, 191, 0.24)"
+            />
+            <text x="650" y="335" text-anchor="middle" fill="#a8e3cf" font-size="11.5" font-weight="650">
+              Grounded RAG · Dated Editions (CP-2024 / CP-2025 / AUTO-2025) · Zero Customer PII in Vector DB
+            </text>
+          </svg>
         </section>
 
         <!-- ======================================================= -->
-        <!-- SLIDE 7: HYBRID RETRIEVAL (VECTOR + BM25 + RRF)         -->
+        <!-- BOTTOM FOCUS DETAIL PANEL (DYNAMIC PER SLIDE)           -->
         <!-- ======================================================= -->
-        <section class="slide" data-title="Hybrid Retrieval & RRF">
-          <div class="slide-top">
-            <div>
-              <div class="eyebrow">Query Time · Retrieval Engine</div>
-              <h2>Hybrid Search: pgvector Cosine + In-SQL BM25 + RRF Fusion</h2>
-              <p class="subtitle">
-                Pure vector search misses exact clause numbers (<code>CP-4.1</code>, <code>PS-9</code>);
-                pure keyword search misses paraphrasing. Credit Copilot fuses both inside one
-                PostgreSQL snapshot after enforcing hard date &amp; product boundaries.
-              </p>
-            </div>
-            <span class="slide-tag">RRF k=60 · BM25 k1=1.2 b=0.75</span>
-          </div>
+        <section class="detail-panel" id="detailPanel" aria-live="polite"></section>
 
-          <div class="hybrid-grid">
-            <!-- Left: SVG Dual-Branch Diagram -->
-            <div class="card card-white reveal d1" style="padding: 12px; min-height: 0; justify-content: center">
-              <svg viewBox="0 0 700 355" style="width: 100%; height: 100%; max-height: 100%; display: block" role="img" aria-label="Hybrid search architecture diagram">
-                <!-- Connectors -->
-                <path d="M168 176 H212" stroke="#176753" stroke-width="2.2" class="flow-line" />
-                <path d="M358 148 C382 148, 382 88, 412 88" stroke="#1d7a8a" stroke-width="2.2" fill="none" class="flow-line" />
-                <path d="M358 204 C382 204, 382 264, 412 264" stroke="#176753" stroke-width="2.2" fill="none" class="flow-line" />
-                <path d="M568 88 C592 88, 592 156, 608 156" stroke="#1d7a8a" stroke-width="2.2" fill="none" class="flow-line" />
-                <path d="M568 264 C592 264, 592 196, 608 196" stroke="#176753" stroke-width="2.2" fill="none" class="flow-line" />
-
-                <!-- Box 1: Masked Query -->
-                <rect x="12" y="114" width="156" height="124" rx="12" fill="#f6faf8" stroke="#176753" stroke-width="1.5" />
-                <text x="90" y="139" text-anchor="middle" fill="#145b47" font-size="11.5" font-weight="800">1. Query Guard</text>
-                <text x="90" y="160" text-anchor="middle" fill="#35504a" font-size="10.5">Mask National IDs</text>
-                <text x="90" y="175" text-anchor="middle" fill="#35504a" font-size="10.5">&amp; phone numbers</text>
-                <rect x="26" y="190" width="128" height="34" rx="6" fill="#edf7f2" stroke="#bfe0d1" />
-                <text x="90" y="205" text-anchor="middle" fill="#145b47" font-size="9.5" font-family="monospace">[MASKED_ID]</text>
-                <text x="90" y="218" text-anchor="middle" fill="#145b47" font-size="9.5" font-family="monospace">[MASKED_PHONE]</text>
-
-                <!-- Box 2: Hard Pre-Filter -->
-                <rect x="212" y="96" width="146" height="160" rx="12" fill="#0f342b" stroke="#4cd29d" stroke-width="1.6" />
-                <text x="285" y="122" text-anchor="middle" fill="#6ee7bf" font-size="11.5" font-weight="800">2. Eligible CTE</text>
-                <text x="285" y="142" text-anchor="middle" fill="#d9f3ea" font-size="10" font-family="monospace">c.active = true</text>
-                <text x="285" y="160" text-anchor="middle" fill="#d9f3ea" font-size="10" font-family="monospace">product = 'PL-100'</text>
-                <text x="285" y="178" text-anchor="middle" fill="#d9f3ea" font-size="10" font-family="monospace">effective_from &lt;=</text>
-                <text x="285" y="194" text-anchor="middle" fill="#6ee7bf" font-size="10.5" font-weight="700" font-family="monospace">2025-04-01</text>
-                <rect x="224" y="210" width="122" height="34" rx="6" fill="rgba(255,255,255,0.09)" />
-                <text x="285" y="225" text-anchor="middle" fill="#ffd9a0" font-size="9.5" font-weight="700">CP-2024 &amp; C-2024-07</text>
-                <text x="285" y="238" text-anchor="middle" fill="#ffd9a0" font-size="9.5">filtered out in SQL</text>
-
-                <!-- Branch A: Vector -->
-                <rect x="412" y="28" width="156" height="120" rx="12" fill="#e8f5f8" stroke="#1d7a8a" stroke-width="1.6" />
-                <text x="490" y="54" text-anchor="middle" fill="#125563" font-size="11.5" font-weight="800">3A. Vector Branch</text>
-                <text x="490" y="74" text-anchor="middle" fill="#235b66" font-size="10.5">pgvector Cosine Dist</text>
-                <text x="490" y="94" text-anchor="middle" fill="#125563" font-size="10.5" font-weight="700" font-family="monospace">embedding &lt;=&gt; $1</text>
-                <rect x="430" y="108" width="120" height="26" rx="6" fill="#ffffff" stroke="#b3dce5" />
-                <text x="490" y="125" text-anchor="middle" fill="#125563" font-size="10" font-weight="700">Top 20 Semantic Hits</text>
-
-                <!-- Branch B: BM25 -->
-                <rect x="412" y="204" width="156" height="120" rx="12" fill="#edf7f2" stroke="#176753" stroke-width="1.6" />
-                <text x="490" y="230" text-anchor="middle" fill="#145b47" font-size="11.5" font-weight="800">3B. BM25 Branch</text>
-                <text x="490" y="250" text-anchor="middle" fill="#2b5549" font-size="10.5">PostgreSQL GIN tsvector</text>
-                <text x="490" y="270" text-anchor="middle" fill="#145b47" font-size="10.5" font-weight="700" font-family="monospace">k1=1.2 · b=0.75</text>
-                <rect x="430" y="284" width="120" height="26" rx="6" fill="#ffffff" stroke="#bfe0d1" />
-                <text x="490" y="301" text-anchor="middle" fill="#145b47" font-size="10" font-weight="700">Top 20 Exact Hits</text>
-
-                <!-- Fusion Node -->
-                <rect x="608" y="114" width="84" height="124" rx="12" fill="#176753" stroke="#0d4436" stroke-width="1.5" />
-                <text x="650" y="148" text-anchor="middle" fill="#ffffff" font-size="12.5" font-weight="800">4. RRF</text>
-                <text x="650" y="168" text-anchor="middle" fill="#9ee5cd" font-size="10" font-family="monospace">k = 60</text>
-                <text x="650" y="192" text-anchor="middle" fill="#e6f7f1" font-size="9.5">1/(60+rV)</text>
-                <text x="650" y="206" text-anchor="middle" fill="#e6f7f1" font-size="9.5">+</text>
-                <text x="650" y="220" text-anchor="middle" fill="#e6f7f1" font-size="9.5">1/(60+rB)</text>
-              </svg>
-            </div>
-
-            <!-- Right: Interactive RRF Fusion Example -->
-            <div class="card reveal d2">
-              <h3 class="card-title">
-                <span class="icon-box">
-                  <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                    <path d="M4 15V9M10 15V5M16 15V11" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-                  </svg>
-                </span>
-                Live RRF Ranking Example
-              </h3>
-
-              <div class="sim-controls" style="gap: 6px">
-                <button type="button" class="btn btn-primary" data-rrf-preset="dbr" style="padding: 5px 10px; font-size: 11.5px">
-                  Max DBR (2025)
-                </button>
-                <button type="button" class="btn" data-rrf-preset="auto" style="padding: 5px 10px; font-size: 11.5px">
-                  Auto Down Payment
-                </button>
-              </div>
-
-              <div class="rrf-legend">
-                <span><i class="swatch" style="background: var(--teal)"></i>Vector RRF</span>
-                <span><i class="swatch" style="background: var(--emerald)"></i>BM25 RRF</span>
-              </div>
-
-              <div class="rrf-bars" id="rrfBars"></div>
-
-              <small style="color: var(--muted); margin-top: auto; line-height: 1.45">
-                Optional bounded <strong>Query Rewrite</strong> runs in the same SQL snapshot and
-                only promotes candidates above <code>RETRIEVAL_MIN_SIMILARITY</code>.
-              </small>
-            </div>
-          </div>
-        </section>
-
-        <!-- ======================================================= -->
-        <!-- SLIDE 8: SUMMARY & BANKING GUARANTEES                   -->
-        <!-- ======================================================= -->
-        <section class="slide" data-title="Key Guarantees">
-          <div class="slide-top">
-            <div>
-              <div class="eyebrow">Architecture Summary</div>
-              <h2>Why This Ingestion &amp; Vector DB Design Fits Regulated Banking</h2>
-              <p class="subtitle">
-                Every engineering decision optimizes for auditability, deterministic policy
-                grounding, and zero data leakage.
-              </p>
-            </div>
-            <span class="slide-tag">Credit Copilot · Production Ready</span>
-          </div>
-
-          <div class="summary-grid">
-            <article class="summary-card reveal d1">
-              <span class="icon-box is-red">
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                  <path d="M10 2.5L16.5 5V10C16.5 13.9 13.7 16.9 10 18C6.3 16.9 3.5 13.9 3.5 10V5L10 2.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
-                </svg>
-              </span>
-              <h3>Strict Schema Isolation</h3>
-              <p>
-                Customer applications &amp; PII stay strictly inside <code>cases.*</code> and are
-                cryptographically blocked from ever entering <code>knowledge.*</code>.
-              </p>
-              <div class="summary-metric">HTTP 403 UntrustedPolicyDocument</div>
-            </article>
-
-            <article class="summary-card reveal d2">
-              <span class="icon-box">
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                  <rect x="3" y="4" width="14" height="13" rx="2" stroke="currentColor" stroke-width="1.6" />
-                  <path d="M3 8.5H17M7 2.5V5.5M13 2.5V5.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-                </svg>
-              </span>
-              <h3>Time-Travel Accuracy</h3>
-              <p>
-                Hard SQL filtering on <code>effective_from</code> and <code>effective_to</code>
-                guarantees superseded policies (<code>CP-2024</code>) never pollute 2025 decisions.
-              </p>
-              <div class="summary-metric">B-tree (product, effective_from, to)</div>
-            </article>
-
-            <article class="summary-card reveal d3">
-              <span class="icon-box is-teal">
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                  <path d="M4 10H16M10 4V16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-                </svg>
-              </span>
-              <h3>Hybrid Precision + Recall</h3>
-              <p>
-                Combining pgvector cosine similarity with GIN-backed Okapi BM25 via RRF
-                (<code>k=60</code>) retrieves both natural phrasing and exact clause IDs.
-              </p>
-              <div class="summary-metric">Single-Snapshot SQL Fusion</div>
-            </article>
-
-            <article class="summary-card reveal d2">
-              <span class="icon-box is-amber">
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                  <path d="M5 10.5L8.5 14L15.5 6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </span>
-              <h3>Atomic &amp; Idempotent</h3>
-              <p>
-                Deterministic SHA-256 chunk IDs skip unchanged embeddings; advisory locks + ACID
-                transactions guarantee zero partial indexes on outages.
-              </p>
-              <div class="summary-metric">pg_advisory_xact_lock + ACID</div>
-            </article>
-
-            <article class="summary-card reveal d3">
-              <span class="icon-box">
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                  <rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.5" />
-                  <path d="M3 8H17M8 8V16" stroke="currentColor" stroke-width="1.5" />
-                </svg>
-              </span>
-              <h3>Zero-Hallucination Math</h3>
-              <p>
-                Pricing CSVs are parsed into structured <code>knowledge.pricing</code> rows so
-                EMI &amp; DBR calculations run in exact 50-digit Decimal code — never LLM prose.
-              </p>
-              <div class="summary-metric">knowledge.pricing → Decimal Engine</div>
-            </article>
-
-            <article class="summary-card reveal d4">
-              <span class="icon-box is-teal">
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-                  <circle cx="6.5" cy="10" r="3" stroke="currentColor" stroke-width="1.5" />
-                  <circle cx="13.5" cy="10" r="3" stroke="currentColor" stroke-width="1.5" />
-                </svg>
-              </span>
-              <h3>Provider-Agnostic Vectors</h3>
-              <p>
-                Composite primary key <code>(chunk_id, model, dimensions)</code> lets Gemini cloud
-                and local Ollama embeddings coexist without re-creating tables.
-              </p>
-              <div class="summary-metric">Gemini Cloud ↔ Local Ollama</div>
-            </article>
-          </div>
-        </section>
-
-        <!-- Progress rail -->
+        <!-- Progress bar -->
         <div class="progress-rail" aria-hidden="true">
-          <div class="progress-fill" id="progressFill" style="width: 12.5%"></div>
+          <div class="progress-fill" id="progressFill" style="width: 14.28%"></div>
         </div>
       </div>
     </main>
 
-    <!-- Presenter Controls -->
+    <!-- Bottom Presenter Controls -->
     <nav class="deck-controls" aria-label="Presentation controls">
       <button type="button" class="nav-btn" id="btnPrev" aria-label="Previous slide" title="Previous (←)">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
@@ -2182,7 +1099,7 @@
         </svg>
       </button>
       <div class="dots" id="dots" role="tablist" aria-label="Slides"></div>
-      <span class="counter" id="counter">01 / 08</span>
+      <span class="counter" id="counter">01 / 07</span>
       <button type="button" class="nav-btn" id="btnNext" aria-label="Next slide" title="Next (→ / Space)">
         <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
           <path d="M6 3.5L10.5 8L6 12.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
@@ -2197,7 +1114,231 @@
 
     <script>
       (() => {
-        const slides = Array.from(document.querySelectorAll('.slide'));
+        const STEPS = [
+          {
+            focus: 'overview',
+            pill: 'Overview',
+            eyebrow: 'STEP 01 OF 07 · FULL ARCHITECTURE',
+            title: 'Policy Ingestion & Vector Database — End-to-End Flow',
+            lead: 'Credit Copilot converts raw lending policies into dated, clause-indexed vectors inside PostgreSQL 17 + pgvector while cryptographically isolating customer data.',
+            tag: '4-Stage Live SSE → pgvector',
+            fourCols: true,
+            cards: [
+              {
+                title: '1. Extract & Trust',
+                badge: 'PDF / MD / CSV',
+                body: 'Parses policy files, blocks customer packs (<code>403</code>), and auto-reads edition &amp; validity dates.',
+                foot: 'ParserRegistry + policy-metadata.ts',
+              },
+              {
+                title: '2. Clause Chunking',
+                badge: 'cl100k-v3',
+                body: 'Splits along banking clauses (<code>CP-*</code>, <code>PM-*</code>, <code>PS-*</code>) with SHA-256 idempotency.',
+                foot: '≤800 tokens · 60 overlap',
+              },
+              {
+                title: '3. Vector Embedding',
+                badge: '768d · Multi-Model',
+                tone: 'is-teal',
+                body: 'Encodes each clause into validated semantic vectors (Gemini or Ollama) with live SSE progress.',
+                foot: 'PK (chunk_id, model, dimensions)',
+              },
+              {
+                title: '4. Atomic pgvector DB',
+                badge: 'Hybrid RRF',
+                tone: 'is-teal',
+                body: 'Commits vectors, GIN full-text, dates &amp; exact pricing rows in one ACID transaction.',
+                foot: 'Cosine <=> + BM25 + RRF (k=60)',
+              },
+            ],
+          },
+          {
+            focus: 'sources',
+            pill: 'Sources',
+            eyebrow: 'STEP 02 OF 07 · INPUT CORPUS & SECURITY BOUNDARY',
+            title: 'Spotlight: Policy Sources & Zero-Trust Customer Pack Firewall',
+            lead: 'Only reviewed or structured bank lending policies enter the pipeline — customer application packs and personal identifiers are blocked before ingestion begins.',
+            tag: 'head-credit RBAC · ≤10 MiB / file',
+            cards: [
+              {
+                title: 'Three Supported Policy Formats',
+                badge: 'PDF · MD · CSV',
+                body: '<strong>PDF</strong> policies &amp; manuals (<code>pdf.js</code> coordinate sort, ≤100 pages), <strong>Markdown</strong> circulars &amp; product sheets (<code>remark</code> AST), and <strong>CSV</strong> interest-rate pricing tables.',
+                foot: 'Validates magic bytes (%PDF-), MIME & UTF-8',
+              },
+              {
+                title: 'Customer Pack Isolation Gate',
+                badge: 'HTTP 403',
+                tone: 'is-red',
+                body: 'Blocks <code>APP-*</code> / <code>AUTO-*</code> filenames, excluded evidence SHA-256 hashes, and documents combining <em>Application reference</em> with salary, bureau, or national ID sections.',
+                foot: 'Error: UntrustedPolicyDocument',
+              },
+              {
+                title: 'Strict Ingestion RBAC',
+                badge: 'can_ingest = true',
+                tone: 'is-amber',
+                body: 'Standard loan &amp; credit officers have read-only access to the Policy Library. Only <code>head-credit</code> can upload, index, or delete policy sources.',
+                foot: 'Enforced server-side by IngestionGuard',
+              },
+            ],
+          },
+          {
+            focus: 'extract',
+            pill: '1. Extract',
+            eyebrow: 'STEP 03 OF 07 · STAGE 1 — EXTRACT & METADATA',
+            title: 'Spotlight: Parsing, Normalization & Automatic Metadata Resolution',
+            lead: 'Stage 1 turns raw bytes into clean NFKC-normalized text blocks with page/row provenance and resolves edition, product, and effective dates automatically.',
+            tag: 'Stage 1 · Extract',
+            cards: [
+              {
+                title: 'Deterministic Normalization',
+                badge: 'SHA-256 Hash',
+                body: 'Extracts text with exact page numbers (PDF) or row numbers (CSV), applies <code>NFKC</code> normalization, and hashes raw bytes with <code>SHA-256</code> for version conflict checks.',
+                foot: 'No OCR · encrypted or empty PDFs rejected',
+              },
+              {
+                title: '3-Tier Metadata Resolution',
+                badge: 'Auto-Header',
+                tone: 'is-teal',
+                body: '<strong>1)</strong> Matches <code>corpus-manifest.json</code> by SHA-256 · <strong>2)</strong> Parses <code>Document ID</code>, <code>Edition/Version</code>, <code>Effective/Superseded</code> dates &amp; product from headers · <strong>3)</strong> Merges optional UI overrides.',
+                foot: 'Supports PL-100 & AL-200 dated editions',
+              },
+              {
+                title: 'Date Integrity & Structured Pricing',
+                badge: '422 Guard',
+                tone: 'is-amber',
+                body: 'Validates <code>effectiveTo &gt; effectiveFrom</code> via Zod schemas and extracts CSV rate tables into typed rows for deterministic 50-digit Decimal underwriting math.',
+                foot: 'Headerless junk files safely rejected (403)',
+              },
+            ],
+          },
+          {
+            focus: 'chunk',
+            pill: '2. Chunk',
+            eyebrow: 'STEP 04 OF 07 · STAGE 2 — CLAUSE-AWARE CHUNKING',
+            title: 'Spotlight: Banking Clause Segmentation & Deterministic Idempotency',
+            lead: 'Instead of cutting rules mid-sentence with fixed character windows, Credit Copilot chunks along legal policy clauses so every vector keeps complete rule meaning.',
+            tag: 'Stage 2 · clause-cl100k-v3',
+            cards: [
+              {
+                title: 'Clause & Row Boundaries',
+                badge: 'CP · PM · PS · C',
+                body: 'Detects formal clause headings (<code>CP-4.1</code>, <code>PM-2</code>, <code>PS-9</code>, <code>C-1</code>) and CSV pricing rows. Comparison tables (e.g. <code>CP-13</code> referencing earlier clauses) stay intact inside their parent chunk.',
+                foot: 'Preserves pageStart, pageEnd, row & section',
+              },
+              {
+                title: 'cl100k Token Window + Overlap',
+                badge: '800 / 60 tok',
+                tone: 'is-teal',
+                body: 'Counts tokens via <code>js-tiktoken (cl100k_base)</code>. Clauses ≤ <strong>800 tokens</strong> stay whole; oversized sections split cleanly with a <strong>60-token overlap</strong>.',
+                foot: 'Every chunk carries edition, product & dates',
+              },
+              {
+                title: 'Zero-Waste Re-Ingestion',
+                badge: 'Idempotent',
+                tone: 'is-amber',
+                body: 'Each chunk ID is <code>SHA-256(docId:docHash:version:ordinal:contentHash)</code>. Re-uploading an unchanged policy skips Embed &amp; Index immediately with <strong>0 API calls</strong>.',
+                foot: 'Same ID + different hash → HTTP 409 Conflict',
+              },
+            ],
+          },
+          {
+            focus: 'embed',
+            pill: '3. Embed',
+            eyebrow: 'STEP 05 OF 07 · STAGE 3 — VECTOR EMBEDDING',
+            title: 'Spotlight: Dense Semantic Embeddings & Multi-Space Isolation',
+            lead: 'Stage 3 maps each policy clause into a dense numeric vector so natural-language underwriting questions match relevant clauses by cosine geometry.',
+            tag: 'Stage 3 · EmbeddingPort (768d)',
+            cards: [
+              {
+                title: 'Meaning as Vector Coordinates',
+                badge: 'Cosine Space',
+                tone: 'is-teal',
+                body: 'Encodes text with <code>task="document"</code> into dense float arrays (e.g. <code>[0.04, -0.19, 0.63…]</code>). Paraphrased queries like <em>"max debt burden"</em> land right next to <code>CP-4.1 (DBR 40%)</code>.',
+                foot: 'Query-time PII masked before embedding',
+              },
+              {
+                title: 'Strict Dimension Validation & SSE',
+                badge: 'Live Progress',
+                body: 'Streams per-chunk progress (<code>Embedded k of N</code>) to the browser. Every vector must match expected <code>dimensions</code> with finite numbers — failing cleanly with zero partial writes.',
+                foot: 'DB constraint: CHECK(vector_dims = dimensions)',
+              },
+              {
+                title: 'Gemini Cloud ↔ Local Ollama Safe',
+                badge: 'Multi-Space PK',
+                tone: 'is-amber',
+                body: 'Composite key <code>PRIMARY KEY (chunk_id, model, dimensions)</code> lets multiple embedding models and vector sizes coexist cleanly in <code>knowledge.embeddings</code> without mixing spaces.',
+                foot: 'Zero downtime when switching providers',
+              },
+            ],
+          },
+          {
+            focus: 'index',
+            pill: '4. Index',
+            eyebrow: 'STEP 06 OF 07 · STAGE 4 — ATOMIC INDEX COMMIT',
+            title: 'Spotlight: Concurrency Locking & Single-Transaction ACID Commit',
+            lead: 'Stage 4 publishes documents, chunks, full-text search vectors, embeddings, and pricing rows atomically — ensuring the Vector DB is never left half-indexed.',
+            tag: 'Stage 4 · ACID Transaction',
+            cards: [
+              {
+                title: 'Per-Document Advisory Lock',
+                badge: 'Concurrency Safe',
+                body: 'Acquires <code>pg_advisory_xact_lock(hashtext(docId))</code> inside the transaction to serialize concurrent uploads for the same policy ID and re-verify hash conflicts.',
+                foot: 'Prevents race conditions on parallel batches',
+              },
+              {
+                title: 'All-or-Nothing Publishing',
+                badge: 'Zero Partial Chunks',
+                tone: 'is-teal',
+                body: 'Writes <code>documents</code>, <code>index_revisions</code>, deactivates old rows, upserts active <code>chunks</code> + <code>embeddings</code> + <code>pricing</code>. If anything fails, PostgreSQL rolls back cleanly.',
+                foot: 'Stored GENERATED tsvector updated automatically',
+              },
+              {
+                title: 'Full Lifecycle Auditability',
+                badge: 'Audit Trail',
+                tone: 'is-amber',
+                body: 'Records every attempt in <code>knowledge.ingestion_attempts</code> (<code>processing → succeeded | skipped | failed | deleted</code>) and supports full cascading policy deletion.',
+                foot: 'DELETE /knowledge/documents/:id removes vectors',
+              },
+            ],
+          },
+          {
+            focus: 'vectordb',
+            pill: 'Vector DB',
+            eyebrow: 'STEP 07 OF 07 · POSTGRESQL 17 + PGVECTOR RETRIEVAL',
+            title: 'Spotlight: Inside knowledge.* & Hybrid Search (Cosine + BM25 + RRF)',
+            lead: 'PostgreSQL + pgvector powers both semantic vector search and exact keyword BM25 inside one isolated schema — filtering by product and date before ranking.',
+            tag: 'Hybrid: Cosine <=> + BM25 + RRF (k=60)',
+            cards: [
+              {
+                title: 'Unified Schema, Isolated from PII',
+                badge: 'knowledge.*',
+                tone: 'is-teal',
+                body: 'Holds <code>documents</code>, <code>chunks</code> (<code>GIN(search_vector)</code> + date B-tree), <code>embeddings</code> (<code>pgvector</code>), and <code>pricing</code> — zero foreign keys to customer <code>cases.*</code>.',
+                foot: 'One ACID engine · no sync drift across DBs',
+              },
+              {
+                title: 'Hard SQL Date & Product Filter',
+                badge: 'Time-Travel Safe',
+                body: 'An <code>eligible</code> CTE enforces <code>c.active</code>, <code>product = $2</code>, and <code>effective_from &lt;= asOfDate &lt; effective_to</code> <em>before</em> scoring — expired policies (<code>CP-2024</code>) can never leak.',
+                foot: 'B-tree index: (product, effective_from, to)',
+              },
+              {
+                title: 'Reciprocal Rank Fusion (RRF)',
+                badge: 'k=60 · Single SQL',
+                tone: 'is-amber',
+                body: 'Fuses Top-20 <strong>pgvector Cosine</strong> (<code>1 - (embedding &lt;=&gt; $1)</code>) + Top-20 in-SQL <strong>Okapi BM25</strong> (<code>k1=1.2, b=0.75</code>) via <code>1/(60+rV) + 1/(60+rB)</code> + optional similarity-floored rewrite.',
+                foot: 'Catches both paraphrases & exact clause IDs',
+              },
+            ],
+          },
+        ];
+
+        const masterSvg = document.getElementById('masterSvg');
+        const stepEyebrow = document.getElementById('stepEyebrow');
+        const slideTitle = document.getElementById('slideTitle');
+        const detailPanel = document.getElementById('detailPanel');
+        const stagePillsWrap = document.getElementById('stagePills');
         const dotsWrap = document.getElementById('dots');
         const counter = document.getElementById('counter');
         const progressFill = document.getElementById('progressFill');
@@ -2207,31 +1348,87 @@
 
         let current = 0;
 
-        // Build dot controls
-        slides.forEach((slide, idx) => {
-          const btn = document.createElement('button');
-          btn.type = 'button';
-          btn.className = 'dot-btn' + (idx === 0 ? ' is-active' : '');
-          btn.title = `${idx + 1}. ${slide.dataset.title || ''}`;
-          btn.setAttribute('aria-label', `Go to slide ${idx + 1}: ${slide.dataset.title || ''}`);
-          btn.addEventListener('click', () => goTo(idx));
-          dotsWrap.appendChild(btn);
+        // Build top pills & bottom dots
+        STEPS.forEach((step, idx) => {
+          const pill = document.createElement('button');
+          pill.type = 'button';
+          pill.className = 'stage-pill';
+          pill.textContent = step.pill;
+          pill.addEventListener('click', () => goTo(idx));
+          stagePillsWrap.appendChild(pill);
+
+          const dot = document.createElement('button');
+          dot.type = 'button';
+          dot.className = 'dot-btn';
+          dot.title = `${idx + 1}. ${step.pill}`;
+          dot.setAttribute('aria-label', `Go to step ${idx + 1}: ${step.pill}`);
+          dot.addEventListener('click', () => goTo(idx));
+          dotsWrap.appendChild(dot);
         });
 
+        const pills = Array.from(stagePillsWrap.querySelectorAll('.stage-pill'));
         const dots = Array.from(dotsWrap.querySelectorAll('.dot-btn'));
 
-        function goTo(index) {
-          const next = Math.max(0, Math.min(slides.length - 1, index));
-          current = next;
-          slides.forEach((slide, idx) => {
-            slide.classList.toggle('is-active', idx === current);
-            slide.classList.toggle('is-prev', idx < current);
+        // Clickable SVG diagram nodes jump directly to their slide
+        document.querySelectorAll('[data-jump]').forEach((node) => {
+          const jumpIndex = Number(node.getAttribute('data-jump'));
+          node.addEventListener('click', () => goTo(jumpIndex));
+          node.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              goTo(jumpIndex);
+            }
           });
-          dots.forEach((dot, idx) => dot.classList.toggle('is-active', idx === current));
-          counter.textContent = `${String(current + 1).padStart(2, '0')} / ${String(slides.length).padStart(2, '0')}`;
-          progressFill.style.width = `${((current + 1) / slides.length) * 100}%`;
+        });
+
+        function renderDetail(step) {
+          // Re-trigger smooth fade-up animation
+          detailPanel.style.animation = 'none';
+          void detailPanel.offsetHeight;
+          detailPanel.style.animation = '';
+
+          const cardsHtml = step.cards
+            .map(
+              (c) => `
+              <article class="d-card ${c.tone || ''}">
+                <div class="d-card-head">
+                  <h3>${c.title}</h3>
+                  <span class="d-card-badge">${c.badge}</span>
+                </div>
+                <p>${c.body}</p>
+                <div class="d-card-foot">${c.foot}</div>
+              </article>
+            `,
+            )
+            .join('');
+
+          detailPanel.innerHTML = `
+            <div class="detail-lead">
+              <p>${step.lead}</p>
+              <span class="detail-tag">${step.tag}</span>
+            </div>
+            <div class="detail-cards${step.fourCols ? ' is-four' : ''}">
+              ${cardsHtml}
+            </div>
+          `;
+        }
+
+        function goTo(index) {
+          const next = Math.max(0, Math.min(STEPS.length - 1, index));
+          current = next;
+          const step = STEPS[current];
+
+          masterSvg.setAttribute('data-focus', step.focus);
+          stepEyebrow.textContent = step.eyebrow;
+          slideTitle.textContent = step.title;
+          renderDetail(step);
+
+          pills.forEach((p, idx) => p.classList.toggle('is-active', idx === current));
+          dots.forEach((d, idx) => d.classList.toggle('is-active', idx === current));
+          counter.textContent = `${String(current + 1).padStart(2, '0')} / ${String(STEPS.length).padStart(2, '0')}`;
+          progressFill.style.width = `${((current + 1) / STEPS.length) * 100}%`;
           btnPrev.disabled = current === 0;
-          btnNext.disabled = current === slides.length - 1;
+          btnNext.disabled = current === STEPS.length - 1;
         }
 
         btnPrev.addEventListener('click', () => goTo(current - 1));
@@ -2256,235 +1453,12 @@
             goTo(current - 1);
           } else if (e.key === 'f' || e.key === 'F') {
             toggleFullscreen();
-          } else if (e.key >= '1' && e.key <= String(slides.length)) {
+          } else if (e.key >= '1' && e.key <= String(STEPS.length)) {
             goTo(Number(e.key) - 1);
           }
         });
 
         goTo(0);
-
-        // ============================================================
-        // Slide 2: Interactive 4-stage ingestion pipeline simulator
-        // ============================================================
-        const pipeCards = Array.from(document.querySelectorAll('[data-pipe]'));
-        const pipeTrackFill = document.getElementById('pipeTrackFill');
-        const pipePulse = document.getElementById('pipePulse');
-        const simStatus = document.getElementById('simStatus');
-        const trackStops = [120, 426, 733, 1040];
-        let simTimers = [];
-
-        function clearSimTimers() {
-          simTimers.forEach((t) => clearTimeout(t));
-          simTimers = [];
-        }
-
-        function setCard(idx, state, badgeText, detailText, pct) {
-          const card = pipeCards[idx];
-          if (!card) return;
-          card.classList.remove('is-running', 'is-done', 'is-failed');
-          if (state) card.classList.add(state);
-          card.querySelector('[data-badge]').textContent = badgeText;
-          card.querySelector('[data-detail]').textContent = detailText;
-          card.querySelector('[data-bar]').style.width = `${pct}%`;
-        }
-
-        function resetPipeline() {
-          clearSimTimers();
-          setCard(0, '', 'QUEUED', 'Waiting for file…', 0);
-          setCard(1, '', 'QUEUED', 'Waiting for extraction…', 0);
-          setCard(2, '', 'QUEUED', 'Waiting for chunks…', 0);
-          setCard(3, '', 'QUEUED', 'Waiting for vectors…', 0);
-          pipeTrackFill.setAttribute('x2', '120');
-          pipeTrackFill.setAttribute('stroke', '#176753');
-          pipePulse.setAttribute('opacity', '0');
-          simStatus.classList.remove('is-error');
-          simStatus.textContent = 'Ready · Click to run live simulation';
-        }
-
-        function runPolicySimulation() {
-          resetPipeline();
-          simStatus.textContent = 'Streaming SSE · credit-policy-2025.pdf';
-          pipePulse.setAttribute('opacity', '1');
-          pipePulse.setAttribute('cx', String(trackStops[0]));
-
-          const timeline = [
-            [
-              0,
-              () => {
-                setCard(0, 'is-running', 'RUNNING', 'Parsing PDF & verifying trust gate…', 45);
-              },
-            ],
-            [
-              650,
-              () => {
-                setCard(0, 'is-done', 'DONE', 'PDF · 12 pages · CP-2025 (2025-03-01)', 100);
-                pipeTrackFill.setAttribute('x2', String(trackStops[1]));
-                pipePulse.setAttribute('cx', String(trackStops[1]));
-                setCard(1, 'is-running', 'RUNNING', 'Splitting clauses (clause-cl100k-v3)…', 50);
-              },
-            ],
-            [
-              1350,
-              () => {
-                setCard(1, 'is-done', 'DONE', '14 clause chunks · SHA-256 IDs ready', 100);
-                pipeTrackFill.setAttribute('x2', String(trackStops[2]));
-                pipePulse.setAttribute('cx', String(trackStops[2]));
-                setCard(2, 'is-running', 'RUNNING', 'Embedding 6 of 14 chunks (768d)…', 45);
-              },
-            ],
-            [
-              1850,
-              () => {
-                setCard(2, 'is-running', 'RUNNING', 'Embedding 12 of 14 chunks (768d)…', 86);
-              },
-            ],
-            [
-              2350,
-              () => {
-                setCard(2, 'is-done', 'DONE', '14 vectors · 768d validated', 100);
-                pipeTrackFill.setAttribute('x2', String(trackStops[3]));
-                pipePulse.setAttribute('cx', String(trackStops[3]));
-                setCard(3, 'is-running', 'RUNNING', 'ACID commit to knowledge.*…', 60);
-              },
-            ],
-            [
-              3000,
-              () => {
-                setCard(3, 'is-done', 'DONE', 'Indexed 14 chunks as CP-2025', 100);
-                pipePulse.setAttribute('opacity', '0');
-                simStatus.textContent = '✓ Succeeded · CP-2025 active in pgvector (14 chunks)';
-              },
-            ],
-          ];
-
-          timeline.forEach(([delay, fn]) => simTimers.push(setTimeout(fn, delay)));
-        }
-
-        function runBlockedSimulation() {
-          resetPipeline();
-          simStatus.textContent = 'Streaming SSE · APP-001.pdf';
-          setCard(0, 'is-running', 'RUNNING', 'Checking SHA-256 & customer pack guard…', 45);
-          simTimers.push(
-            setTimeout(() => {
-              setCard(
-                0,
-                'is-failed',
-                'FAILED',
-                '403 UntrustedPolicyDocument — customer pack rejected',
-                100,
-              );
-              setCard(1, '', 'BLOCKED', 'Aborted before chunking', 0);
-              setCard(2, '', 'BLOCKED', '0 embedding tokens spent', 0);
-              setCard(3, '', 'BLOCKED', '0 rows written to knowledge.*', 0);
-              pipeTrackFill.setAttribute('stroke', '#b43a2f');
-              simStatus.classList.add('is-error');
-              simStatus.textContent = '✕ Blocked at Stage 1 · Customer data isolated from Vector DB';
-            }, 650),
-          );
-        }
-
-        document.getElementById('btnSimPolicy').addEventListener('click', runPolicySimulation);
-        document.getElementById('btnSimBlocked').addEventListener('click', runBlockedSimulation);
-        document.getElementById('btnSimReset').addEventListener('click', resetPipeline);
-
-        // ============================================================
-        // Slide 7: Interactive RRF Fusion Bar Presets
-        // ============================================================
-        const rrfPresets = {
-          dbr: [
-            {
-              clause: 'CP-4.1 · CP-2025',
-              meta: 'Vec #1 · BM25 #1',
-              score: '0.0328',
-              vecPct: 50,
-              bm25Pct: 50,
-              top: true,
-            },
-            {
-              clause: 'CP-4.2 · CP-2025',
-              meta: 'Vec #2 · BM25 #4',
-              score: '0.0317',
-              vecPct: 48,
-              bm25Pct: 45,
-            },
-            {
-              clause: 'C-1 · Circular 2025/02',
-              meta: 'Vec #3 · BM25 #7',
-              score: '0.0308',
-              vecPct: 46,
-              bm25Pct: 41,
-            },
-            {
-              clause: 'CP-2024 (Expired)',
-              meta: 'Excluded by SQL date filter',
-              score: 'FILTERED',
-              vecPct: 0,
-              bm25Pct: 0,
-            },
-          ],
-          auto: [
-            {
-              clause: 'PS-9 · synthetic-auto-product',
-              meta: 'Vec #1 · BM25 #1',
-              score: '0.0328',
-              vecPct: 50,
-              bm25Pct: 50,
-              top: true,
-            },
-            {
-              clause: 'PS-3 · synthetic-auto-product',
-              meta: 'Vec #2 · BM25 #3',
-              score: '0.0320',
-              vecPct: 48,
-              bm25Pct: 47,
-            },
-            {
-              clause: 'CP-4.1 · AUTO-2025',
-              meta: 'Vec #4 · BM25 #5',
-              score: '0.0310',
-              vecPct: 45,
-              bm25Pct: 43,
-            },
-            {
-              clause: 'PL-100 Policies',
-              meta: 'Excluded by SQL product filter',
-              score: 'FILTERED',
-              vecPct: 0,
-              bm25Pct: 0,
-            },
-          ],
-        };
-
-        const rrfBars = document.getElementById('rrfBars');
-        const rrfButtons = Array.from(document.querySelectorAll('[data-rrf-preset]'));
-
-        function renderRrf(key) {
-          rrfButtons.forEach((b) =>
-            b.classList.toggle('btn-primary', b.dataset.rrfPreset === key),
-          );
-          rrfBars.innerHTML = '';
-          rrfPresets[key].forEach((row) => {
-            const el = document.createElement('div');
-            el.className = 'rrf-item' + (row.top ? ' is-top' : '');
-            el.innerHTML = `
-              <div class="rrf-head">
-                <strong>${row.clause}</strong>
-                <span class="rrf-score">${row.score}</span>
-              </div>
-              <div class="rrf-track">
-                <div class="rrf-seg-vec" style="width:${row.vecPct}%"></div>
-                <div class="rrf-seg-bm25" style="width:${row.bm25Pct}%"></div>
-              </div>
-              <small style="color:var(--muted);font-size:11px">${row.meta}</small>
-            `;
-            rrfBars.appendChild(el);
-          });
-        }
-
-        rrfButtons.forEach((b) =>
-          b.addEventListener('click', () => renderRrf(b.dataset.rrfPreset)),
-        );
-        renderRrf('dbr');
       })();
     </script>
   </body>
