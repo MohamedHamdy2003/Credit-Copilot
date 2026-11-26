@@ -1,10 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { DataSource } from 'typeorm';
+import { ZodError } from 'zod';
 import {
   customPolicyMetadataSchema,
-  type CustomPolicyMetadata,
+  policyMetadataOverrideSchema,
   type DocumentMetadata,
   type NormalizedDocument,
+  type PolicyMetadataOverride,
 } from '../../../contracts/src/documents.js';
 import type { IngestionStage } from '../../../contracts/src/streams.js';
 import type { EmbeddingPort } from '../../../application/src/ports.js';
@@ -12,6 +14,7 @@ import { DomainError, invariant } from '../../../domain/src/errors.js';
 import { ParserRegistry } from '../parsers/registry.js';
 import { chunkDocument, CHUNKER_VERSION } from '../parsers/chunker.js';
 import { extractPricing } from '../parsers/pricing.js';
+import { extractPolicyMetadataFromDocument } from './policy-metadata.js';
 
 export interface ManifestEntry extends DocumentMetadata {
   filename: string;
@@ -27,7 +30,7 @@ export interface IngestionStageStatus {
 }
 
 export interface IngestionOptions {
-  customMetadata?: CustomPolicyMetadata;
+  customMetadata?: PolicyMetadataOverride;
   onProgress?: (event: IngestionStageStatus) => void;
 }
 
@@ -52,19 +55,79 @@ function looksLikeCustomerPack(filename: string, document: NormalizedDocument) {
   return hasApplicationRef && hasCustomerEvidence;
 }
 
-function resolveCustomMetadata(
+function hasExplicitOverride(override: PolicyMetadataOverride | undefined): boolean {
+  if (!override) return false;
+  return Object.values(override).some((value) => value !== undefined);
+}
+
+function resolveDocumentMetadata(
   filename: string,
-  raw: CustomPolicyMetadata,
-): DocumentMetadata & { sourceOrigin: 'custom' } {
-  const parsed = customPolicyMetadataSchema.parse(raw);
-  const id = parsed.id ?? `CUSTOM-${slug(parsed.edition, 18)}-${slug(filename, 36)}`.slice(0, 64);
+  document: NormalizedDocument,
+  manifestMatch: ManifestEntry | undefined,
+  rawOverride: PolicyMetadataOverride | undefined,
+): DocumentMetadata & { sourceOrigin: 'manifest' | 'custom' } {
+  const override = rawOverride ? policyMetadataOverrideSchema.parse(rawOverride) : undefined;
+  if (manifestMatch && !hasExplicitOverride(override)) {
+    return { ...manifestMatch, sourceOrigin: 'manifest' };
+  }
+
+  const base: PolicyMetadataOverride = manifestMatch
+    ? {
+        id: manifestMatch.id,
+        edition: manifestMatch.edition,
+        effectiveFrom: manifestMatch.effectiveFrom,
+        effectiveTo: manifestMatch.effectiveTo,
+        product: manifestMatch.product as 'PL-100' | 'AL-200',
+        kind: manifestMatch.kind,
+      }
+    : extractPolicyMetadataFromDocument(filename, document);
+
+  const edition = override?.edition ?? base.edition;
+  const effectiveFrom = override?.effectiveFrom ?? base.effectiveFrom;
+  if (!edition || !effectiveFrom) {
+    throw new DomainError(
+      'UntrustedPolicyDocument',
+      'Document is not in the reviewed policy manifest and lacks header metadata (edition/document ID and effective date). Open "Override validity dates & metadata" to supply them.',
+      403,
+    );
+  }
+
+  const effectiveTo =
+    override?.effectiveTo !== undefined ? override.effectiveTo : (base.effectiveTo ?? null);
+  const product = override?.product ?? base.product ?? 'PL-100';
+  const kind = override?.kind ?? base.kind ?? (document.format === 'csv' ? 'pricing' : 'policy');
+  const explicitId = override?.id ?? base.id;
+
+  let validated;
+  try {
+    validated = customPolicyMetadataSchema.parse({
+      ...(explicitId ? { id: explicitId } : {}),
+      edition,
+      effectiveFrom,
+      effectiveTo,
+      product,
+      kind,
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      throw new DomainError(
+        'InvalidPolicyMetadata',
+        error.issues[0]?.message ?? 'Invalid policy metadata',
+        422,
+      );
+    }
+    throw error;
+  }
+
+  const id =
+    validated.id ?? `CUSTOM-${slug(validated.edition, 18)}-${slug(filename, 36)}`.slice(0, 64);
   return {
     id,
-    edition: parsed.edition,
-    effectiveFrom: parsed.effectiveFrom,
-    effectiveTo: parsed.effectiveTo ?? null,
-    product: parsed.product,
-    kind: parsed.kind,
+    edition: validated.edition,
+    effectiveFrom: validated.effectiveFrom,
+    effectiveTo: validated.effectiveTo ?? null,
+    product: validated.product,
+    kind: validated.kind,
     sourceOrigin: 'custom',
   };
 }
@@ -105,17 +168,12 @@ export class IngestionService {
       const manifestMatch = this.manifest.find(
         (entry) => entry.filename === filename && entry.sha256 === document.hash,
       );
-      const metadata: DocumentMetadata & { sourceOrigin?: 'manifest' | 'custom' } = manifestMatch
-        ? { ...manifestMatch, sourceOrigin: 'manifest' }
-        : options?.customMetadata
-          ? resolveCustomMetadata(filename, options.customMetadata)
-          : (() => {
-              throw new DomainError(
-                'UntrustedPolicyDocument',
-                'Only reviewed manifest documents or explicitly tagged custom policies may enter the policy knowledge base',
-                403,
-              );
-            })();
+      const metadata = resolveDocumentMetadata(
+        filename,
+        document,
+        manifestMatch,
+        options?.customMetadata,
+      );
       const pageNumbers = document.blocks
         .map((block) => block.page)
         .filter((page): page is number => page !== null);
@@ -124,8 +182,8 @@ export class IngestionService {
         stage: 'extract',
         status: 'completed',
         detail: maxPage
-          ? `${document.format.toUpperCase()} · ${maxPage} pages · ${document.blocks.length} blocks`
-          : `${document.format.toUpperCase()} · ${document.blocks.length} blocks`,
+          ? `${document.format.toUpperCase()} · ${maxPage} pages · ${document.blocks.length} blocks · ${metadata.edition} (${metadata.effectiveFrom})`
+          : `${document.format.toUpperCase()} · ${document.blocks.length} blocks · ${metadata.edition} (${metadata.effectiveFrom})`,
       });
 
       report({ stage: 'chunk', status: 'running', detail: `Chunking (${CHUNKER_VERSION})` });

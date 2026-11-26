@@ -52,21 +52,6 @@ const STAGE_LABELS: Record<IngestionStage, { step: string; title: string }> = {
   index: { step: '4', title: 'Index' },
 };
 
-const MONTHS: Record<string, string> = {
-  january: '01',
-  february: '02',
-  march: '03',
-  april: '04',
-  may: '05',
-  june: '06',
-  july: '07',
-  august: '08',
-  september: '09',
-  october: '10',
-  november: '11',
-  december: '12',
-};
-
 function initialStages(): Record<IngestionStage, StageState> {
   return {
     extract: { status: 'pending' },
@@ -82,70 +67,6 @@ function sourceHref(filename: string) {
 
 function todayCairo() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Cairo' });
-}
-
-function parseHeaderDate(raw: string): string | null {
-  const trimmed = raw.trim();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-  const match = /^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/.exec(trimmed);
-  if (!match) return null;
-  const month = MONTHS[match[2]!.toLowerCase()];
-  if (!month) return null;
-  return `${match[3]}-${month}-${match[1]!.padStart(2, '0')}`;
-}
-
-function detectPolicyMetadata(
-  filename: string,
-  sampleText: string,
-): {
-  product?: 'PL-100' | 'AL-200';
-  kind?: PolicyKind;
-  edition?: string;
-  effectiveFrom?: string;
-  effectiveTo?: string;
-} {
-  const lower = filename.toLowerCase();
-  const combined = `${filename}\n${sampleText}`;
-  const product: 'PL-100' | 'AL-200' | undefined = /\bAL-200\b|\bauto[\s-]?loan\b/i.test(combined)
-    ? 'AL-200'
-    : /\bPL-100\b|\bpersonal[\s-]?loan\b/i.test(combined)
-      ? 'PL-100'
-      : undefined;
-  const kind: PolicyKind | undefined =
-    lower.endsWith('.csv') || /\bpricing\b/i.test(lower)
-      ? 'pricing'
-      : /\bcircular\b/i.test(combined)
-        ? 'circular'
-        : /\bprocedure/i.test(combined)
-          ? 'procedure'
-          : /\bproduct\s+sheet\b/i.test(combined)
-            ? 'product'
-            : /\bpolicy\b/i.test(combined)
-              ? 'policy'
-              : undefined;
-  const editionMatch =
-    /\b(CP-20\d{2}|AUTO-20\d{2})\b/i.exec(combined) ??
-    /\bCircular\s+(20\d{2})\/(\d{2})\b/i.exec(combined);
-  const edition = editionMatch
-    ? editionMatch[2]
-      ? `C-${editionMatch[1]}-${editionMatch[2]}`
-      : editionMatch[1]!.toUpperCase()
-    : undefined;
-  const effectiveFromMatch =
-    /\b(?:Effective(?:\s+from)?|IN FORCE from)[:*\s]+(\d{4}-\d{2}-\d{2}|\d{1,2}\s+[A-Za-z]+\s+\d{4})/i.exec(
-      sampleText,
-    );
-  const effectiveFrom = effectiveFromMatch
-    ? (parseHeaderDate(effectiveFromMatch[1]!) ?? undefined)
-    : undefined;
-  const effectiveToMatch =
-    /\b(?:Effective\s+to|Superseded[^.\n]*?\bon|Ends)[:*\s]+(\d{4}-\d{2}-\d{2}|\d{1,2}\s+[A-Za-z]+\s+\d{4})/i.exec(
-      sampleText,
-    );
-  const effectiveTo = effectiveToMatch
-    ? (parseHeaderDate(effectiveToMatch[1]!) ?? undefined)
-    : undefined;
-  return { product, kind, edition, effectiveFrom, effectiveTo };
 }
 
 function validityStatus(effectiveFrom?: string, effectiveTo?: string | null) {
@@ -168,13 +89,13 @@ export function Knowledge({ actor }: { actor: Actor }) {
         : Promise.resolve([]),
     [actor.canIngest],
   );
-  const [customId, setCustomId] = useState('');
-  const [customEdition, setCustomEdition] = useState('');
-  const [customProduct, setCustomProduct] = useState<'PL-100' | 'AL-200'>('PL-100');
-  const [customKind, setCustomKind] = useState<PolicyKind>('policy');
-  const [effectiveFrom, setEffectiveFrom] = useState(todayCairo);
+  const [overrideOpen, setOverrideOpen] = useState(false);
+  const [overrideId, setOverrideId] = useState('');
+  const [overrideEdition, setOverrideEdition] = useState('');
+  const [overrideProduct, setOverrideProduct] = useState<'' | 'PL-100' | 'AL-200'>('');
+  const [overrideKind, setOverrideKind] = useState<'' | PolicyKind>('');
+  const [effectiveFrom, setEffectiveFrom] = useState('');
   const [effectiveTo, setEffectiveTo] = useState('');
-  const [autoFillNote, setAutoFillNote] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
@@ -193,49 +114,6 @@ export function Knowledge({ actor }: { actor: Actor }) {
     return () => streamAbort.current?.abort();
   }, []);
 
-  async function handleFilesSelected(fileList: FileList | null) {
-    setAutoFillNote(null);
-    if (!fileList || fileList.length !== 1) return;
-    const file = fileList[0]!;
-    if (/^(?:APP|AUTO)-\d+/i.test(file.name)) return;
-    const alreadyIndexed = (documents.data ?? []).some((doc) => doc.filename === file.name);
-    if (alreadyIndexed) return;
-    const isText = /\.(?:md|csv)$/i.test(file.name);
-    const sampleText = isText
-      ? await file
-          .slice(0, 4096)
-          .text()
-          .catch(() => '')
-      : '';
-    const detected = detectPolicyMetadata(file.name, sampleText);
-    const filled: string[] = [];
-    if (detected.product) {
-      setCustomProduct(detected.product);
-      filled.push('product');
-    }
-    if (detected.kind) {
-      setCustomKind(detected.kind);
-      filled.push('type');
-    }
-    if (detected.edition && !customEdition.trim()) {
-      setCustomEdition(detected.edition);
-      filled.push('edition');
-    }
-    if (detected.effectiveFrom) {
-      setEffectiveFrom(detected.effectiveFrom);
-      filled.push('effective date');
-    }
-    if (detected.effectiveTo) {
-      setEffectiveTo(detected.effectiveTo);
-      filled.push('expiry date');
-    }
-    if (filled.length > 0) {
-      setAutoFillNote(
-        `Auto-detected ${filled.join(', ')} from ${file.name}. Review before ingesting.`,
-      );
-    }
-  }
-
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -249,29 +127,23 @@ export function Knowledge({ actor }: { actor: Actor }) {
       setError(new Error('Choose 1–20 files, no larger than 10 MiB each.'));
       return;
     }
+    if (effectiveFrom && effectiveTo && effectiveTo <= effectiveFrom) {
+      setError(new Error('Effective-to date must be later than effective-from date.'));
+      return;
+    }
+
     const payload = new FormData();
     for (const file of files) payload.append('files', file);
-    const hasCustomMetadata = customEdition.trim().length > 0;
-    if (hasCustomMetadata) {
-      if (!effectiveFrom) {
-        setError(new Error('Provide an effective-from date when specifying a custom edition.'));
-        return;
-      }
-      if (effectiveTo && effectiveTo <= effectiveFrom) {
-        setError(new Error('Effective-to date must be later than effective-from date.'));
-        return;
-      }
-      payload.append(
-        'metadata',
-        JSON.stringify({
-          ...(customId.trim() ? { id: customId.trim() } : {}),
-          edition: customEdition.trim(),
-          product: customProduct,
-          kind: customKind,
-          effectiveFrom,
-          effectiveTo: effectiveTo || null,
-        }),
-      );
+
+    const override: Record<string, string | null> = {};
+    if (overrideId.trim()) override.id = overrideId.trim();
+    if (overrideEdition.trim()) override.edition = overrideEdition.trim();
+    if (overrideProduct) override.product = overrideProduct;
+    if (overrideKind) override.kind = overrideKind;
+    if (effectiveFrom) override.effectiveFrom = effectiveFrom;
+    if (effectiveTo) override.effectiveTo = effectiveTo;
+    if (Object.keys(override).length > 0) {
+      payload.append('metadata', JSON.stringify(override));
     }
 
     setFilesProgress(
@@ -351,11 +223,13 @@ export function Knowledge({ actor }: { actor: Actor }) {
       documents.refresh();
       attempts.refresh();
       form.reset();
-      setCustomId('');
-      setCustomEdition('');
-      setEffectiveFrom(todayCairo());
+      setOverrideId('');
+      setOverrideEdition('');
+      setOverrideProduct('');
+      setOverrideKind('');
+      setEffectiveFrom('');
       setEffectiveTo('');
-      setAutoFillNote(null);
+      setOverrideOpen(false);
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'AbortError')) setError(e);
     } finally {
@@ -388,6 +262,14 @@ export function Knowledge({ actor }: { actor: Actor }) {
   }
 
   const totalChunks = (documents.data ?? []).reduce((sum, doc) => sum + (doc.chunk_count ?? 0), 0);
+  const activeOverrideCount = [
+    overrideId.trim(),
+    overrideEdition.trim(),
+    overrideProduct,
+    overrideKind,
+    effectiveFrom,
+    effectiveTo,
+  ].filter(Boolean).length;
 
   return (
     <>
@@ -401,8 +283,8 @@ export function Knowledge({ actor }: { actor: Actor }) {
         <section className="panel">
           <h2>Ingest policy documents</h2>
           <p className="muted">
-            Upload one or more policy files (PDF, CSV, or MD · up to 10 MiB each). Recognized bank
-            policies match automatically; specify edition and validity dates below for new policies.
+            Upload policy files (PDF, CSV, or MD · up to 10 MiB each). Edition, product, and
+            validity dates are read automatically from each document header or bank manifest.
           </p>
 
           <form onSubmit={upload}>
@@ -415,92 +297,123 @@ export function Knowledge({ actor }: { actor: Actor }) {
                 accept=".pdf,.csv,.md"
                 required
                 disabled={busy}
-                onChange={(event) => void handleFilesSelected(event.currentTarget.files)}
               />
             </label>
 
-            <fieldset className="policy-metadata-box">
-              <legend>Validity &amp; metadata (for new policies)</legend>
-              {autoFillNote && (
-                <p className="autofill-hint" role="status">
-                  {autoFillNote}
-                </p>
+            <details
+              className="policy-override"
+              open={overrideOpen}
+              onToggle={(event) => setOverrideOpen(event.currentTarget.open)}
+            >
+              <summary className="policy-override-summary">
+                <span>
+                  Override validity dates &amp; metadata (optional)
+                  {activeOverrideCount > 0 && (
+                    <span className="policy-override-badge">{activeOverrideCount} set</span>
+                  )}
+                </span>
+                <svg
+                  className="policy-override-chevron"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M4 6.25L8 10.25L12 6.25"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </summary>
+
+              {overrideOpen && (
+                <div className="policy-override-body">
+                  <p className="muted policy-override-hint">
+                    Leave blank to use values detected from the file header. Fill any field below to
+                    override or supply missing dates for a custom policy.
+                  </p>
+                  <div className="form-grid">
+                    <label>
+                      Product
+                      <select
+                        value={overrideProduct}
+                        disabled={busy}
+                        onChange={(event) =>
+                          setOverrideProduct(event.target.value as '' | 'PL-100' | 'AL-200')
+                        }
+                      >
+                        <option value="">Auto-detect from file</option>
+                        <option value="PL-100">Personal loan (PL-100)</option>
+                        <option value="AL-200">Auto loan (AL-200)</option>
+                      </select>
+                    </label>
+                    <label>
+                      Document type
+                      <select
+                        value={overrideKind}
+                        disabled={busy}
+                        onChange={(event) => setOverrideKind(event.target.value as '' | PolicyKind)}
+                      >
+                        <option value="">Auto-detect from file</option>
+                        <option value="policy">Credit policy</option>
+                        <option value="circular">Circular</option>
+                        <option value="product">Product sheet</option>
+                        <option value="procedure">Procedures manual</option>
+                        <option value="pricing">Pricing table (CSV)</option>
+                      </select>
+                    </label>
+                    <label>
+                      Policy edition
+                      <input
+                        type="text"
+                        value={overrideEdition}
+                        disabled={busy}
+                        maxLength={40}
+                        placeholder="Auto-detect · e.g. CP-2026"
+                        onChange={(event) => setOverrideEdition(event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Document ID (optional)
+                      <input
+                        type="text"
+                        value={overrideId}
+                        disabled={busy}
+                        maxLength={64}
+                        pattern="[A-Za-z0-9._-]{2,64}"
+                        placeholder="Auto-detected or generated"
+                        onChange={(event) => setOverrideId(event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Effective from
+                      <input
+                        type="date"
+                        value={effectiveFrom}
+                        disabled={busy}
+                        onChange={(event) => setEffectiveFrom(event.target.value)}
+                      />
+                    </label>
+                    <label>
+                      Effective to (optional)
+                      <input
+                        type="date"
+                        value={effectiveTo}
+                        disabled={busy}
+                        onChange={(event) => setEffectiveTo(event.target.value)}
+                      />
+                    </label>
+                  </div>
+                </div>
               )}
-              <div className="form-grid">
-                <label>
-                  Product
-                  <select
-                    value={customProduct}
-                    disabled={busy}
-                    onChange={(event) =>
-                      setCustomProduct(event.target.value as 'PL-100' | 'AL-200')
-                    }
-                  >
-                    <option value="PL-100">Personal loan (PL-100)</option>
-                    <option value="AL-200">Auto loan (AL-200)</option>
-                  </select>
-                </label>
-                <label>
-                  Document type
-                  <select
-                    value={customKind}
-                    disabled={busy}
-                    onChange={(event) => setCustomKind(event.target.value as PolicyKind)}
-                  >
-                    <option value="policy">Credit policy</option>
-                    <option value="circular">Circular</option>
-                    <option value="product">Product sheet</option>
-                    <option value="procedure">Procedures manual</option>
-                    <option value="pricing">Pricing table (CSV)</option>
-                  </select>
-                </label>
-                <label>
-                  Policy edition
-                  <input
-                    type="text"
-                    value={customEdition}
-                    disabled={busy}
-                    maxLength={40}
-                    placeholder="Optional for bank policies · e.g. CP-2026"
-                    onChange={(event) => setCustomEdition(event.target.value)}
-                  />
-                </label>
-                <label>
-                  Document ID (optional)
-                  <input
-                    type="text"
-                    value={customId}
-                    disabled={busy}
-                    maxLength={64}
-                    pattern="[A-Za-z0-9._-]{2,64}"
-                    placeholder="Auto-generated if left blank"
-                    onChange={(event) => setCustomId(event.target.value)}
-                  />
-                </label>
-                <label>
-                  Effective from
-                  <input
-                    type="date"
-                    value={effectiveFrom}
-                    disabled={busy}
-                    required={customEdition.trim().length > 0}
-                    onChange={(event) => setEffectiveFrom(event.target.value)}
-                  />
-                </label>
-                <label>
-                  Effective to (optional)
-                  <input
-                    type="date"
-                    value={effectiveTo}
-                    disabled={busy}
-                    onChange={(event) => setEffectiveTo(event.target.value)}
-                  />
-                </label>
-              </div>
-            </fieldset>
+            </details>
 
             <button className="primary" disabled={busy}>
-              {busy ? 'Ingesting…' : 'Ingest documents'}
+              {busy ? 'Uploading & indexing…' : 'Upload & index'}
             </button>
           </form>
 

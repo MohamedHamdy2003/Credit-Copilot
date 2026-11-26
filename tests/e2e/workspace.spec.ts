@@ -338,7 +338,7 @@ test('real multipart upload, duplicate registration, draft delete and mixed know
   await expect(
     page.getByText('Ingestion requires separate permission.', { exact: false }),
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Ingest documents' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Upload & index' })).toHaveCount(0);
   await page.getByRole('button', { name: 'LLM Usage', exact: true }).click();
   await expect(page.getByTestId('model-readonly')).toBeVisible();
   await expect(page.getByRole('group', { name: 'LLM provider mode' })).toHaveCount(0);
@@ -357,13 +357,15 @@ test('real multipart upload, duplicate registration, draft delete and mixed know
   await modeGroup.getByRole('button', { name: 'Auto', exact: true }).click();
   await expect(page.getByTestId('llm-status-badge')).toHaveText('Auto · Gemini + Ollama');
   await page.getByRole('button', { name: 'Policy library', exact: true }).click();
+  // Validity & metadata overrides stay collapsed by default until explicitly opened.
+  await expect(page.getByLabel('Policy edition')).toHaveCount(0);
   await page
     .getByLabel('Policy files')
     .setInputFiles([
       'data/corpus/policy/credit-policy-2025.pdf',
       'data/corpus/evidence/APP-001.pdf',
     ]);
-  await page.getByRole('button', { name: 'Ingest documents' }).click();
+  await page.getByRole('button', { name: 'Upload & index' }).click();
   await expect(page.getByText('credit-policy-2025.pdf — skipped', { exact: true })).toBeVisible();
   await expect(
     page.getByText('APP-001.pdf — failed: UntrustedPolicyDocument', { exact: true }),
@@ -371,8 +373,35 @@ test('real multipart upload, duplicate registration, draft delete and mixed know
   await expect(page.getByLabel('Ingestion stages').getByText('Extract').first()).toBeVisible();
   await expect(page.getByLabel('Ingestion stages').getByText('Index').first()).toBeVisible();
 
-  // Upload a new custom policy through all 4 live stages, then delete it via the confirmation modal.
-  await page.getByLabel('Policy edition').fill('CP-2026');
+  // Upload a new policy with header metadata directly (zero override fields opened), then delete it.
+  await page.getByLabel('Policy files').setInputFiles({
+    name: 'e2e-auto-header-policy.md',
+    mimeType: 'text/markdown',
+    buffer: Buffer.from(
+      '# Credit Policy — Personal Loans (PL-100)\n**Document ID:** CUSTOM-E2E-AUTO | **Edition:** CP-2026 | **Effective from:** 1 January 2026\n\n## CP-99. Custom Clause\nSynthetic browser test policy.\n',
+    ),
+  });
+  await page.getByRole('button', { name: 'Upload & index' }).click();
+  await expect(
+    page.getByText('e2e-auto-header-policy.md — succeeded', { exact: true }),
+  ).toBeVisible();
+  const autoRow = page.getByRole('row').filter({ hasText: 'e2e-auto-header-policy.md' });
+  await expect(autoRow).toBeVisible();
+  await expect(autoRow.getByText('CP-2026', { exact: true })).toBeVisible();
+  await expect(autoRow.getByText('2026-01-01', { exact: true })).toBeVisible();
+  await expect(autoRow.getByText('Active', { exact: true })).toBeVisible();
+  await autoRow.getByRole('button', { name: 'Delete', exact: true }).click();
+  const autoDialog = page.getByRole('dialog');
+  await expect(autoDialog).toBeVisible();
+  await autoDialog.getByRole('button', { name: 'Delete policy', exact: true }).click();
+  await expect(page.getByText('Deleted e2e-auto-header-policy.md', { exact: false })).toBeVisible();
+  await expect(page.getByRole('row').filter({ hasText: 'e2e-auto-header-policy.md' })).toHaveCount(
+    0,
+  );
+
+  // Open optional overrides to ingest a headerless custom policy with explicit dates, then delete it.
+  await page.getByText('Override validity dates & metadata (optional)').click();
+  await page.getByLabel('Policy edition').fill('CP-2026-OVR');
   await page.getByLabel('Document ID (optional)').fill('CUSTOM-E2E-2026');
   await page.getByLabel('Effective from').fill('2026-01-01');
   await page.getByLabel('Policy files').setInputFiles({
@@ -382,7 +411,7 @@ test('real multipart upload, duplicate registration, draft delete and mixed know
       '# Custom Policy\n\n## CP-99. Custom Clause\nSynthetic browser test policy.\n',
     ),
   });
-  await page.getByRole('button', { name: 'Ingest documents' }).click();
+  await page.getByRole('button', { name: 'Upload & index' }).click();
   await expect(page.getByText('e2e-custom-policy.md — succeeded', { exact: true })).toBeVisible();
   const customRow = page.getByRole('row').filter({ hasText: 'e2e-custom-policy.md' });
   await expect(customRow).toBeVisible();

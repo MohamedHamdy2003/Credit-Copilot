@@ -2,9 +2,9 @@ import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import type { Actor } from '../../domain/src/access.js';
 import {
-  customPolicyMetadataSchema,
-  type CustomPolicyMetadata,
+  policyMetadataOverrideSchema,
   type NormalizedDocument,
+  type PolicyMetadataOverride,
 } from '../../contracts/src/documents.js';
 import type { IssuedOfferDocument } from '../../contracts/src/offers.js';
 import {
@@ -85,7 +85,7 @@ export interface KnowledgePort {
     bytes: Uint8Array,
     mime?: string,
     options?: {
-      customMetadata?: CustomPolicyMetadata;
+      customMetadata?: PolicyMetadataOverride;
       onProgress?: (event: KnowledgeIngestionProgress) => void;
     },
   ): Promise<{
@@ -141,7 +141,7 @@ export class OperationsService {
   private readonly questionStreams = new QuestionStreams();
   private readonly ingestionStreams = new IngestionStreams();
   constructor(private readonly deps: OperationDependencies) {}
-  private parseCustomMetadata(raw: unknown, fileCount: number): CustomPolicyMetadata | undefined {
+  private parseCustomMetadata(raw: unknown, fileCount: number): PolicyMetadataOverride | undefined {
     if (raw === undefined || raw === null || raw === '') return undefined;
     let parsedRaw: unknown = raw;
     if (typeof raw === 'string') {
@@ -155,13 +155,13 @@ export class OperationsService {
         );
       }
     }
-    const metadata = customPolicyMetadataSchema.parse(parsedRaw);
+    const metadata = policyMetadataOverrideSchema.parse(parsedRaw);
     invariant(
       fileCount === 1 || !metadata.id,
       'InvalidUpload',
       'Custom document ID can only be set when uploading a single policy file',
     );
-    return metadata;
+    return Object.values(metadata).some((value) => value !== undefined) ? metadata : undefined;
   }
   async ingest(actor: Actor, uploads: Upload[], requestId: string, rawMetadata?: unknown) {
     invariant(
