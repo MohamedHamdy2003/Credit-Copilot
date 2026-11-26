@@ -1703,10 +1703,36 @@ summary {
 .stage-running {
   border-color: #2f8096;
   background: #f0f9fb;
+  box-shadow: 0 0 0 2px rgba(47, 128, 150, 0.14);
 }
-.stage-running .stage-num,
+.stage-running .stage-num {
+  background: #2f8096;
+  color: #fff;
+  animation: stage-pulse 1.2s ease-in-out infinite;
+}
 .stage-running .stage-badge {
   color: #155c6e;
+}
+@keyframes stage-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(47, 128, 150, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(47, 128, 150, 0);
+  }
+}
+.assessment-pipeline.is-compact {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.assessment-pipeline h2,
+.assessment-pipeline h3 {
+  margin-bottom: 0;
+}
+.assessment-stage-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .stage-completed {
   border-color: #2c7a5f;
@@ -1763,7 +1789,8 @@ button.danger-button:hover {
   background: #872920;
 }
 @media (max-width: 900px) {
-  .stage-grid {
+  .stage-grid,
+  .assessment-stage-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .workspace {

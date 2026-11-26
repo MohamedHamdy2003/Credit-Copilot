@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   ASSESSMENT_STAGES,
   assessmentStreamEvent,
+  type AssessmentStage,
   type AssessmentStreamEvent,
 } from '../../../packages/contracts/src/streams';
 import { api, ApiError } from './api';
@@ -17,6 +18,7 @@ import {
   useResource,
 } from './components';
 import { Assessment } from './Assessment';
+import { AssessmentPipeline } from './AssessmentPipeline';
 
 const stageLabels = {
   load_application: 'Loaded application',
@@ -109,6 +111,9 @@ function ApplicationView({
     [completed, setCompleted] = useState(false),
     [reconnecting, setReconnecting] = useState(false),
     [stage, setStage] = useState<Extract<AssessmentStreamEvent, { kind: 'stage' }>>(),
+    [stageMap, setStageMap] = useState<
+      Partial<Record<AssessmentStage, 'executed' | 'skipped' | 'failed'>>
+    >({}),
     [error, setError] = useState<unknown>();
   const key = useRef<string | null>(null);
   const request = useRef<AbortController | null>(null);
@@ -120,6 +125,7 @@ function ApplicationView({
     setBusy(true);
     setCompleted(false);
     setStage(undefined);
+    setStageMap({});
     setError(undefined);
     key.current ??= crypto.randomUUID();
     try {
@@ -134,7 +140,10 @@ function ApplicationView({
       const terminal = await api.follow(`assessment-streams/${runId}`, assessmentStreamEvent, {
         signal: controller.signal,
         onEvent: (event) => {
-          if (event.kind === 'stage') setStage(event);
+          if (event.kind === 'stage') {
+            setStage(event);
+            setStageMap((previous) => ({ ...previous, [event.stage]: event.status }));
+          }
         },
         onReconnect: setReconnecting,
       });
@@ -228,6 +237,7 @@ function ApplicationView({
                     key.current = null;
                     setError(undefined);
                     setStage(undefined);
+                    setStageMap({});
                     setCompleted(false);
                   }}
                 >
@@ -318,6 +328,9 @@ function ApplicationView({
               )}
             </div>
           </section>
+          {(busy || Object.keys(stageMap).length > 0) && (
+            <AssessmentPipeline stages={stageMap} running={busy} reconnecting={reconnecting} />
+          )}
           {data.run && (
             <Assessment
               run={data.run}

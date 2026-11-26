@@ -3,6 +3,8 @@ import { api } from './api';
 import type { Actor, AssessmentResult, Offer, Run } from './types';
 import { Empty, ErrorNotice, Money, Status } from './components';
 import { WrittenReasonPanel, ReferralReviewPanel } from './CaseReview';
+import { AssessmentPipeline } from './AssessmentPipeline';
+import type { AssessmentStage } from '../../../packages/contracts/src/streams';
 
 type MemoRuleItem = {
   code: string;
@@ -398,17 +400,19 @@ export function Assessment({
           )}
           {tab === 'Workflow' && (
             <>
-              <h2>Recorded workflow</h2>
               {result.stageEvents?.length ? (
-                <ol>
-                  {result.stageEvents.map((e, i) => (
-                    <li key={i}>
-                      {e.stage} — {e.status}
-                    </li>
-                  ))}
-                </ol>
+                <AssessmentPipeline
+                  heading="Recorded workflow"
+                  compact
+                  stages={Object.fromEntries(
+                    result.stageEvents.map((e) => [e.stage as AssessmentStage, e.status]),
+                  )}
+                />
               ) : (
-                <Empty>No detailed stage events recorded.</Empty>
+                <>
+                  <h2>Recorded workflow</h2>
+                  <Empty>No detailed stage events recorded.</Empty>
+                </>
               )}
             </>
           )}

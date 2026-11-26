@@ -116,6 +116,10 @@ test('assessment progress reconnects with a cursor and reaches the saved result'
     await expect(
       page.getByRole('status').filter({ hasText: 'Reconnecting to assessment' }),
     ).toBeVisible();
+    await expect(page.getByLabel('Assessment pipeline stages')).toBeVisible();
+    await expect(
+      page.getByLabel('Assessment pipeline stages').getByText('Load application'),
+    ).toBeVisible();
     await page.screenshot({ path: shot('stream-desktop'), fullPage: true });
   } finally {
     release();
