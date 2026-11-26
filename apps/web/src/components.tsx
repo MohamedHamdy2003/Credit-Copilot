@@ -61,10 +61,31 @@ export function ErrorNotice({ error }: { error: unknown }) {
 export function Empty({ children }: { children: ReactNode }) {
   return <p className="empty">{children}</p>;
 }
+const LIFECYCLE_STATUS: Record<string, { label: string; tone: string; detail?: string }> = {
+  pending_review: { label: 'Pending', tone: 'pending', detail: 'Pending human review' },
+  pending_approval: { label: 'Pending', tone: 'pending', detail: 'Pending approval' },
+  pending_customer_acceptance: {
+    label: 'Pending',
+    tone: 'pending',
+    detail: 'Pending customer acceptance',
+  },
+  approved: { label: 'Approved', tone: 'approved' },
+  rejected: { label: 'Rejected', tone: 'rejected' },
+  issued: { label: 'Issued', tone: 'issued' },
+};
 export function Status({ value }: { value: string | null | undefined }) {
-  return (
-    <span className="status">{(value ?? 'Not assessed').replaceAll('_', ' ').toLowerCase()}</span>
-  );
+  if (!value) {
+    return <span className="status status-pill status-neutral">Not assessed</span>;
+  }
+  const lifecycle = LIFECYCLE_STATUS[value];
+  if (lifecycle) {
+    return (
+      <span className={`status status-pill status-${lifecycle.tone}`} title={lifecycle.detail}>
+        {lifecycle.label}
+      </span>
+    );
+  }
+  return <span className="status">{value.replaceAll('_', ' ').toLowerCase()}</span>;
 }
 export function Money({ value }: { value: string | undefined | null }) {
   return (
