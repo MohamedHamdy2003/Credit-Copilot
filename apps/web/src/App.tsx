@@ -9,12 +9,12 @@ import { Knowledge } from './Knowledge';
 import { Reviews } from './Reviews';
 import { Usage } from './Usage';
 const pages = [
-  'Applications',
-  'Delta Copilot',
-  'Affordability calculator',
   'Policy library',
-  'LLM Usage',
+  'Delta Copilot',
+  'Applications',
+  'Affordability calculator',
   'Review queue',
+  'LLM Usage',
 ] as const;
 type Page = (typeof pages)[number];
 function Login({ onLogin, expired }: { onLogin: (s: Session) => void; expired: boolean }) {
