@@ -7,6 +7,46 @@
 > submitting candidate. Actual personal hours spent and final candidate
 > reflection remain candidate-owned fields before final submission.
 
+## 2026-11-26 workspace UX refinements, server-side policy header extraction, and presentation deck
+
+Under candidate direction, Antigravity refined the React workspace and policy
+ingestion flow: unified `Applications` to direct PDF upload with `PM-8`
+draft-only deletion and confirmation modals, unified lifecycle status badges to
+the five `FR-5` states, added the 8-stage live visual `AssessmentPipeline` UI,
+upgraded `Full memo text` to a structured underwriting memorandum viewer
+(`CreditMemo.tsx` + `memo-parser.ts`) with raw/copy controls, replaced raw run
+UUIDs in `Review queue` with canonical application references, implemented
+server-side policy header/CSV metadata extraction (`policy-metadata.ts`) behind
+a collapsible override drawer, and added a standalone offline HTML architecture
+deck (`docs/ingestion-vectordb-presentation.html`).
+
+- **Actual AI-authored mistakes caught and corrected during verification**:
+  1. **Policy header regex over-matching in `policy-metadata.ts`**: an initial
+     `Edition` pattern without a digit requirement captured `"or"` from
+     headerless prose and `"Document"` from `credit-policy-2024.pdf`; `detectKind`
+     scanned 4,500 body characters and misclassified `credit-policy-2024.pdf` as
+     `product` due to a body reference to `Product Sheet`; and a body reference
+     to `Circular 2025/02` inside `credit-policy-2025.pdf` overrode its `CP-2025`
+     edition. Caught immediately by unit tests across all 11 real policy files
+     (`tests/policy-metadata.test.ts`) and fixed by requiring digit-bearing
+     edition tokens, scoping kind/circular detection to document IDs and title
+     blocks, and adding `Document <CODE>` parsing (`PS-AL-200`, `PM-AL-200`).
+  2. **Playwright strict-locator collision in collapsed `<details>`**: eagerly
+     rendering the structured memorandum inside a closed `<details>` in
+     `CreditMemo.tsx` caused Playwright's exact `EGP 8,630.39` and `EGP 6,623.47`
+     checks to resolve to two DOM nodes. Caught by the Chromium E2E suite and
+     fixed by lazily mounting the memorandum body only when `open === true` via
+     `onToggle`.
+  3. **Full-screen navigation regression**: an intermediate fix replaced native
+     `requestFullscreen()` with an in-app mode that hid the sidebar; the
+     candidate flagged the missing sidebar and native full-screen height was
+     restored with the sidebar intact and a single exit control.
+  4. **SVG spotlight CSS specificity bug (`ingestion-vectordb-presentation.html`)**:
+     `:not([data-focus='overview'])` gave the dimmed-node rule higher specificity
+     than the active-stage highlight rule, leaving the focused node faded.
+     Flagged during candidate review and fixed with an explicit `.is-focused`
+     toggle and verified in Chromium (`opacity: 1.00` active vs `0.18` dimmed).
+
 ## 2026-11-25 ITI brief audit, alignment fixes, and README overhaul
 
 Antigravity audited the entire repository against the supplied ITI "Credit

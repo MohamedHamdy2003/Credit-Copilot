@@ -37,11 +37,17 @@ auto-loan (`AL-200`) policy sources and three authored auto-loan packs
 Trusted policy sources are verified by SHA-256 against
 [corpus-manifest.json](../data/config/corpus-manifest.json) before indexing into
 `knowledge.*`. Authorized `head-credit` users (`canIngest = true`) may also
-upload custom policy documents (PDF, Markdown, or CSV) with explicit metadata
-(`product`, `edition`, `kind`, `effectiveFrom`, optional `effectiveTo` and `id`)
-or delete indexed policy documents (`DELETE /api/v1/knowledge/documents/:id`,
-removing chunks, embeddings, index revisions, and pricing rows atomically while
-logging a `deleted` attempt). Live ingestion streams stage-by-stage progress
+upload custom policy documents (PDF, Markdown, or CSV) via a streamlined upload
+form: the server automatically extracts `id`, `edition`, `product`, `kind`,
+`effectiveFrom`, and optional `effectiveTo` from PDF, Markdown, and CSV headers
+([policy-metadata.ts](../packages/infrastructure/src/knowledge/policy-metadata.ts)),
+and merges any optional partial overrides supplied through the collapsed
+**Override validity dates & metadata** drawer (still enforcing
+`effectiveTo > effectiveFrom` and rejecting headerless non-manifest files with
+`403 UntrustedPolicyDocument`). Authorized users can also delete indexed policy
+documents (`DELETE /api/v1/knowledge/documents/:id`, removing chunks,
+embeddings, index revisions, and pricing rows atomically while logging a
+`deleted` attempt). Live ingestion streams stage-by-stage progress
 (`extract → chunk → embed → index`) over authenticated SSE
 (`POST /api/v1/knowledge/ingestions/streams` +
 `GET /api/v1/knowledge/ingestion-streams/:id`). Customer application packs
@@ -187,6 +193,12 @@ code (`credit-memo.ts`) from verified rule outcomes, Decimal calculations,
 required approval authority, and cited clause IDs rather than free-form LLM
 prose. This guarantees zero LLM arithmetic hallucinations and ensures
 bitwise-identical memos across protected-attribute fairness pairs (Scenario S5).
+In the React workspace, [CreditMemo.tsx](../apps/web/src/CreditMemo.tsx) and
+[memo-parser.ts](../apps/web/src/memo-parser.ts) present the expandable **Full
+memo text** as a structured Credit Underwriting Memorandum (with one-click copy
+and a `Formatted` / `Raw text` toggle), while
+[AssessmentPipeline.tsx](../apps/web/src/AssessmentPipeline.tsx) visualizes all
+eight workflow stages live during execution and in the recorded **Workflow** tab.
 
 ### Privacy, fairness, and prompt-injection defense
 
@@ -216,14 +228,17 @@ bitwise-identical memos across protected-attribute fairness pairs (Scenario S5).
   `PS-7`). Because the five supplied synthetic packs omit a separate national ID
   copy file, Strict refers them to human review.
 - **Demo mode (`ALLOW_DEMO_MODE=true`, explicit opt-in on synthetic packs)**:
-  assumes national ID copy presence *only* so reviewers can exercise the full
+  assumes national ID copy presence _only_ so reviewers can exercise the full
   end-to-end approval, alternative-offer, decline, and referral scenarios. The
   actual missing document (`verified: false`) remains explicit across the
   assessment result, audit trail, credit memo, and issued offer.
 - **Approval authority (`PM-2`) and four-eyes**: Loan Officers prepare cases but
   cannot decide. Credit Officers approve up to EGP 250,000, Senior Credit
   Officers up to EGP 500,000, and Head Credit Officers up to EGP 1,000,000. The
-  preparer can never approve their own case.
+  preparer can never approve their own case. In **Review queue**, pending items
+  display canonical application references (`a.reference`) rather than raw run
+  UUIDs, and local session TTL defaults to `720` hours (30 days) with immediate
+  server-side revocation on sign-out.
 - **Referral adjudication (`PM-4` / `CP-6`)**: Senior Credit Officers and Head
   Credit Officers can review and decide non-blocking policy referrals (such as
   `APP-005` with bureau score 580 under `CP-6`). Approving a reviewable referral
